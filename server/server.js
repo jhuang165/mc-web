@@ -19,6 +19,9 @@ import { readPacketId, writePacketId } from '../src/multiplayer/net-packet-ids.j
 import { planSave, savePlayerData, STOP_LOG, STOP_KICK, worldSaveLine } from '../src/multiplayer/server-save.js'; // b88 console88: saves under /save-off, the stop sequence
 import { readPacketBytes, writePacketBytes } from '../src/multiplayer/net-packet-ids.js'; // b88 console88: /netstat's native record sizes
 import { readPackets, writePackets, kickPacket } from '../src/multiplayer/net-packet-ids.js'; // b89 console89: one /netstat record per native packet, kicks as S40
+import { watchSweep, kindRecords } from '../src/multiplayer/net-packet-ids.js'; // b92 console92: the S1C of a changed watcher on the native schedule
+import { hooks as watchHooks, watchState } from '../src/multiplayer/net-watch-bytes.js'; // b92 console92
+import { witherState } from '../src/wither-boss-mobs.js'; // b92 console92: the head targets (watchers 17-19)
 import { chunkSourceFor } from '../src/multiplayer/net-native-bytes.js'; // b89 console89: the receiving player's world for the deflated chunk data
 import { autosaveClock, autosaveTicksOf } from '../src/multiplayer/server-save.js'; // b89 console89: the autosave on MinecraftServer.u()'s tick counter
 import { bookPacket } from '../src/multiplayer/server-books.js'; // b66 mpbooks
@@ -173,25 +176,35 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
   const wss = new WebSocketServer({ noServer: true, maxPayload: 32768, perMessageDeflate: false });
   // b91 console91: /netstat's view of the mob a packet names (the owner string, name tag and later watcher keys natively in S0F / S1C): the Overworld's live mobs by wire number, and what
   // this connection was last told (net-watch-bytes.js). A player in another dimension has no lookup (the sizes stay the class defaults).
-  const mobIndex = { tick: -1, map: new Map() };
+  // b92 console92: the lookup is per dimension (the Nether and the End have their own mob lists; wire numbers are their own) and the native state of a mob is derived once a tick for all connections.
+  watchHooks.witherHeads = (e) => witherState(e).heads.map((t) => (t ? String(t.id ?? 1) : 0)); // the target's id as the signature (a player's or a mob's)
+  const mobIndex = new Map(); // dimension -> { tick, map: wire number -> mob, states: wire number -> watchState }
   const mobWatch = (ws) => {
-    const w = (ws.netWatch ??= { memory: new Map(), mob: null });
-    w.mob = (i) => {
-      if (simulation.players.get(ws.netId)?.dimension | 0) return undefined;
-      if (mobIndex.tick !== autosave.ticks) {
-        mobIndex.tick = autosave.ticks; mobIndex.map = new Map();
-        for (const e of simulation.mobs?.mobs?.entities ?? []) mobIndex.map.set(Number(String(e.id).replace(/^mob-/, '')), e);
+    const w = (ws.netWatch ??= { memory: new Map(), mob: null, state: null, dim: 0 });
+    const dim = simulation.players.get(ws.netId)?.dimension | 0;
+    if (w.dim !== dim) { w.dim = dim; w.memory.clear(); } // the client rebuilt its world: nothing is known of the other dimension's mobs
+    const index = () => {
+      let x = mobIndex.get(dim);
+      if (!x) mobIndex.set(dim, x = { tick: -1, map: new Map(), states: new Map() });
+      if (x.tick !== autosave.ticks) {
+        x.tick = autosave.ticks; x.map = new Map(); x.states = new Map();
+        const list = (dim ? simulation.dimensions.mobsOf(dim) : simulation.mobs)?.mobs?.entities ?? [];
+        for (const e of list) x.map.set(Number(String(e.id).replace(/^mob-/, '')), e);
       }
-      return mobIndex.map.get(i);
+      return x;
     };
+    w.mob = (i) => index().map.get(i);
+    w.state = (i, live) => { const x = index(); let st = x.states.get(i); if (!st) x.states.set(i, st = watchState(live)); return st; };
     return w;
   };
+  const sweepWatch = (ws) => { if (ws.netWatch?.memory.size) for (const [packetId, bytes] of watchSweep(mobWatch(ws))) simulation.admin.netStats.write(packetId, bytes); };
   const send = (ws, message) => {
     if (ws.readyState !== WebSocket.OPEN) return;
     if (message.type === 'chat' && ws.settingsId !== undefined && !settingsChatDelivered(simulation.players.get(ws.settingsId), message)) return; // b72 mpsettings: S02 chat filter (chat visibility)
     if (ws.bufferedAmount > 2 * 1024 * 1024) { ws.terminate(); return; }
     const text = JSON.stringify(message);
-    for (const [packetId, bytes] of writePackets(message, { self: ws.netId, tick: autosave.ticks + 1 /* the tick counter MinecraftServer.u() has raised (S03 every 20) */, chunks: chunkSourceFor(simulation, simulation.players.get(ws.netId)?.dimension | 0), ...(message.type === 'mobs' ? { watch: mobWatch(ws) } : {}) }) ?? []) simulation.admin.netStats.write(packetId, bytes); // b86 console86: /netstat (the encoder fa records each packet); b87 offline87: under its native id; b88: native bytes; b89 console89: one record per native packet the message stands for
+    if (message.type === 'dimRespawn') ws.netObjs?.clear(); // b92 console92: the rebuilt world holds no tracked objects (the rows are spawned again)
+    for (const [packetId, bytes] of writePackets(message, { self: ws.netId, tick: autosave.ticks + 1 /* the tick counter MinecraftServer.u() has raised (S03 every 20) */, chunks: chunkSourceFor(simulation, simulation.players.get(ws.netId)?.dimension | 0), ...(message.type === 'mobs' ? { watch: mobWatch(ws) } : {}), ...(message.type === 'dispEnts' ? { objs: (ws.netObjs ??= new Map()) } : {}) }) ?? []) simulation.admin.netStats.write(packetId, bytes); // b86 console86: /netstat (the encoder fa records each packet); b87 offline87: under its native id; b88: native bytes; b89 console89: one record per native packet the message stands for
     ws.send(text);
   };
   // Whole-chunk resends (`chunks`) go only to clients that joined with `chunks: true`; the others get the same cells as `changes`.
@@ -368,6 +381,9 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
         for (const m of player.itemsOut ?? []) if (ws) send(ws, m); // b59: S2F slot corrections, S28 break effects, XP gains (server-items.js)
         for (const e of player.effectsOut ?? []) if (ws) send(ws, { type: 'effect', ...e }); // S1D entity effect (beacon grants)
         if (player.mobPackets && ws) send(ws, { type: 'mobs', packets: player.mobPackets }); // S0F / S14..S19 / S13 of the mobs this player tracks (server-mobs.js)
+        if (ws) sweepWatch(ws); // b92 console92: S1C of a mob whose watcher changed without a packet this tick (counted only, not sent)
+        if (player.vehNet && ws) for (const kinds of player.vehNet) for (const [packetId, bytes] of kindRecords(kinds)) simulation.admin.netStats.write(packetId, bytes); // b92 console92: a tracked cart's packets with no row (counted only)
+        player.vehNet = null;
         if (player.vehPackets && ws) send(ws, player.vehPackets); player.vehPackets = null; // b61: minecarts and boats near this player (server-vehicles.js)
         for (const m of player.dispOut ?? []) if (ws) send(ws, m); // b61: dispEnts / dispFx of dispensed entities (server-dispense.js)
         player.dispOut = null;
