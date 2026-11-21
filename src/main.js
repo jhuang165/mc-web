@@ -1906,7 +1906,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     mobs.thrownDiamond = (name) => { if (name === PLAYER_NAME) achievements.trigger("diamondsToYou"); }; // b79 spswing79: sw.e picks a thrown diamond up -> the thrower's achievement
     mobs.itemPickedUp = (e, item) => scene.drops.pickup(item, e, MOB_PICKUP_LIFT); // b80 mpcmd80: the integrated server's S0D for a mob collector: EntityPickupFX to the mob's feet - 0.5 (silent: RenderGlobal.playSound is empty)
     mobs.fx = scene.fx;
-    awayIdle = !world.dimension && record.transit ? dims.takeIdle() : null; // b59/b60: the Overworld's spawn-area entities kept their tracker phase while the player was in the Nether/End (caught up below, once the object lists are loaded)
+    awayIdle = !world.dimension && tripArrival ? dims.takeIdle() : null; // b89 lead: record.transit is deleted by arrive before launch (as spcopy89 found for arriveFrom), so the catch-up never ran in the game; tripArrival is the same transit. b59/b60: the Overworld's spawn-area entities kept their tracker phase while the player was in the Nether/End (caught up below, once the object lists are loaded)
     for (const q of pendingEdits) q.predicted?.undoHeld?.(); // a queued click's held-stack change goes with it
     pendingEdits = []; prediction?.clearAll(); prediction = null; scene.predicted = null; crystalFireLayer.forget();
     mobs.crystalFire = (copy) => crystalFireLayer.tick(copy); // batch 57: the End crystal copy's fire on the client block layer (crystal-fire-layer.js)
