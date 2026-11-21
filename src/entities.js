@@ -100,6 +100,7 @@ import { OCELOT_WIDTH, OCELOT_HEIGHT, OCELOT_SPEED, OCELOT_HEALTH, OCELOT_SOUNDS
 import { NETHER, providerOf, lightBrightnessTable } from "./dimensions.js";
 import { cloneStack, attackBonus, meleeEffects, fallingBlockHelmet, brokenItemDraws, breakSoundPitch, daylightHelmet } from "./mob-equipment.js";
 import { MobTracker } from "./entity-tracker.js";
+import { newMobTracker } from "./sp-chunk-gate.js"; // b94 spcopy94
 import { GEAR_TYPES, defaultGear, gearFieldsFrom as mobGearFieldsFrom, toLiveStack, pickUpLoot } from "./mob-equipment-live.js";
 import { enchantedDamage, isAbsolute, setMobFire } from "./armor-enchantments.js";
 import { mobThornsOnPlayerHit, NO_THORNS_ATTACKER } from "./thorns-live.js";
@@ -2360,7 +2361,7 @@ export class EntityWorld {
     if (ids && (fresh || ids.playerId === undefined)) ids.playerId = ids.take();
     if (ids && this.tracker) this.tracker.joinPlayer(ids.playerId);
   }
-  idleTrack(ticks, keep, joint = null, per = null) { this.tracker ??= new MobTracker(this.viewChunks); this.tracker.idleCatchUp(this.entities.filter(keep), (m) => this.size(m), ticks, joint, per); } // b59: the mobs that stayed loaded while the player was away were tracked for every tick of it (entity-tracker.js idleCatchUp)
+  idleTrack(ticks, keep, joint = null, per = null) { this.tracker ??= newMobTracker(MobTracker, this.viewChunks); this.tracker.idleCatchUp(this.entities.filter(keep), (m) => this.size(m), ticks, joint, per); } // b59: the mobs that stayed loaded while the player was away were tracked for every tick of it (entity-tracker.js idleCatchUp)
   leaveWorld(others = []) { this.tracker?.leaveWorld(others); } // a dimension change: the player leaves this world's tracker (entity-tracker.js leaveWorld)
   takeId(e) { if (e && typeof e === "object" && e.entityId === undefined && e.id === undefined && !Object.isFrozen(e)) e.entityId = this.ids.take(); }
   // World.loadedEntityList order: a stamp for every mob and ball, taken when it is first seen (balls at launch, mobs at the next launch or tick, in list order).
@@ -2467,7 +2468,7 @@ export class EntityWorld {
     trackChunkLoads(this, player, this.viewChunks, this.world.dimension ? null : nearSpawn(this.spawnPoint ? this.spawnPoint() : (this.cachedSpawnPoint ??= this.world.spawn?.())), false); // b60so: the unload queue runs after the spawner pass (unloadQueued below); b59so: unload rule; b58so: the chunks the player's movement loads, in load order (saved-order.js)
     this.watching = player; // drainClientSounds: the one client (entity-tracker.js)
     // EntityTracker.updateTrackedEntities for the previous tick's end state: tracking list, encoded positions, the client's entities.
-    this.tracker ??= new MobTracker(this.viewChunks);
+    this.tracker ??= newMobTracker(MobTracker, this.viewChunks);
     this.tracker.beforePlayer ??= (e) => this.beforePlayer(e);
     this.tracker.crystalFire ??= (c) => this.crystalFire?.(c); // client block layer hook (main.js, crystal-fire-layer.js)
     this.tracker.spawnEarly ??= (e) => !!this.earlySpawns?.has(e);
@@ -3602,7 +3603,7 @@ export class EntityWorld {
     const sounds = this.clientSounds;
     this.clientSounds = [];
     if (!this.watching) return sounds;
-    const tracker = (this.tracker ??= new MobTracker(this.viewChunks));
+    const tracker = (this.tracker ??= newMobTracker(MobTracker, this.viewChunks));
     tracker.crystalFire ??= (c) => this.crystalFire?.(c);
     tracker.attach(this.watching);
     const out = [];

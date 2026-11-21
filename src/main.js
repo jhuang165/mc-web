@@ -118,6 +118,7 @@ import { washStacks, burnStacks } from "./fluid-wash.js";
 import { plantDropDamage, plantPick } from "./plant-damage.js"; // b82 pots82; b83 plants83 plantPick
 import { meterPercent } from "./mining-crack.js"; // b82 pots82
 import { spActiveChunkSource } from "./sp-active-chunks.js"; // b69 spfarming
+import { spGateConfig } from "./sp-chunk-gate.js"; // b94 spcopy94
 import { EntityWorld, ENTITY_TYPES, HOSTILE, heldAttackDamage, pushBox, setEntityBoxes } from "./entities.js";
 import { wakeSavedSleeper, mobInBox, BedSleep, BED_DIR, BED_TEXT, Beds, activateBed, bedRespawnPosition, nextMorning, verifyRespawn } from "./bed.js";
 import { showChatLine, PLAYER_NAME } from "./death-messages.js";
@@ -4087,6 +4088,7 @@ function movementTick(controls) {
   enchantBooks.tick(world, [{ x: position.x, y: position.y, z: position.z }]); // TileEntityEnchantmentTable.updateEntity
   if (containerView?.kind === "enchanting") enchantExtras?.tick(containerView.container); // GuiEnchantment.updateScreen
   mobs.look = { yaw, pitch }; // the enderman stare rule reads the view
+  spGateConfig.enabled = !active?.remote; // b94 spcopy94: the integrated server sends the nearest five columns per tick; trackers made from now on gate entities on them
   mobs.viewChunks = options.distance; // the integrated server's view distance: the chunk square the tracker shows entities in (entity-tracker.js)
   // b89 spcopy89: from the portal tick until the new world launches, the old world no longer has the player (mt.f(sa)); a failed trip gives it back.
   // b92 spcopy92: in the portal tick itself the copy leaves at its own list entry (EntityWorld.copyDeparts), not at the tick's start: the spawner, the villages and the entities before
