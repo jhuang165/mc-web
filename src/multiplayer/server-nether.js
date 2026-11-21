@@ -30,6 +30,7 @@ import { ServerPistons } from './server-pistons.js'; // b66 mppistons
 import { installMusic } from './server-music.js'; // b66 mpbooks
 import { LightVolume, lightEmission } from '../lighting.js';
 import { tickScheduledSystems, tickTileSystems } from '../world-tick.js';
+import { attachTickTree } from '../tile-ticks.js';
 import { tickBeacons } from '../pyramid-live.js';
 import { Survival, ITEMS } from '../survival.js';
 import { PlayerInventory, makeStack } from '../inventory.js';
@@ -105,6 +106,7 @@ export function buildNetherSystems(sim, n, source, saved = {}) {
   n.plants = new Plants(w, { drop, broken: noop, apply: noop }).watch();
   n.falling = new FallingBlocks(w, { drop: (...a) => sim.serverItems.fallingDrop(...a), apply: noop, tile: serverFallingTile(n) /* b78 falling78 */ }, saved.falling).watch();
   n.falling.load(saved.fallingTicks);
+  n.tickTree = attachTickTree({ fluids: n.fluids, fire: n.fire, falling: n.falling, redstone: { redstone: n.redstone, tickBegin: () => n.redstone.beginTick() } }); // b93 mpobjects93: one tree per dimension (see simulation.js)
   n.farming = new Farming(w, saved.farms);
   n.farming.lightLevel = (x, y, z) => n.light.level(x, y, z, 0);
   n.farming.rained = () => false;
@@ -156,7 +158,8 @@ export function tickNether(sim, n, players) {
   n.mobs.mobs.cachedSpawnPoint ??= n.overMobs.mobs.cachedSpawnPoint; // SpawnerAnimals keeps 24 blocks from the OVERWORLD spawn in every dimension
   // b91 mpobjects91: WorldServer.tick's random block ticks run before World.updateEntities and the tracker flush (bytecode-read mt.b), as in simulation.js.
   // b92 mpobjects92 (mt.b: tickPending before tickBlocks): the scheduled tickUpdates and the queued block events precede the random ticks and the entities; the tile entities follow the entities.
-  tickScheduledSystems({ falling: n.falling, farming: n.farming, fluids: n.fluids, fire: n.fire, redstone: n.redstone },
+  n.mobs.spawnStep(); // b93 mpobjects93: SpawnerAnimals before tickPending (mt.b); n.mobs.tick() below skips its own pass
+  tickScheduledSystems({ falling: n.falling, farming: n.farming, fluids: n.fluids, fire: n.fire, redstone: n.redstone, tickTree: n.tickTree },
     { time: sim.time, daylight: 0, x: 64, z: 64 }, { farming: noop, fluids: noop, fire: noop });
   n.weather.tickDimension(w, null); // the three random block ticks per section, over the whole finite world (as the Overworld's weather.tick(world))
   n.weather.drain();
