@@ -4079,7 +4079,14 @@ function movementTick(controls) {
   if (containerView?.kind === "enchanting") enchantExtras?.tick(containerView.container); // GuiEnchantment.updateScreen
   mobs.look = { yaw, pitch }; // the enderman stare rule reads the view
   mobs.viewChunks = options.distance; // the integrated server's view distance: the chunk square the tracker shows entities in (entity-tracker.js)
-  if (mobs?.ai?.player) mobs.ai.player.left = !!dims.busy; // b89 spcopy89: from the portal tick until the new world launches, the old world no longer has the player (mt.f(sa)); a failed trip gives it back
+  // b89 spcopy89: from the portal tick until the new world launches, the old world no longer has the player (mt.f(sa)); a failed trip gives it back.
+  // b92 spcopy92: in the portal tick itself the copy leaves at its own list entry (EntityWorld.copyDeparts), not at the tick's start: the spawner, the villages and the entities before
+  // it still had the player, and the entity after it is stepped over. The ticks after that (the port's async save) start with the copy gone.
+  if (mobs?.ai?.player) {
+    const copy = mobs.ai.player;
+    if (!dims.busy) { copy.left = false; copy.departing = null; }
+    else if (!copy._left && !copy.departing) copy.departing = { skip: dims.listSkip };
+  }
   const living = { world, position, survival, inhabited, mobs, xpOrbs, experience, items,
     playerTicks, width: PHYSICS.width, height: PHYSICS.height, sleeping: bedSleep.sleeping,
     sneaking: !!motion.sneaking, flying, rider, packetGround: grounded, sprinting: !!motion.sprinting, yaw, // b83 attack83: the C03 / C0B flags the integrated server's copy reads (living-simulation.js; sneaking, flying and riding were never set in single player)

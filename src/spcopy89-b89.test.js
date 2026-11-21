@@ -192,7 +192,7 @@ test("a portal trip takes the player out of the old world at once: the copy stop
   assert.ok(h.calls.length > 0 && moved > 0, "back in the world after a failed trip");
   assert.equal(h.p.corrected ?? 0, 0);
   const main = readFileSync(new URL("./main.js", import.meta.url), "utf8");
-  assert.match(main, /if \(mobs\?\.ai\?\.player\) mobs\.ai\.player\.left = !!dims\.busy;/);
+  assert.match(main, /if \(!dims\.busy\) \{ copy\.left = false; copy\.departing = null; \}/); // b92 spcopy92: left now flips at the player's turn in the walk (EntityWorld.copyDeparts); main.js only hands over the departure and clears it on a failed trip
   const ents = readFileSync(new URL("./entities.js", import.meta.url), "utf8");
   assert.match(ents, /if \(p && !p\.unticked && !p\.left\) \{/);
 });
