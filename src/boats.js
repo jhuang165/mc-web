@@ -202,6 +202,7 @@ export class Boats extends Minecarts {
     boat.timeSinceHit = 10;
     boat.damage = f(boat.damage + f(amount * 10));
     if (creative || boat.damage > BREAK_DAMAGE) {
+      if (boat.rider) boat.remounted = true; // b89 spcopy89: xi.a 106-118 riddenByEntity.mountEntity(this) before setDead: the player's copy gets an S08 at its seat (ai.js PlayerView)
       if (!creative) this.drop(boat, BOAT_ITEM);
       boat.dead = true;
     }

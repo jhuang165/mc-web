@@ -52,6 +52,7 @@ import { enterWater, burst, drownBubbles } from "./fx.js";
 import { waterAcceleration, entityWaterBox, inLava, eyeInWater } from "./fluids.js";
 import { sheepColor, childColor } from "./sheep.js";
 import { movedTooQuickly, movedWrongly, needsCorrection, shrunkBox, awaitedAnswer, updateFallResets, handleFalling } from "./server-process-player.js"; // b85 spcopy85, b86 spcopy86, b87 spcopy87
+import { awaitedRuns, brokenMountLocation } from "./server-process-player.js"; // b89 spcopy89
 import { sneakEdge, criticalDamage, JUMP_MOTION, sprintJumpPush } from "./player-movement.js";
 import { MobAI } from "./ai.js";
 import { VILLAGER_TYPE, VILLAGER_SOUNDS, villagerFields } from "./villager.js";
@@ -2625,7 +2626,7 @@ export class EntityWorld {
     this.tilePass = true; // b56tm: until the hook's network part (main.js tickServerDig -> endTilePass) a spawn is a tile entity pass spawn: late against the flush
     try { this.afterEntities?.(); } finally { this.tilePass = false; } // World.updateEntities' tile entity pass (moving piston blocks push mobs and the copy: b48pp records), after every entity and before the network tick
     const p = this.ai.player;
-    if (p?.alive && !p.unticked) { // `unticked`: the village-fight replay's player, which the native probe never ticks
+    if (p?.alive && !p.unticked && !p.left) { // `unticked`: the village-fight replay's player, which the native probe never ticks; b89 spcopy89 `left`: gone to another dimension
       this.serverPlayerUpdate(p);
     }
     for (const e of peacefulGone) { e.removedHealth = e.health; e.health = 0; e.death = 20; }
@@ -2646,6 +2647,7 @@ export class EntityWorld {
     // such gate, and the harnesses that place the copy themselves now say so with `placed`). The client's C06 answer to an S08 comes first (bjb.a(fu) sends it from inside its S08
     // handler, before its own tick's C03), then the tick's C03; a C03 without a position is the accepted position. NetworkManager.processReceivedPackets then runs nh.a(), ++e.
     p.fallOwner = !p.placed; // b87 spcopy87: the copy's handleFalling deals the fall damage (player-environment.js landPlayer leaves it); a harness that places the copy keeps the client's
+    if (p.brokenSeat) brokenMountLocation(this, p); // b89 spcopy89: a boat or cart broken under the copy: mountEntity(this) -> setPlayerLocation at the seat (S08)
     if (!p.direct) {
       const ground = p.packetGround, answer = p.answer, packet = p.packet; // a caller that gives no packet onGround (a unit test) takes the copy's own, below
       p.answer = p.packet = null;
@@ -2662,19 +2664,32 @@ export class EntityWorld {
       // walking branch from the copy's last seat.
       const mount = this.serverMount?.();
       if (mount) p.mount = mount;
-      if (p.mount?.dead) { this.processPlayer(p, null, p.packetGround); p.netTicks++; return; }
-      const seat = this.serverSeat?.() ?? p.reported;
-      if (seat) { p.x = seat.x; p.y = seat.y; p.z = seat.z; }
-      if (p.packetGround !== undefined) p.onGround = !!p.packetGround;
-      this.serverCopyUpdate(p);
-      p.accepted = { x: p.x, y: p.y, z: p.z };
-      p.motion.x = p.motion.y = p.motion.z = 0; p.fallDistance = 0;
+      if (p.mount?.dead) {
+        // b89 spcopy89: broken by damage (boats.js / minecarts.js `remounted`): the S08 at the seat first, whose C06 answer then takes the walking branch too
+        if (p.mount.remounted) { p.brokenSeat = { x: p.x, y: p.y, z: p.z }; brokenMountLocation(this, p); const answer = p.answer; p.answer = null; if (answer) this.processPlayer(p, answer, answer.onGround); }
+        this.processPlayer(p, null, p.packetGround); p.netTicks++; return;
+      }
+      // b89 spcopy89: offsets 31-87 wrap the riding branch: after mountEntity's setPlayerLocation nothing runs until the C06 answers (awaitedRuns), and that C06 takes the branch too
+      const runs = awaitedRuns(this, p);
+      for (let i = 0; i < runs; i++) {
+        const seat = this.serverSeat?.() ?? p.reported;
+        if (seat) { p.x = seat.x; p.y = seat.y; p.z = seat.z; }
+        if (p.packetGround !== undefined) p.onGround = !!p.packetGround;
+        this.serverCopyUpdate(p);
+        p.accepted = { x: p.x, y: p.y, z: p.z };
+        p.motion.x = p.motion.y = p.motion.z = 0; p.fallDistance = 0;
+      }
+      p.netTicks++;
       return;
     }
-    // The sleeping branch (301-359): mw.i(), then back at o / p / q (sleepInBedAt's setPlayerLocation); the packet is not read.
+    // The sleeping branch (301-359): mw.i(), then back at o / p / q (sleepInBedAt's setPlayerLocation); the packet is not read. b89 spcopy89: behind the same wait.
     if (p.branch === "sleeping") {
-      this.serverCopyUpdate(p);
-      p.x = p.accepted.x; p.y = p.accepted.y; p.z = p.accepted.z;
+      const runs = awaitedRuns(this, p);
+      for (let i = 0; i < runs; i++) {
+        this.serverCopyUpdate(p);
+        p.x = p.accepted.x; p.y = p.accepted.y; p.z = p.accepted.z;
+      }
+      p.netTicks++;
       return;
     }
     // A copy the server places (the mount, dismount, bed, login and respawn ticks, a harness): it rests where the update put it; mw.i() runs there and the position is put back.
