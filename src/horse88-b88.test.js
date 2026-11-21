@@ -5,12 +5,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { EntityWorld } from "./entities.js";
+import { EntityWorld, setEntityRandom } from "./entities.js";
+import { JavaRandom } from "./java-random.js";
 import { Survival } from "./survival.js";
 import { horseJumpCounter } from "./horse-live.js";
 import { moveRidingPlayer } from "./vehicle-simulation.js";
 import * as H from "./horse.js";
 
+// A Random whose interval draws never hit (nextInt(n) is never 0 for n > 1), so idle sounds, rears, healing and eating never start.
+class NoHit extends JavaRandom { constructor() { super(1); } nextInt(n) { return n > 1 ? n - 1 : 0; } }
 const ref = (name) => JSON.parse(readFileSync(new URL(`../public/research/${name}`, import.meta.url), "utf8"));
 const grass = { numericSeed: 1, solid: (x, y, z) => y < 0, get: (x, y, z) => (y < 0 ? 1 : 0), surface: () => 0, spawn: () => ({ x: 64.5, y: 0, z: 64.5 }) };
 const horseWorld = (x, y, z, { saddled = true, speed = 0.25, jump = 0.7 } = {}) => {
@@ -28,6 +31,11 @@ test("whole ridden ticks match the executed wi.h() rows (jump, air release, rear
   for (const s of r.ticks) {
     const { w, e } = horseWorld(64, 0, 64, { saddled: s.saddled, speed: s.speed, jump: s.jumpAttr });
     Object.assign(e, { vx: 0, vy: 0, vz: 0, onGround: true, aiMoveSpeed: 0, rotationYaw: 0 }); // a fresh wi: bp (aiMoveSpeed) 0, no motion
+    // The probe gives the horse no AI tasks (Horse88Probe clears every uj field) and its Random is a seeded one whose draws were never recorded. Natively an unsaddled or
+    // unridden horse (the unsaddled rows, and after the dismount) runs its wander task and wi.t()'s idle talk (nextInt(10) == 0 rears) off its own Random; the port's is seeded
+    // from Math.random, so those draws moved the horse / started a rear in ~25% of runs. Stub the AI and the Random so no draw hits (the draws themselves are native).
+    w.ai.think = () => {};
+    setEntityRandom(e, new NoHit());
     const p = rider(s.riderYaw, s.forward, s.strafe);
     assert.ok(w.horseSeats.mount(e, p));
     s.ticks.forEach((t, i) => {
