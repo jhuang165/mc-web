@@ -2,6 +2,49 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 94
+
+Batch 94 covered these areas (track agents ran on Sonnet):
+- **Horses.** The `horse88-b88` and `horse92-b92` flakes were in the tests, not the port: unseeded wander and idle-rear rolls leaked into replays; the tests now stub the AI and inject a no-hit Random (40 runs, no failure). The dedicated server now decays a player rider's strafe and forward input by 0.98 on every C05 before a C0C overwrites it (`mw.i`, `decayRideInput`; boats share it). `Horse94Probe` (6 scenarios): mount and rider setDead and kills already matched.
+- **Multiplayer objects.** The dedicated server and its Nether and End flush block events after random ticks and weather bolts, before the entity pass (`tickBlockEvents`), as `mt.b` does. The Overworld Teleporter cache sweeps before the portal checks, so a Nether-to-Overworld trip on a multiple of 100 ticks no longer misses an expired entry. Sieges (no zombie spawns in 1.7.10), chunk unloading and the tree's other block kinds needed no change.
+- **Portals.** Single player keeps a player-held lead across a portal when the holder is in the destination (the 10-block rule, as on the server); the away run follows. A `/summon` or a single-player portal copy starts the port-only mob transients over (`mob-transient.js`); the lead found that stripping them on every browser-save restore broke away-run ticksExisted (awaytracker-b60), so saved-record restores now keep them, and the single-player portal handoff strips them as the server's arrive does. Items cross portals without their pickup delay and hover, and orbs, carts and boats keep their OnGround.
+- **The single-player copy.** An entity is first sent to the player when its chunk column is sent, at login and after every portal arrival: five columns per tick in the native spiral, own column first, each sent column re-testing its entities (`sp-chunk-gate.js` over the server's `ChunkWatch`; single player only).
+- **Kill credit.** A mob holding a Bane weapon rolls the slowness once, not twice (`afv.b` adds the held item only for players). A player's hit or arrow visits a mob victim's held Thorns item twice, a mob's once (`afv.a`). Balls, potions and arrows left in a Nether or End stash keep the dead body (`ownerBody`). A dead body keeps the armour it wore (server `deadBody`, single-player `deathBodyHere`), which feeds Bane on its arrows; its arrows no longer hurt the new player through Thorns.
+- **The dedicated server.** Every kind's S13 ids (mobs, items, thrown rows, carts and boats, TNT and fireballs) share one queue per connection, drained once at the end of the player's slot as packets of at most 127 ids; a dead cart's or boat's S13 waits a tick. The End tracker lookup is tested on a live server.
+- **Server speed.** Behind `MC_MPPERF94=on|off|verify`: `legacyThink` uses one shared environment object instead of 14 closures per call, and `scratchBox` copies only in mpperf81 verify mode. Heap per tick is 2 to 4% lower; tick time is within noise. The terrain hash change was explained: the batch 92 note's value predates a batch 92 merge, and console93's golem-ball `kinds` field moved it again.
+- **Tiles.** `awayResult` applies the away run's time shift whatever the live rule at return (`away-time-shift.js`), and ticks skipped on the wall budget count under the rule in force when the run stopped (`skipTicks`). Dispenser, dropper, hopper and brewing stand state was already in cell metadata; an unread `facing` field on generated dispensers was removed.
+- **Entity NBT.** `Entnbt94Probe`: a Health 0 mob with `DeathTime` 20 or more is an immortal corpse, a negative `DeathTime` counts up to 20, a live mob keeps its `DeathTime`, and the dragon writes what it loaded. Unknown effect ids are dropped, enderman carried ids from 128 read as air (the data is kept), minecart display values are masked, `ItemRotation` keeps Java's `% 4` sign, an empty item frame writes no rotation or drop chance, and a chested horse always writes `Items`.
+- **Mob records.** 18 new executed records replay with no divergence: wither blue skulls, armour against arrows, mob attackers, block breaking (also with mobGriefing off), regeneration and a wither-effect kill; pigman group anger at 20, 30 and 34 blocks, pigman and giant hit by a zombie, a giant with pigmen. Fixes: bow arrows now trigger the armoured wither's arrow immunity (`directArrow`), wither block-break drops use the world Random, and a mob killed by the wither effect skips its AI and ambient roll.
+
+Found wrong in the batch 93 list:
+- The horse test flakes came from unseeded test rolls, not port randomness.
+- `ServerMobs.restore` does not exist; mobs load through `EntityWorld.restore`.
+- Item, orb, cart and boat portal records were not fully NBT-shaped (delay and hover, forced OnGround).
+- A keepInventory body keeps its armour natively.
+- Dispenser, dropper, hopper and brewing stand facing needed no audit fix.
+- A live mob's `DeathTime` does not tilt the client copy (the spawn packet does not carry it).
+- The probe's explosion double not pushing skulls was a probe artefact; the armoured wither's arrow immunity existed but never fired for bow arrows.
+
+Still open from batch 94:
+- **Multiplayer.**
+  - Horses: a mount entering water, a lead pulling the rider off and /kill on a real player rider are unprobed; a killed saddled horse drifted in about 3% of live-AI runs (not root-caused).
+  - Objects: block changes from the entity pass reach clients one tick early (one `changes` map per tick; natively `mq.b` flushes before entities); village and siege ticks still run inside `mobs.tick`.
+  - Kill credit: a player victim hit by a player does not get the second Thorns visit; mob-on-mob hits never run the victim's Thorns.
+  - The dedicated server: a removal during the same tick's network handling would send its S13 at once natively.
+  - Speed: `explosionBlocks`, `blockBoxesFast`, `tickMobs` shapes, tracker iterators, `moveEntityBody`'s box copy.
+  - Server commands: /publish stays off. End island tails past 128 blocks are cut on some seeds (left for the user's decision). WebSocket compression stays off.
+  - Not seen in a browser: leads across server portals, plus the batch 67 to 93 lists.
+- **Single player.**
+  - The copy: a held target with a near arrival and the old chunk listing still need the arrival before the old world's save point.
+  - Portals: item `load()` still reads the saved pickup delay on a reload; a true game reload keeps port-only transients from the save (native resets them, since the port also rebuilds dimensions in-session from the save); cart subtypes are not audited field by field.
+  - Tiles: an away run that stops idle assumes no rule change in the ticks it never ran.
+  - Kill credit: after a reload a stashed ball keeps the dead body where native looks the thrower up by name.
+  - Mob records: longer pigman and giant melee fights.
+  - Entity NBT: player export always writes `DeathTime` 0.
+  - Not seen in a browser: entities popping in chunk by chunk after login and portal trips (new in this batch), immortal corpses after a reload, negative-rotation item frames, the wither's break sound and armour shimmer, the clock after a trip that turned `doDaylightCycle` on, plus the batch 93 list.
+- **Rendering.** No native pixel capture.
+- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+
 ## Done in batch 93
 
 Batch 93 covered these areas (track agents ran on Sonnet):
@@ -24,27 +67,7 @@ Found wrong in the batch 92 list:
 - A dying mob is saved natively; the port dropped it.
 - The wither skeleton dropped original-numbered items, played zombie-family sounds and skipped the sunburn draw.
 
-Still open from batch 93:
-- **Multiplayer.**
-  - Horses: a player rider's own C0C input values are not re-probed; a mob-mount dismount other than sneaking is unprobed.
-  - Objects: the server tick tree has no source for other block kinds (none are scheduled there today); village, siege and teleporter cleanup order is not audited.
-  - Portals: `ServerMobs.restore` keeps the same port-only transients on a world reload; items, orbs, carts and boats are not audited field by field; no three-world probe.
-  - Kill credit: a dead body on the server never wears armour.
-  - The dedicated server: a dead cart's or boat's S13 is counted at once; natively one S13 carries every kind's ids of the tick; the End lookup was not run.
-  - Speed: `legacyThink` closures, `tickMobs` shapes, `explosionBlocks`, `blockBoxesFast`, iterators in tracker code; the terrain state hash differs from the batch 92 note's (unexplained, identical across modes).
-  - Server commands: /publish stays off. End island tails past 128 blocks are cut on some seeds (left for the user's decision). WebSocket compression stays off.
-  - Not seen in a browser: leads across server portals, plus the batch 67 to 92 lists.
-- **Single player.**
-  - Tiles: `awayResult` skips a positive time shift when the live clock is frozen at return; a run stopped by the wall budget does not count skipped ticks; dispenser, dropper, hopper and brewing facing records are not audited.
-  - The copy: a held target with a near arrival and the old chunk listing need the arrival before the old world is saved; the trackers have no sent-chunk gate at arrival or login.
-  - Portals: `dimension-live.js deliver` drops a player-held lead whose holder is in the destination.
-  - Kill credit: balls left in a Nether or End stash at a death go through the away run as ownerless.
-  - Mob melee rolls Bane of Arthropods slowness twice when the mob holds the item (`entities.js` passes `equipment[0]` again).
-  - Mob records: wither blue skulls, the armoured phase and block breaking have no record.
-  - Entity NBT: a Health 0 mob with `DeathTime` 20 or more (a native immortal corpse) is dropped; a live mob with `DeathTime` above 0 loses its pose; players, the dragon and crystals write 0; the other audit keys were not probed past the entnbt91 rows.
-  - Not seen in a browser: the death animation after a reload, old-save chests, sensors after a mid-run `/time`, bat and squid motion, wither sounds, entities popping in after a portal trip, plus the batch 92 list.
-- **Rendering.** No native pixel capture.
-- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+Still open from batch 93: carried into the batch 94 list above, less what batch 94 fixed or found wrong.
 
 ## Done in batch 92
 

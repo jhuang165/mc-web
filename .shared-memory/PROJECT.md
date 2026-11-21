@@ -145,6 +145,22 @@ Batch 79 (2026-11-16/18, ten tracks in `../wt79-<name>` on `batch79-<name>`, cut
 - Verification: the first full run hung on those two files; after the fix one full `npm test` on 536376793: 8964 tests, 8964 pass. Build and bridge tests ok. No browser checks.
 - Open: "Still open from batch 79" in `public/research/remaining-gaps.md`.
 
+Batch 94 (2026-11-21, ten tracks in `../wt94-<name>` on `batch94-<track>94`, cut from 5650dbe8b, merged --no-ff on `batch94-lead`; track agents ran on Sonnet, by request; shared rules `../artifacts/b94-lead/track-rules.md`; lead note `b94-lead-track.md`; no browser checks or full test runs in tracks, by request):
+- 0.123.0, by track (details in the `*-b94-track.md` notes and "Done in batch 94" in `public/research/remaining-gaps.md`):
+  - horse94: the `horse88-b88`/`horse92-b92` flakes were test rolls (tests now stub the AI and inject a no-hit Random); server rider input decays 0.98 per C05 (`decayRideInput`, boats too); `Horse94Probe`.
+  - mpobjects94: server block events flush after random ticks and bolts, before entities (`tickBlockEvents`); the Overworld Teleporter cache sweeps before portal checks.
+  - portals94: single-player player-held leads across portals (10-block rule); items cross without pickup delay and hover; orbs, carts and boats keep OnGround; `mob-transient.js` `withoutTransient`.
+  - spcopy94: single-player entities first sent with their chunk column, five columns per tick in the native spiral (`sp-chunk-gate.js`, `spGateConfig` in `main.js`).
+  - credit94: mob Bane rolls once; Thorns visit counts (player hit twice, mob once); stashed balls/potions/arrows keep the dead body (`ownerBody`); death bodies keep armour.
+  - console94: one S13 queue per connection for every kind (`ctx.destroyed`, `drainDestroyed`), packets of at most 127 ids; dead carts/boats wait a tick (`delLate`).
+  - mpperf94: `mpperf94-fast.js` behind `MC_MPPERF94=on|off|verify` (shared `legacyThink` environment, `scratchBox` copy only in verify); heap per tick -2 to -4%; terrain hash change explained.
+  - tiles94: away time shift applied whatever the live rule at return (`away-time-shift.js`), skipped ticks counted under the rule in force (`skipTicks`).
+  - entnbt94: `Entnbt94Probe`; immortal corpses (Health 0, DeathTime >= 20), negative DeathTime, effect/enderman/cart/frame/horse edge values.
+  - mobrec94: 18 executed wither/pigman/giant records; bow arrows trigger the armoured wither's immunity (`directArrow`), wither break drops use the world Random.
+- Lead: ten merges, none needing a manual resolution. The full run's one failure, `awaytracker-b60` (a saved mob's `age`), came from portals94 stripping transients on every `EntityWorld.restore`; the lead made the reset opt-in (`resetTransient`, default on for `summoned`) and moved the single-player portal strip into `dimension-live.js` `deliver` (07abd4289).
+- Verification: one full `npm test` on the merged tree: 10488/10489, the failure being `awaytracker-b60` above; after the fix, 872/872 targeted tests (every test touching summon, away runs, dimension-live or mob transients, plus `entities.test.js`). Build and bridge tests ok. No browser checks.
+- Open: "Still open from batch 94" in `public/research/remaining-gaps.md`.
+
 Batch 93 (2026-11-21, ten tracks in `../wt93-<name>` on `batch93-<track>93`, cut from aeb417610, merged --no-ff on `batch93-lead`; track agents ran on Sonnet, by request; shared rules `../artifacts/b93-lead/track-rules.md`; lead note `b93-lead-track.md`; no browser checks or full test runs in tracks, by request):
 - 0.122.0, by track (details in the `*-b93-track.md` notes and "Done in batch 93" in `public/research/remaining-gaps.md`):
   - horse93: `Horse93Probe`; client copy of a mob rider gets the rear shift, the player seat reads `bM` (previous rear amount), mob rider input decays once (0.98), not twice.
