@@ -47,7 +47,7 @@ export function replayHopperScenario(s, { origin = O } = {}) {
   };
   const setBlock = (x, y, z, id, meta) => {
     const m = id ? fromOriginal(id, meta) : { id: 0, meta: 0 };
-    if (id === 54 || id === 61 || id === 62) m.meta = 0;
+    if (id === 61 || id === 62) m.meta = 0; // b91 tiles91: a chest keeps its facing in the cell, like the registry
     world.put(...abs(x, y, z), m.id, m.meta, false);
     if (TILE_IDS.has(id)) { const t = tile(x, y, z, id); if (id === 54 || id === 61 || id === 62) t.facing = meta; }
     if (TRACKED.has(id)) order.push([x, y, z]);

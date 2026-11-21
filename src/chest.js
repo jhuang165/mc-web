@@ -11,6 +11,37 @@ export const FACING = { 2: [0, -1], 3: [0, 1], 4: [-1, 0], 5: [1, 0] };
 const SIDES = [[0, 0, -1], [0, 0, 1], [-1, 0, 0], [1, 0, 0]];
 import { largeChestName } from "./tile-names.js";
 export const chestKey = (x, y, z) => `${x},${y},${z}`;
+// b91 tiles91: BlockChest keeps its facing in block metadata (2-5), like the furnace since batch 90. The cell metadata rules; the record's `facing`
+// is only the fallback for a cell whose metadata is not 2-5 (a save from before this batch, an unmigrated column, a replica that has the record only)
+// and is still written for one release so that an older build can read the save. 3 when neither decides.
+const faced = (f) => f >= 2 && f <= 5;
+export function chestFacing(world, chests, x, y, z) {
+  const meta = world.getMeta?.(x, y, z);
+  if (faced(meta)) return meta;
+  const rec = chests?.[chestKey(x, y, z)]?.facing;
+  return faced(rec) ? rec : 3;
+}
+// Chunk.setBlockMetadata with flags 2 (setBlockMetadataWithNotify from func_149954_e / onBlockPlacedBy): the block stays, no breakBlock. Writes the cell
+// metadata (a silent tracked `put`: no neighbour notification, the saved edit carries the metadata) and the record fallback.
+export function writeChestFacing(world, chests, x, y, z, facing) {
+  (chests[chestKey(x, y, z)] ??= newChest()).facing = facing;
+  const id = world.get(x, y, z);
+  if (isChestBlock(id) && typeof world.put === "function" && world.getMeta(x, y, z) !== facing) world.put(x, y, z, id, facing, true);
+}
+// A chest block saved without tile data: the tile is made from the block alone (the cell's metadata is the facing); only a cell with no 2-5 metadata gets the
+// facing onBlockAdded settles.
+export function adoptChest(world, chests, x, y, z) {
+  if (chests[chestKey(x, y, z)]) return;
+  const meta = world.getMeta(x, y, z);
+  if (faced(meta)) chests[chestKey(x, y, z)] = newChest(meta);
+  else settleFacing(world, chests, x, y, z);
+}
+// Save migration: a chest cell whose metadata is not 2-5 takes the record's facing (the old storage). True when it wrote.
+export function migrateChestFacing(world, chests, x, y, z) {
+  const rec = chests?.[chestKey(x, y, z)]?.facing, id = world.get(x, y, z);
+  if (!faced(rec) || !isChestBlock(id) || faced(world.getMeta(x, y, z)) || typeof world.put !== "function") return false;
+  return world.put(x, y, z, id, rec, true);
+}
 
 export function newChest(facing = 3) {
   return { items: Array(CHEST_SLOTS).fill(null), facing, users: 0, lid: 0, prevLid: 0 };
@@ -45,13 +76,13 @@ export function settleFacing(world, chests, x, y, z, kind = kindAt(world, x, y, 
   if (north === kind || south === kind) {
     const pz = north === kind ? z - 1 : z + 1, w2 = at(-1, 0, x, pz), e2 = at(1, 0, x, pz);
     facing = 5;
-    if (chests[chestKey(x, y, pz)]?.facing === 4) facing = 4;
+    if (chestFacing(world, chests, x, y, pz) === 4) facing = 4;
     if ((o(west) || o(w2)) && !o(east) && !o(e2)) facing = 5;
     if ((o(east) || o(e2)) && !o(west) && !o(w2)) facing = 4;
   } else if (west === kind || east === kind) {
     const px = west === kind ? x - 1 : x + 1, n2 = at(0, -1, px, z), s2 = at(0, 1, px, z);
     facing = 3;
-    if (chests[chestKey(px, y, z)]?.facing === 2) facing = 2;
+    if (chestFacing(world, chests, px, y, z) === 2) facing = 2;
     if ((o(north) || o(n2)) && !o(south) && !o(s2)) facing = 3;
     if ((o(south) || o(s2)) && !o(north) && !o(n2)) facing = 2;
   } else {
@@ -61,7 +92,7 @@ export function settleFacing(world, chests, x, y, z, kind = kindAt(world, x, y, 
     if (o(west) && !o(east)) facing = 5;
     if (o(east) && !o(west)) facing = 4;
   }
-  (chests[chestKey(x, y, z)] ??= newChest()).facing = facing;
+  writeChestFacing(world, chests, x, y, z, facing);
 }
 // World.setBlock -> onBlockAdded (settle this chest and any neighbours), then
 // onBlockPlacedBy, which turns a pair only when the yaw lines up with it.
@@ -69,7 +100,7 @@ export function placeChest(world, chests, x, y, z, yaw, kind = kindAt(world, x, 
   chests[chestKey(x, y, z)] ??= newChest();
   settleFacing(world, chests, x, y, z, kind);
   for (const [dx, , dz] of SIDES) if (world.get(x + dx, y, z + dz) === kind) settleFacing(world, chests, x + dx, y, z + dz, kind);
-  const facing = placementFacing(yaw), set = (px, pz) => (chests[chestKey(px, y, pz)] ??= newChest()).facing = facing,
+  const facing = placementFacing(yaw), set = (px, pz) => writeChestFacing(world, chests, px, y, pz, facing),
     north = world.get(x, y, z - 1) === kind, south = world.get(x, y, z + 1) === kind,
     west = world.get(x - 1, y, z) === kind, east = world.get(x + 1, y, z) === kind;
   if (!north && !south && !west && !east) set(x, z);

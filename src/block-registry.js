@@ -49,7 +49,13 @@ const redstoneTorch = (mc) => ({
   to: (meta) => [mc, meta >= 1 && meta <= 4 ? meta : 5],
   from: (meta) => (meta >= 1 && meta <= 4 ? { meta, exact: true } : { meta: 0, exact: meta === 5 }),
 });
-const chest = (mc) => ({ mc, to: (meta, state) => [mc, facing(state)], from: (meta) => ({ meta: 0, state: { facing: meta }, exact: meta >= 2 && meta <= 5 }) });
+// b91 tiles91: BlockChest keeps its facing in block metadata (2-5, ajx), so the cell carries it both ways (as the furnace since b90); `state.facing` (a record's
+// facing) only fills in a cell whose metadata is not 2-5, and a metadata outside 2-5 imports as an approximation (3).
+const chest = (mc) => ({
+  mc,
+  to: (meta, state) => [mc, meta >= 2 && meta <= 5 ? meta : facing(state)],
+  from: (meta) => (meta >= 2 && meta <= 5 ? { meta, exact: true } : { meta: 0, state: { facing: meta }, exact: false }),
+});
 const facing = (state) => (state.facing >= 2 && state.facing <= 5 ? state.facing : 3);
 
 // Internal id -> mapping. Identity metadata ("same") where the port stores the original meaning.
