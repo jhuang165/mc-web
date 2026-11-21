@@ -198,7 +198,7 @@ test("seeded server scenes hash the same off / on / verify (MC_MPPERF83..88 all 
   for (const scene of ["pen", "terrain"]) {
     const hash = (m) => spawnSync(process.execPath, ["tools/bench-alloc81.mjs", `--scene=${scene}`, "--state", "--ticks=100", "--mobs=60"], { env: { ...process.env, MC_MPPERF88: m, ...(m === "verify" ? verifyAll : {}) }, encoding: "utf8" }).stdout.trim();
     const off = hash("off");
-    assert.match(off, /mode88=off (mode89=\w+ )?(mode90=\w+ )?(mode91=\w+ )?(mode92=\w+ )?mobs=\d+ \[/); // b89: the bench prints mode89 after mode88
+    assert.match(off, /mode88=off (mode89=\w+ )?(mode90=\w+ )?(mode91=\w+ )?(mode92=\w+ )?(mode93=\w+ )?mobs=\d+ \[/); // b89: the bench prints mode89 after mode88
     const tail = (s) => s.split("mobs=").pop();
     assert.equal(tail(hash("on")), tail(off));
     assert.equal(tail(hash("verify")), tail(off));

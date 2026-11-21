@@ -1,0 +1,22 @@
+# Batch 93 mpperf93: FineGrid keeps its index and cell maps, portal step stops allocating per entity
+
+## Summary
+- New `src/mpperf93-fast.js`, `MC_MPPERF93=on|off|verify` (default on). `tools/bench-alloc81.mjs` prints `mode93` after `mode92`; the `mode92=` regexes in the mpperf86..90 tests allow `mode93=`.
+- `src/push-grid.js` FineGrid (hook: `recycleOf93(spare, list)` before `recycleOf90`): a new grid over the same entities in the same order as the retired one (the usual tick of a settled population) keeps its entity -> index Map unchanged and its cell Map with the lists emptied; the cell Map is dropped when it holds more than `64 + 4 * entities` cells. Stale empty cell lists are harmless (queries only `get` a cell and add its indices). Verify rebuilds the index and compares.
+- `src/entity-portal.js` `EntityPortals.step` (hooks: `boxPair93`, in-place `last` record): the previous-position record of an entity is rewritten in place (read into locals first) instead of a new `{x,z}` per step, and the collision box is a module scratch pair instead of a new array per step (`box[0]`, `box[1]` read at once, nothing keeps it). Same arithmetic as `boxOf`; verify compares with it.
+- Shared files touched: `push-grid.js` (3 lines), `entity-portal.js` (step head), `tools/bench-alloc81.mjs`, and the mode regexes of five old mpperf tests. No world-tick, portal-travel logic, NBT, console or mob-record code.
+
+## Evidence
+- Executed (travel, 150 ticks, sampling heap profile before): `step` entity-portal 10.3 MB, `set` builtin 5.5 MB (4.5 of it from `push87` inside FineGrid, the idx/cell Maps), FineGrid 5.4, `next` 8.3, legacyThink 5.1, tickMobs 5.1. After: `step` 4.3 MB, FineGrid 5.3 with `set` gone from the top (sampling is random, so +-1 MB).
+- Executed `node --expose-gc tools/bench-alloc81.mjs --scene=X --runs=3 --ticks=150`, off/on alternated twice (heap KB/tick; ms/tick): travel 1418 -> 1346, 1417 -> 1345 (-5%; 4.79 -> 4.10, 3.90 -> 4.39); pen 468 -> 424, 472 -> 426 (-9%; 1.01 -> 0.90, 0.90 -> 0.86); terrain 713 -> 694, 713 -> 697 (-2.5%; 2.59 -> 2.77, 2.86 -> 2.90). Tick time is within noise on the shared Mac; only the allocation drop is claimed.
+- Executed `--state` 150 ticks, off = on = verify: travel `f81ade75de17a1ed,ff999ef463b1dfa9,d5aa46cad2ae3123` and pen `57dd8fa8bdd4d102,299f5b68c2b695ca,a0f2782811dd9f8b` (both equal the batch 92 hashes), terrain `0e8433fc12383afe,86695eba48ec2495,c4dec3fc9cd47b5e` (equal across the three modes; differs from the b92 note's terrain hash, I did not run b92's code to see why, probably different bench arguments).
+
+## Verification
+- `node --test src/mpperf93-b93.test.js`: 4 pass (FineGrid kept maps / other list / reversed list / touch, cell-map drop, 540 portal steps over mob, baby, unknown type, item, cart with and without bb off/on/verify, bench hashes pen/travel off/on/verify + mode93 print). Mutation (executed): `idxOf: null` in `recycleOf93` fails test 1.
+- Neighbours: 107 test files naming push-grid, FineGrid, entity-portal, portal, boxOf, pushNear or mpperf80..93 (concurrency 2): 1694 pass / 3 fail; the 3 were my own bug (a replace also hit the PushGrid constructor: `re is not defined`), fixed; re-run of the 10 files naming push-grid/PushGrid/FineGrid/pushNear/entity-portal/mpperf90..93: 80 pass / 0 fail. Not re-run: the other 97 (they do not touch the fixed lines). No full npm test, no build (no new imports of shipped modules beyond the ones tested; push-grid and entity-portal load in node tests), no browser. An early shell glob mistake started the whole suite for a few seconds; it was stopped, and I ran `pkill -f 'node --test'` which may also have killed other agents' test runs on this Mac.
+
+## Found wrong in the batch 92 list
+- Nothing wrong. `walk`, `next`, `push` as "callers not attributable" holds: the `set` builtin was FineGrid's Maps; `push` and `next` sit under inlined tracker code in `multiplayer/server-mobs.js track`, `server-stats.js` (a `for (of this.entities)` per tick) and `simulation.js tick`.
+
+## Follow-ups
+- Still open: `legacyThink` allocates about 14 closures per call (`env`, 5 MB); fixing it means a per-mob context object with shared closures (risk of capture order such as `light`). `tickMobs` object shapes, `explosionBlocks`, `blockBoxesFast`, `moveEntityBody`/`scratchBox`, the `step` caller's option object, `next` (iterators in tracker code). Browser-only: single-player frame time.
