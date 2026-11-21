@@ -33,7 +33,7 @@ import { eachView90 } from '../mpperf90-fast.js'; // b90 mpperf90
 import { syncVehiclePassengers } from '../vehicle-riders.js';
 import { useEntityInReach } from './use-entity-reach.js'; // b70 mpclicks: processUseEntity's reach (posY to posY, 36 or 9 without sight)
 import { vehicleSprintPush } from './server-vehicle-hit.js'; // b75 mpusesweep75
-import { CartTracker, setVehicleInfo } from './server-cart-track.js'; // b71 mpreach71: minecart tracker cadence (80 / 3 / velocity)
+import { CartTracker, setVehicleInfo, joinWatcher } from './server-cart-track.js'; // b71 mpreach71: minecart tracker cadence (80 / 3 / velocity)
 import { ServerHanging } from './server-hanging.js'; // b68 mppaintings: paintings, item frames and knots of this dimension
 import { boatPlaceEntities, mobBallLists, playerListed, crystalBox } from '../boat-place-entities.js'; // b87 boatcheck87 (b88 boatray88: playerListed)
 import { serverPosY, SLEEP_BOX } from '../sleeper-eye.js';
@@ -377,7 +377,7 @@ export class ServerVehicles {
     eachView90(this.views, (view, id) => { // b90 mpperf90: Map.forEach, no [id, view] entry array per view (the body's one `continue` is the `return`)
       const p = this.host.players.get(id);
       if (!p) { view.known.clear(); view.vis?.clear(); view.ref = null; view.leaving = []; return; } // b63 mpnether3: a player of another dimension (the host's players are this dimension's): the client rebuilt its world, so nothing is known
-      const set = [], del = [], seen = new Set(), knownPos = (view.cartPos ??= new Map()), joins = (view.joins ??= new Map()); // b84 mpboat84: joins, the spawn record of each tracked vehicle
+      let quiet = null; const set = [], del = [], seen = new Set(), knownPos = (view.cartPos ??= new Map()), joins = (view.joins ??= new Map()); // b84 mpboat84: joins, the spawn record of each tracked vehicle
       // b83 tracker83: the range test of EntityTrackerEntry.tryStartWachingThis (the square of side 2 * range around lastScaledPosition / 32, int division), run only when the
       // vehicle's entry re-lists (it moved over 4 blocks: CartTracker `recheck`, with the scaled position from before its packets) or this player's own entry does (it moved over
       // 4 blocks, joined, or its columns changed), as EntityTracker.updateTrackedEntities; in between the membership holds. A vehicle that leaves goes at the viewer's next update
@@ -403,9 +403,9 @@ export class ServerVehicles {
         if (view.known.get(key) !== json) {
           const st = state, tracked = !v.boat || st.bc === 1, pos = tracked ? `${st.x},${st.y},${st.z},${st.yaw},${st.pitch},${st.rs ?? ''}` : '', had = view.known.has(key);
           view.known.set(key, json);
-          const row = tracked && had && knownPos.get(key) === pos ? { ...st, cartMeta: 1 } : { ...st }; set.push(row); setVehicleInfo(row, { kinds: en?.kinds ?? [], join: !had, data: v.boat ? 0 : v.type | 0, velocity: !!v.boat || !!en }); // b91 console91: the packets /netstat counts for the row; cartMeta: the position is the one the client holds, do not re-aim it (b83: a tracked boat's too; its S12 count `vs` still applies)
+          const row = tracked && had && knownPos.get(key) === pos ? { ...st, cartMeta: 1 } : { ...st }; set.push(row); setVehicleInfo(row, { kinds: en?.kinds ?? [], join: !had, data: v.boat ? 0 : v.type | 0, velocity: !!v.boat || !!en, watch: joinWatcher(v.boat, v.type) }); // b91 console91: the packets /netstat counts for the row; cartMeta: the position is the one the client holds, do not re-aim it (b83: a tracked boat's too; its S12 count `vs` still applies)
           knownPos.set(key, pos);
-        }
+        } else if (en?.kinds?.length) (quiet ??= []).push(en.kinds); // b92 console92: the entry sent packets (S12 of a cart, a move the viewer's state hides) with no row change
       }
       if (fast89.mode === 'off' || view.known.size !== seen.size) // b89 mpperf89: every seen key is known, so equal sizes leave nothing to delete
       for (const key of [...view.known.keys()]) if (!seen.has(key)) { view.known.delete(key); knownPos.delete(key); joins.delete(key); del.push(key); } // dead, or its column not sent
@@ -413,6 +413,7 @@ export class ServerVehicles {
       for (const key of leaving) if (!vis.has(key)) del.push(key); // last tick's untracked vehicles: the S13 now
       if (fast89.mode === 'off' || vis.size !== 0) // b89 mpperf89: skip a loop that would do nothing
       for (const key of vis) if (!all.some(v => keyOf(v) === key)) vis.delete(key);
+      p.vehNet = quiet; // b92 console92: counted by the connection, never sent
       if (set.length || del.length) p.vehPackets = { type: 'vehicles', ...(set.length ? { set } : {}), ...(del.length ? { del } : {}), ...(set.some(x => x.v[0] === 'c') ? { cartCadence: true } : {}) };
     });
     for (const [id, extra] of this.hanging.track(id => this.host.players.get(id))) { const p = this.host.players.get(id); p.vehPackets = { type: 'vehicles', ...(p.vehPackets ?? {}), ...extra }; } // b68 mppaintings: hset / hdel

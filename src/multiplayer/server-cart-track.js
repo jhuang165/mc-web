@@ -23,6 +23,10 @@ import { TrackerEntry, sizeClass, angleByteOf, velocityInt } from '../entity-tra
 const infos = new WeakMap();
 export const setVehicleInfo = (row, info) => { infos.set(row, info); };
 export const vehicleInfo = (row) => infos.get(row);
+// b92 console92: the S1C a viewer gets right after a cart's or boat's S0E (EntityTrackerEntry.tryStartWachingThis sends the whole DataWatcher whenever it is not blank, hw(id, dw, true)):
+// executed record bytes (console92-reference.json): Boat 26, MinecartRideable / Chest / TNT / Hopper / Spawner 38, MinecartFurnace 40 (the fuel flag), MinecartCommandBlock 42 (two empty strings).
+const CART_WATCH = [38, 38, 40, 38, 38, 38, 42]; // by cart type 0..6
+export const joinWatcher = (boat, type) => (boat ? 26 : CART_WATCH[type | 0] ?? 38);
 export const CART_RANGE = 80, CART_FREQUENCY = 3, CART_WIDTH = Math.fround(0.98);
 const POS = ['x', 'y', 'z', 'yaw', 'pitch'];
 

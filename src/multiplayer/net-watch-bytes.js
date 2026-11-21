@@ -18,6 +18,9 @@ const varInt = (n) => { let s = 1; while (n >= 0x80) { n >>>= 7; s++; } return s
 /** et.a(String): the VarInt length and the UTF-8 bytes. */
 export const nativeStringBytes = (s) => { const n = utf8(String(s ?? '')); return varInt(n) + n; };
 
+// b92 console92: `hooks.witherHeads(e)` (set by the server) returns the wither's three head targets (EntityWither watchers 17, 18, 19: the target's entity id, 0 for none) as
+// [id, id, id]; the targeting state lives in wither-boss-mobs.js, which a pure counting module does not import.
+export const hooks = { witherHeads: null };
 const BYTE = 2, SHORT = 3, INT = 5, FLOAT = 5; // header byte plus the value
 const AGEABLE = new Set(['pig', 'cow', 'mooshroom', 'sheep', 'chicken', 'wolf', 'ocelot', 'horse', 'villager']);
 // Native keys the port's own meta packets already carry (air 1, potion 7, flags 0, enderman 18, wither 20 and health, dragon health, bat 16, horse 16): not derived here.
@@ -41,7 +44,9 @@ export function watchState(e) {
   else if (t === 'sheep') out.push([16, BYTE, (e.color ?? 0) | (e.sheared ? 16 : 0)]);
   else if (t === 'pig') out.push([16, BYTE, e.saddled ? 1 : 0]);
   else if (t === 'villager') out.push([16, INT, e.profession | 0]);
-  else if (t === 'creeper') out.push([17, BYTE, e.powered ? 1 : 0]);
+  else if (t === 'creeper') out.push([16, BYTE, e.creeperState ?? -1], [17, BYTE, e.powered ? 1 : 0], [18, BYTE, e.ignited ? 1 : 0]); // b92: swell state (-1 / 1), charged, ignited
+  else if (t === 'enderman') out.push([16, BYTE, e.carried | 0], [17, BYTE, e.carriedData | 0]); // b92: the carried block id and metadata (the scream, watcher 18, travels in the port's own meta packet)
+  else if (t === 'wither') { const h = hooks.witherHeads?.(e); if (h) for (let i = 0; i < 3; i++) out.push([17 + i, INT, h[i] ?? 0]); } // b92: head targets (the invulnerable timer, watcher 20, travels in the port's own meta packet)
   else if (t === 'slime' || t === 'magma_cube') out.push([16, BYTE, e.size ?? 1]);
   else if (t === 'horse' && e.horse) out.push([19, BYTE, e.horse.type | 0], [20, INT, e.horse.variant | 0], [21, 1 + nativeStringBytes(owner), owner], [22, INT, e.horse.armor | 0]);
   return out;

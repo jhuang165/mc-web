@@ -11,7 +11,8 @@
 // /netstat does not count them, as a native server never sends or reads them.
 import { toOriginal } from '../block-registry.js';
 import { watchState, stringExtra, watchDiff } from './net-watch-bytes.js'; // b91 console91: owner strings, name tags and the later watcher keys of a native mob
-import { vehicleInfo } from './server-cart-track.js'; // b91 console91: the packets a cart or boat entry released
+import { vehicleInfo } from './server-cart-track.js';
+import { rowInfo } from './net-row-info.js'; // b92 console92: what a dispEnts row's S0E / S1C / S12 hold // b91 console91: the packets a cart or boat entry released
 import { columnsDeflated, itemTagBytes } from './net-native-bytes.js'; // b89 console89: deflated chunk data, item tags (node:zlib: server-only)
 export const STATUS_IDS = { pingStatus: 0, pingProbe: 1, pingStatusReply: 0, pingProbeReply: 1 }; // STATUS: C00ServerQuery / C01Ping, S00ServerInfo / S01Pong
 
@@ -155,6 +156,23 @@ const metaBytes = (p) => { let n = 1; for (const k of Object.keys(p ?? {})) if (
 const attributesBytes = (p) => C[32] + list(p?.list).reduce((n, r) => n + stringSize(r?.name ?? '') + 10 + 25 * list(r?.mods).length, 0);
 // b91 console91: `ctx.watch` ({ mob(i) -> the live mob, memory: Map i -> watchState }, per receiving player) lets the count see what the port's packets do not carry: the owner string and
 // name tag in the S0F and the first S1C, and one S1C with the changed native keys (health, age, tame flags, colour, ...) when a message carries a packet of the mob (net-watch-bytes.js).
+/**
+ * b92 console92: EntityTrackerEntry.sendLocationToAllClients runs its S1C (func_111190_b's watcher branch) whenever the DataWatcher has changes, on any tick, not only when a position
+ * packet goes out. `watch` is the receiving connection's ctx.watch; each remembered mob whose native entries differ from what was last counted is one S1C (id, int, the entries, end
+ * byte). Called once a tick after the mobs message, so a mob that is standing still (or whose packets were all dropped) is counted on the native schedule.
+ */
+export const watchSweep = (watch) => {
+  const out = [];
+  if (!watch) return out;
+  for (const [i, last] of watch.memory) {
+    const live = watch.mob(i);
+    if (!live) continue;
+    const now = watch.state ? watch.state(i, live) : watchState(live), n = watchDiff(last, now);
+    watch.memory.set(i, now);
+    if (n) out.push([28, C[28] - 1 + 1 + n]);
+  }
+  return out;
+};
 const GATED = new Set(['move', 'look', 'moveLook', 'teleport', 'head', 'meta', 'velocity']);
 const mobRecords = (packets, ctx) => {
   const out = [], watch = ctx?.watch; let destroys = 0, type = null, fresh = false, extra = 0;
@@ -209,9 +227,31 @@ const vehicleRecords = (row) => {
   const info = vehicleInfo(row);
   if (!info) return [[24, C[24]]];
   const out = [];
-  if (info.join) { out.push([14, C[14] + (info.data > 0 ? 6 : 0)]); if (info.velocity) out.push([18, C[18]]); }
+  if (info.join) { out.push([14, C[14] + (info.data > 0 ? 6 : 0)]); if (info.watch) out.push([28, info.watch]); /* b92: the S1C of the whole watcher (my.b(mw): after the S0E, before the S12) */ if (info.velocity) out.push([18, C[18]]); }
   for (const k of info.kinds) if (POSITION[k]) out.push(POSITION[k]);
   if (!out.length) out.push([28, C[28] - 1 + 1 + 5]); // only a watched field changed (hit, damage, display, lit, fuse): one int entry
+  return out;
+};
+/** b92 console92: the records of the tracker packet kinds an entry released (strings, or { type }); a 'meta' is an S1C of one byte entry (the burning flag). Used for carts a viewer holds whose row did not change. */
+export const kindRecords = (kinds) => { const out = []; for (const p of list(kinds)) { const k = typeof p === 'string' ? p : p?.type; if (k === 'meta') out.push([28, C[28] - 1 + 1 + 2]); else if (POSITION[k]) out.push(POSITION[k]); } return out; };
+// b92 console92: the `ents` rows of dispEnts (primed TNT, fireballs, skulls, a golem's snowball) are the port's per-tick snapshot; natively each is ONE entity the tracker spawns once (S0E, then the
+// whole-watcher S1C, then an S12 when the entry sends velocity) and moves with S15 / S16 / S17 / S18 / S12 / S1C packets at its own cadence (EntityTrackerEntry), and its S13 when it leaves.
+// `ctx.objs` (per connection) remembers which rows the viewer holds; a row's info (net-row-info.js) names its S0E data, velocity flag and S1C size, and its tick's packet kinds come from the
+// ball's own tracker packets (`t.p`, fireball-copy.js; an S17 is the row's 'move' carrying angle bytes) or the TNT's entry (info.kinds). Without ctx.objs a row counts one S0E per message.
+const ballKinds = (t) => list(t?.p).map((p) => (p?.type === 'move' && p.yb !== undefined ? 'moveLook' : p?.type));
+const dispEntRecords = (m, ctx) => {
+  const rows = list(m.ents), mem = ctx?.objs;
+  if (!mem) return rows.map(() => [14, C[14]]);
+  const out = [], seen = new Set();
+  let gone = 0;
+  for (const r of rows) {
+    const key = `${r?.k}:${r?.i}`, info = rowInfo(r) ?? {};
+    seen.add(key);
+    if (!mem.has(key)) { mem.set(key, true); out.push([14, C[14] + (info.data > 0 ? 6 : 0)], [28, info.watch ?? 11]); if (info.velocity) out.push([18, C[18]]); }
+    out.push(...kindRecords(info.kinds ?? ballKinds(r?.t)));
+  }
+  for (const key of [...mem.keys()]) if (!seen.has(key)) { mem.delete(key); gone++; }
+  if (gone) out.push([19, s13(gone)]);
   return out;
 };
 const sbPacket = (p) => { let n = C[SB_PACKET[p?.type ?? p?.k] ?? 59]; for (const [k, v] of Object.entries(p ?? {})) if (k !== 'type' && k !== 'k') { if (typeof v === 'string') n += stringSize(v) - 1; else if (Array.isArray(v)) n += v.reduce((a, s) => a + stringSize(s), 0); } return n; };
@@ -266,7 +306,7 @@ const CLIENT_PACKETS = {
   chunkBulk: (m, ctx) => bulks(m.columns, ctx),
   mobs: (m, ctx) => mobRecords(m.packets, ctx),
   vehicles: (m) => [...list(m.set).flatMap(vehicleRecords), ...(list(m.del).length ? [[19, s13(list(m.del).length)]] : [])],
-  dispEnts: (m) => [...each(14, m.ents, () => C[14]), ...objectRecords(m.trk)], fishHooks: (m) => each(14, m.hooks, () => C[14] + 6), // S0E (a hook's data is its angler: three shorts follow)
+  dispEnts: (m, ctx) => [...dispEntRecords(m, ctx), ...objectRecords(m.trk)], fishHooks: (m) => each(14, m.hooks, () => C[14] + 6), // S0E (a hook's data is its angler: three shorts follow)
   pistonTiles: (m) => each(36, m.events, () => C[36]), crack: (m) => each(37, m.cracks, () => C[37]), aux: (m) => each(40, m.events, () => C[40]),
   sound: (m) => each(41, m.sounds, (s) => C[41] - 1 + stringSize(s?.name ?? s?.n ?? s?.sound ?? '')), // S29: string name, int x, y, z, float volume, byte pitch
   dispFx: (m) => each(42, m.events, (e) => C[42] - 1 + stringSize(e?.n ?? e?.name ?? '')), fishFx: (m) => each(42, m.events, (e) => C[42] - 1 + stringSize(e?.n ?? '')), // S2A: string name, 7 floats, int
