@@ -21,6 +21,7 @@ import { drain, runSteps } from "./steps.js";
 import { ExitPrewarm } from "./exit-prewarm.js";
 import { OVERWORLD, NETHER, END, PortalState, Teleporter, transferTarget, GAME_IDS, providerOf, actualHeight, portalCooldown, readPlayerPortalState } from "./dimensions.js";
 import { EntityPortals, entityDeparture, placeAfterTravel, POS_Y, mobYawToMc, mcToMobYaw } from "./entity-portal.js";
+import { travelRoute } from "./entity-portal.js"; // b89 entnbt89
 import { ringEntityActive } from "./streaming-ticks.js";
 import { LEAD_ITEM } from "./horse-gear.js";
 
@@ -53,7 +54,7 @@ export function storedRecord(view, root) {
   for (const k of Object.keys(view)) if (!VIEW_ONLY.has(k) && !DIM_KEYS.includes(k)) out[k] = view[k];
   out.player = { ...(view.player ?? {}) };
   for (const k of TILE_KEYS) { if (root.player?.[k] !== undefined) out.player[k] = root.player[k]; else delete out.player[k]; }
-  if (root.portalArrivals?.[d]) { const rest = { ...root.portalArrivals }; delete rest[d]; if (Object.keys(rest).length) out.portalArrivals = rest; else delete out.portalArrivals; } // delivered by applyWrites
+  if (root.portalArrivals?.[d] && !root.portalArrivals[d].late) { const rest = { ...root.portalArrivals }; delete rest[d]; if (Object.keys(rest).length) out.portalArrivals = rest; else delete out.portalArrivals; } // delivered by applyWrites
   out.dimension = d;
   out.dimensions = { ...(root.dimensions ?? {}), [d]: { state: structuredClone(pick(view, DIM_KEYS)), tiles: structuredClone(pick(view.player, TILE_KEYS)) } };
   return out;
@@ -221,6 +222,7 @@ export class DimensionLive {
     delete record.pendingArrivals;
     if (!record.rootId && record.portalArrivals) { const rest = { ...record.portalArrivals }; delete rest[0]; if (Object.keys(rest).length) record.portalArrivals = rest; else delete record.portalArrivals; }
     if (!inbox) return;
+    if (record.rootId) { const root = this.host.worlds?.().find((w) => w.id === record.rootId), mine = root?.portalArrivals?.[dimensionOf(record)]; if (mine?.late) delete mine.late; } // b89 entnbt89: delivered now, so storedRecord drops it
     for (const k of ["entities", "drops", "xpOrbs"]) if (inbox[k]?.length) record[k] = [...(record[k] ?? []), ...inbox[k]];
     // Minecarts (saved as { version, carts }) and boats (a list) that travelled here (batch 37).
     if (inbox.carts?.length) record.minecarts = { version: 1, ...record.minecarts, carts: [...(record.minecarts?.carts ?? []), ...inbox.carts] };
@@ -264,7 +266,8 @@ export class DimensionLive {
   }
   depart(root, from, kind, e, r, owner) {
     const vehicle = kind === "cart" || kind === "boat";
-    const { rec, mc } = entityDeparture(this.portals, kind, e, r, owner);
+    const { rec, mc, source } = entityDeparture(this.portals, kind, e, r, owner);
+    if (source !== undefined) from = source; // b89 entnbt89: travelToDimension's source is the saved Dimension (entity-portal.js travelRoute)
     if (vehicle && e.passenger) { // the copy is made from the vehicle's own NBT: a mob that mounted it after the collision stays behind, unmounted (Entity.updateRidden)
       if (e.passenger.ridingEntity === e) e.passenger.ridingEntity = null;
       e.passenger = null;
@@ -334,10 +337,14 @@ export class DimensionLive {
   async deliver(rootId, from, kind, rec, mc, arg, leashed, time) {
     const root = this.rootRecord();
     if (!root || root.id !== rootId) return;
-    const to = from === END && arg === END ? OVERWORLD : arg, peek = await this.peekFor(root, to), before = peek.writes.length;
+    const to = travelRoute(from, arg).to, peek = await this.peekFor(root, to), before = peek.writes.length;
     const spawn = root.worldSpawn ? { x: root.worldSpawn[0], z: root.worldSpawn[2] } : { x: 0, z: 0 };
     const heightAt = (x, z) => { for (let y = peek.actualHeight - 1; y > 0; y--) if (solidId(peek.get(x, y, z))) return y + 1; return 0; };
     const { e } = placeAfterTravel({ from, arg, entity: mc, teleporter: this.shareTeleporter(root, to, peek, time), spawn, heightAt });
+    // b89 entnbt89: a mismatched Dimension can send the copy into the dimension the player is in (sa.b(I) spawns it in that world at once). The port cannot add it to
+    // the live lists here: it waits in a `late` inbox, which storedRecord keeps and the next load of that dimension delivers (deliverArrivals).
+    const a = this.host.active?.(), late = !!a?.rootId && a.rootId === root.id && dimensionOf(a) === to;
+    if (late && !root.portalArrivals?.[to]?.late) (root.portalArrivals ??= {})[to] = { late: true, entities: [], drops: [], xpOrbs: [], writes: [] };
     const inbox = ((root.portalArrivals ??= {})[to] ??= { entities: [], drops: [], xpOrbs: [], writes: [] });
     for (const w of peek.writes.slice(before)) inbox.writes.push(w);
     const y = e.y - POS_Y[kind];
@@ -434,7 +441,7 @@ export class DimensionLive {
         // Batch 39: mobs, items and orbs too, and each arrives at the total time of the tick it left the run at (the Teleporter's cache entries and 100-tick sweeps are keyed by it).
         const now = this.clock(root), t0 = now - (this.host.ticks() - a.ticks0) - Math.round(a.tripMs / 50);
         let last = -Infinity;
-        for (const t of r.entities.portalTravel ?? []) { this.flights++; try { await this.deliver(root.id, OVERWORLD, t.kind, t.rec, t.mc, t.arg, !!t.leashed, last = Math.max(last, Math.min(now, Math.max(0, t0 + (t.tick | 0))))); } catch (error) { console.warn("away portal delivery failed:", error); } finally { this.flights--; } }
+        for (const t of r.entities.portalTravel ?? []) { this.flights++; try { await this.deliver(root.id, t.source ?? OVERWORLD, t.kind, t.rec, t.mc, t.arg, !!t.leashed, last = Math.max(last, Math.min(now, Math.max(0, t0 + (t.tick | 0))))); } catch (error) { console.warn("away portal delivery failed:", error); } finally { this.flights--; } }
       }
       // Batch 33 (away-commands.js): command block tiles, world rules a command changed, and what the main thread applies (clock shift, weather, chat lines).
       if (r.commandBlocks) root.commandBlocks = r.commandBlocks;

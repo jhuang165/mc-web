@@ -157,7 +157,7 @@ function javaMobFromNbtBase(entity, { shiftX = 0, shiftZ = 0, convertItem = () =
   if (summonType) {
     const pos = numbers(entity, 'Pos', NBT.DOUBLE, 3), parsed = pos && summonedMobRecord(summonType, entity, { convertItem });
     if (!parsed) return null;
-    const max = savedMaxHealth(entity), record = { ...parsed.record, x: pos[0] + shiftX, y: pos[1], z: pos[2] + shiftZ, fire: Math.max(-1, tagValue(entity, 'Fire', NBT.SHORT, -1)) };
+    const max = savedMaxHealth(entity), record = { ...parsed.record, x: pos[0] + shiftX, y: pos[1], z: pos[2] + shiftZ, fire: tagValue(entity, 'Fire', NBT.SHORT, 0) /* b89 entnbt89: sa.f's raw getShort (0 when absent); moveEntity rests it at -1 on the first update */ };
     if (Number.isFinite(max) && max > 0) record.health = Math.min(tagValue(entity, 'HealF', NBT.FLOAT, tagValue(entity, 'Health', NBT.SHORT, max)), max);
     return Object.assign(record, gearNbtFields(entity, shiftX, shiftZ), portalCooldownFields(entity));
   }
@@ -171,7 +171,7 @@ function javaMobFromNbtBase(entity, { shiftX = 0, shiftZ = 0, convertItem = () =
     type, x: pos[0] + shiftX, y: pos[1], z: pos[2] + shiftZ, health,
     // Entity.rotationYaw is degrees counter-clockwise from +z toward -x; the browser yaw is the negated radian value.
     yaw: rotation ? -rotation[0] * Math.PI / 180 : 0,
-    fire: Math.max(-1, tagValue(entity, 'Fire', NBT.SHORT, -1)),
+    fire: tagValue(entity, 'Fire', NBT.SHORT, 0) /* b89 entnbt89: sa.f's raw getShort (0 when absent); moveEntity rests it at -1 on the first update */,
     effects: readActiveEffects(entity), ...absorptionFields(entity), ...invulnerableFields(entity),
   };
   if (type === 'villager') {
