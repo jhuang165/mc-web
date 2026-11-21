@@ -116,10 +116,11 @@ export function witherAITick(brain) {
   const p = m.ai.player, players = m.witherPlayers ? m.witherPlayers() : [p], h = (o) => (o.isPlayer ? o : m.ai.brain(o)); // b64: the server passes every player of the dimension (each is a candidate of getEntitiesWithinAABB)
   headPass(s, rand, ticks, {
     pos: e, difficulty: m.difficulty ?? 2,
-    // World.getEntitiesWithinAABB(EntityLivingBase, box.expand(20, 8, 20), xd): living, not undead, the player included, in chunk/slice order
+    // World.getEntitiesWithinAABB(EntityLivingBase, box.expand(20, 8, 20), xd): living, not undead, the player included, in chunk/slice order. xd tests only the creature
+    // attribute, so a corpse still in the list is a candidate (it takes a nextInt draw; the alive test fails after it): b93 mobrec93, executed b93mr-wither-cow (the blast's kill).
     pool: () => {
       const near = [];
-      for (const o of m.entities) if (o !== e && o.health > 0 && !witherIsUndead(o) && brain.ai.overlaps(brain, m.ai.brain(o), 20, 8, 20)) near.push(o);
+      for (const o of m.entities) if (o !== e && !witherIsUndead(o) && brain.ai.overlaps(brain, m.ai.brain(o), 20, 8, 20)) near.push(o);
       for (const q of players) if (q?.alive && brain.ai.overlaps(brain, q, 20, 8, 20)) near.push(q);
       return nativeOrder(near).map(h);
     },
@@ -251,7 +252,10 @@ export function buildWitherTasks(m, K) {
   m.targets.add(1, new HurtByTarget(m, false));
   m.targets.add(2, new NearestNonUndead());
   const gate = (obj, name) => { const base = obj[name].bind(obj); obj[name] = (...a) => ((e.invul ?? 0) > 0 ? undefined : base(...a)); };
-  gate(m.tasks, "tick"); gate(m.targets, "tick"); gate(m.navigator, "onUpdateNavigation");
+  gate(m.tasks, "tick"); gate(m.targets, "tick");
+  // b93 mobrec93: xc.bn never reaches super.bn while Invul > 0, so EntityAITasks.tickCount (its start-evaluation every 3rd call) does not advance: the first active tick
+  // evaluates the tasks (executed b93mr-wither-spawn: i120 on the first tick after the spawn). aiSkipped is what ai.js subtracts from the age for it.
+  const tick = m.tasks.tick; m.tasks.tick = (...a) => { if ((e.invul ?? 0) > 0) e.aiSkipped = (e.aiSkipped || 0) + 1; return tick(...a); }; gate(m.navigator, "onUpdateNavigation");
   m.updateAITick = () => witherAITick(m);
 }
 

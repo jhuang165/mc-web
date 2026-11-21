@@ -7,7 +7,7 @@ const nextInt = (random, n) => typeof random === "function" ? Math.floor(random(
 // and experience; only its size, health, onSpawnWithEgg and attackEntityAsMob differ.
 export const isSpider = (type) => type === "spider" || type === "cave_spider";
 // The sound names the original resolves for a type (EntityCaveSpider keeps mob.spider.*).
-export const soundType = (type) => (type === "cave_spider" ? "spider" : type === "mooshroom" ? "cow" : type);
+export const soundType = (type) => (type === "cave_spider" ? "spider" : type === "mooshroom" ? "cow" : type === "wither_skeleton" ? "skeleton" : type); // b93 mobrec93: EntitySkeleton (yl) names its sounds mob.skeleton.* for type 1 too (executed b93mr-wskel-fight: say, hurt, death)
 // EntityCaveSpider.attackEntityAsMob (xy.n): after a successful hit on a living target,
 // Poison (amplifier 0) for 7 s on Normal or 15 s on Hard, none on Easy or Peaceful.
 export const caveSpiderPoisonTicks = (difficulty) => (difficulty === 2 ? 7 : difficulty === 3 ? 15 : 0) * 20;

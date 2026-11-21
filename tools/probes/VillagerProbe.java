@@ -31,6 +31,8 @@ public class VillagerProbe {
   public static class World extends MobMoveProbe.ProbeWorld {
     static Map<String, int[]> cells = new HashMap<>(); // x,y,z -> {id, meta}
     static List<sa> entities = new ArrayList<>();
+    static boolean byId; // batch 93: World.getEntityByID (the wither's watched head targets); off for the older sets, whose probe world answered null
+    public sa a(int id) { if (byId) for (sa e : entities) if (e.y() == id) return e; return null; }
     static List<String> sounds = new ArrayList<>();
     static List<Object> spawned = new ArrayList<>();
     static List<String> aux = new ArrayList<>();

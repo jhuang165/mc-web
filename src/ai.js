@@ -1268,6 +1268,7 @@ export class Brain {
   // 1 in 800 roll; within 32 the idle age resets, which is what lets Wander run.
   despawnEntity() {
     const e = this.e, p = this.ai.player;
+    if (e.type === "wither") { e.idle = 0; return; } // b93 mobrec93: xc.w() (despawnEntity) just resets entityAge to 0, so the wither never rolls nextInt(800) (executed b93mr-wither-far)
     if (!p || p.absent || p.left) return; // b91 spcopy91 `left`: the player is out of this world, so getClosestPlayerToEntity is null as well. `absent`: the away run has no player (away-entities.js); getClosestPlayerToEntity is null and nothing happens. sw.w() has no age gate in 1.7.10: it runs every tick (bytecode-read)
     const d3 = this.distSq(p), can = canDespawn(e);
     if (can && d3 > 16384) return this.ai.despawn(e);

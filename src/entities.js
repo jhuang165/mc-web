@@ -1265,13 +1265,13 @@ export class EntityWorld {
     // sounds go to `clientSounds`, so a fresh hit is heard twice in 1.7.10 (damage-fx.md).
     if (fresh) (this.clientSounds ??= []).push({ sound: hurtOf(e), ...sound, pitch: this.statusPitch(e, 2) });
     if (e.health <= 0) {
-      if (fresh) this.events.push({ sound: deathOf(e), ...sound, pitch: soundPitch(rand, child) });
+      if (fresh && (deathOf(e) || e.type !== "squid")) this.events.push({ sound: deathOf(e), ...sound, pitch: soundPitch(rand, child) }); // b93 mobrec93: EntityLivingBase.attackEntityFrom reads getSoundPitch only for a non-null sound (executed b93mr-squid-hit: no pitch draws on the squid's hit; the snow golem's null here is the inherited default sound, which does draw: b88mr-snow-creeper-8862)
       if (fresh && e.type === "horse") e.mouthTicks = 1; // wi.aU (the death sound getter) calls cS()
       this.onDeath(e, source);
       if (fresh) (this.clientSounds ??= []).push({ sound: deathOf(e), ...sound, pitch: this.statusPitch(e, 3) });
     } else if (fresh) {
       if (e.type === "horse") this.horseHurt(e, rand); // EntityHorse.getHurtSound (wi.aT): cS (mouth open), nextInt(3) first, 0 makes it rear (no sound of its own)
-      this.events.push({ sound: hurtOf(e), ...sound, pitch: soundPitch(rand, child) });
+      if (hurtOf(e) || e.type !== "squid") this.events.push({ sound: hurtOf(e), ...sound, pitch: soundPitch(rand, child) });
     }
     if (e.type === "zombie" || e.type === "pigman") this.callReinforcement(e, sourceEntity(this, e, source), source.deadAttacker ? deadTargetAt(source) : null); // EntityPigZombie.attackEntityFrom ends in EntityZombie's (spawnReinforcements 0: the Hard roll still draws)
     // EntityMob.attackEntityFrom (yg.a), every legacy-action-state EntityMob (spider, pigman, silverfish, blaze, giant; fireballs-replay.js, fireballs-reference.json
@@ -1723,7 +1723,8 @@ export class EntityWorld {
     if (ignite) setMobFire(e, 1); // EntityPlayer.attackTargetEntityWithCurrentItem: setFire(1) on a target not yet burning
     // b82 mpplace82: wy.a(ro, F) -> xa.a(wy, ro, F) answers true inside the dragon's hurt window too (bytecode-read: the window is sv.a's, reached only
     // through xa.e(ro, F), and xa.a(wy) ignores its result), so a part hit always lands; the window only decides the dragon's health (dragon.js livingHurt).
-    const landed = (part || !(e.hurt > 0 && damage <= e.lastDamage)) && this.damage(e, damage, player.x, player.z, true, null, { looting: weapon.looting });
+    // b93 mobrec93: EntityPlayer.attackTargetEntityWithCurrentItem always calls target.attackEntityFrom, also inside the hurt window; the overrides that act before super (pigman c(sa) anger and its fresh sound delay, silverfish wake-up, wolf sit, animal flee) still run on the refused hit (b93mr-pigman-hit-9541: yh.a re-rolls bt on the second hit).
+    const landed = this.damage(e, damage, player.x, player.z, true, null, { looting: weapon.looting });
     if (landed) {
       this.ai.playerHit(living ? e : null); // EntityLivingBase.setLastAttacker: the owner's wolves join in (EntityAIOwnerHurtTarget); b80: the dragon is hit through a part, not living, so sv.l(sa) stores null (bytecode-read)
       // EnchantmentHelper.func_151384_a(target, player): a mob wearing Thorns hurts the player back (thorns-live.js, DamageSource.causeThornsDamage).
@@ -2879,7 +2880,7 @@ export class EntityWorld {
   // (brightness - 0.4) * 2 under open sky is set on fire for 8 s; burn() takes the damage, water or rain puts it out. No health test (b82: corpses too).
   // b82 entities82: a helmet takes the hit instead (mob-equipment.js daylightHelmet: wear, the break sound and crumbs).
   sunIgnite(e, t) {
-    if (!(((e.type === "zombie" && e.growingAge >= 0) || e.type === "skeleton") && this.day)) return;
+    if (!(((e.type === "zombie" && e.growingAge >= 0) || e.type === "skeleton" || e.type === "wither_skeleton") && this.day)) return; // b93 mobrec93: yl.e has no type test, so the wither skeleton draws the sunburn float too (executed b93mr-wskel-day); setMobFire leaves a fire-immune mob unburnt
     const bx = Math.floor(e.x), by = Math.floor(e.y + t.height * 0.66), bz = Math.floor(e.z),
       light = this.ai.brightness(bx, by, bz);
     if (light > 0.5 && f(entityRandom(e).nextFloat() * 30) < f(f(light - f(0.4)) * 2) && this.ai.deps.canSeeSky(bx, Math.floor(e.y), bz)

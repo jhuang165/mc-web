@@ -19,7 +19,7 @@ import { totalArmor, dropEquipment, equipmentExperience } from "./mob-equipment.
 const f = Math.fround;
 // Item ids of this build: porkchop, cooked porkchop, beef, steak, rotten flesh, leather,
 // arrow, bone, bow, string, spider eye, gunpowder, iron ingot. The chicken ids are entities.js's.
-const SADDLE = 363, PORK = 202, COOKED_PORK = 203, BEEF = 204, STEAK = 205, FLESH = 206, LEATHER = 315, ARROW = 320, BONE = 311, BOW = 127, STRING = 321, SPIDER_EYE = 326, GUNPOWDER = 330, IRON = 302;
+const COAL_ITEM = 301, SADDLE = 363, PORK = 202, COOKED_PORK = 203, BEEF = 204, STEAK = 205, FLESH = 206, LEATHER = 315, ARROW = 320, BONE = 311, BOW = 127, STRING = 321, SPIDER_EYE = 326, GUNPOWDER = 330, IRON = 302;
 export const FEATHER = 317, RAW_CHICKEN = 318, COOKED_CHICKEN = 319;
 export const ANIMALS = new Set(["pig", "cow", "sheep", "chicken", "wolf", "ocelot", "mooshroom", "horse"]);
 // DamageSource.setDamageBypassesArmor: these skip applyArmorCalculations. Melee, arrows,
@@ -68,7 +68,7 @@ export function mobDrops(e, { playerHit, burning = false, bySkeleton = false, lo
     case "chicken": add(FEATHER, rand.nextInt(3) + rand.nextInt(1 + looting)); add(burning ? COOKED_CHICKEN : RAW_CHICKEN); break;
     case "zombie": add(FLESH, generic()); break;
     case "enderman": add(ENDER_PEARL, endermanPearls(rand, looting)); break; // EntityEnderman.dropFewItems: 0 to 1 + looting pearls; the carried block is not dropped
-    case "wither_skeleton": for (const [id] of witherSkeletonDrops(rand, { looting })) add(id); break; // EntitySkeleton type 1: coal and bones (wither-skeleton.js)
+    case "wither_skeleton": for (const [id] of witherSkeletonDrops(rand, { looting })) add(id === 263 ? COAL_ITEM : BONE); break; // b93 mobrec93: wither-skeleton.js lists the original ids (coal 263, bone 352); the port items are coal 301 and bone 311 (executed b93mr-wskel-kill: native 301 x1, 311 x2) // EntitySkeleton type 1: coal and bones (wither-skeleton.js)
     case "skeleton": add(ARROW, rand.nextInt(3 + looting)); add(BONE, rand.nextInt(3 + looting)); break;
     case "spider":
     case "cave_spider": // EntityCaveSpider inherits EntitySpider.dropFewItems

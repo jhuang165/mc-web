@@ -10,10 +10,11 @@
 //  - EntityWither.onLivingUpdate (xc.e): the 0.6 damping, the chase on head 0's target and the yaw before EntityMob's; the side heads after.
 //  - EntityWolf.onLivingUpdate / onUpdate (wv.e, wv.h): the wet shake, the head tilt and the shake's sound and splashes; watcher 18 (the health the tail shows) is written
 //    by updateAITasks (wv.bp), which a corpse skips, so it keeps the last live value.
+//  - EntityBat.onUpdate (we.h) tail: 0.6 of the vertical motion, a corpse too (b93).
 //  - EntitySnowman.onLivingUpdate (wr.e): the melt and drown hits are refused, the snow trail is still laid.
 // Already run before batch 83: EntityIronGolem's counters and walking dust (push -> golemTailTick). Not observable: EntityMob's entityAge += 2 in the light (yg.e).
 import { moveEntity, entityRandom, inWater } from "./entities.js";
-import { squidStateOf, squidLivingUpdate, squidWet, legacyBodyTurn } from "./squid-bat.js";
+import { squidStateOf, squidLivingUpdate, squidWet, legacyBodyTurn, batUpdate } from "./squid-bat.js";
 import { tickMobEffects } from "./mob-effects.js";
 import { maxHealthOf } from "./mob-riding.js";
 import { revengeOf } from "./revenge-target.js";
@@ -47,6 +48,7 @@ export function corpseLivingTail(m, e, t) {
   if (e.type === "wolf") { const dw = e.dwHealth; m.wolfUpdate(e, t); e.dwHealth = dw; }
   else if (e.type === "snow_golem") m.snowGolemUpdate(e, e.inWater || !!m.wet?.(e, t.height));
   else if (e.type === "wither") witherPost(m, e, t);
+  else if (e.type === "bat") batUpdate(e); // b93 mobrec93 (executed b93mr-bat-kill-9517): EntityBat.onUpdate's tail (we.h) tests no health: the corpse keeps 0.6 of its vertical motion
 }
 
 // A squid corpse's movement and ws.e tail (in place of the generic walk, push, body turn and limb swing).

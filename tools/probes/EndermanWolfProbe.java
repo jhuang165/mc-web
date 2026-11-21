@@ -62,6 +62,7 @@ public class EndermanWolfProbe {
   }
   static boolean B44, B45, BCW, B46, B47, B47H, B48, B87W;
   static boolean B88; // batch 88 (mobrec88, b88mr): see the B88 notes in scenario()
+  static boolean B93; // batch 93 (mobrec93, b93mr): the b92mr harness with squid (s), bat (b), wither skeleton (k) and wither (w) types
   static boolean B92; // batch 92 (mobrec92, b92mr): the b91mr harness whose loop also ticks the entities a split slime or magma cube spawns (World.updateEntities walks a list that grows), row element 12 holds their rows
   static java.util.ArrayList<Object> kidList = new java.util.ArrayList<>(); // b92: the split children in spawn order (World.spawned order)
   static boolean B91; // batch 91 (mobrec91, b91mr): the b90mr harness with dead-player, slime, magma cube and golem scenarios
@@ -166,6 +167,10 @@ public class EndermanWolfProbe {
         case '6': ents[i] = b45Horse(w, 4, 0, true, 0, 15.0, 0.2, 0.5); break;
         // batch 49 (pistonorder): B a spider (yn, 1.4 x 0.9), I a size 4 slime (ym, 2.04 x 2.04; its jump timer fixed to 20 so the constructor's draw does not matter)
         case 'B': ents[i] = new yn(w); break;
+        case 's': ents[i] = new ws(w); break; // batch 93: EntitySquid
+        case 'b': ents[i] = new we(w); break; // batch 93: EntityBat (hanging at its constructor)
+        case 'k': { yl sk = new yl(w); sk.a(1); sk.c(0, new add(ade.q)); sk.a(yj.e).a(4.0D); ents[i] = sk; break; }
+        case 'w': { xc wt = new xc(w); wt.bZ(); ents[i] = wt; break; } // batch 93: a wither just spawned (EntityWither.func_82206_m: Invul 220, a third of its health) // batch 93: a wither skeleton (EntitySkeleton.setSkeletonType(1))
         case 'i': case 'j': case 'l': case 'u': case 'v': { // batch 91: slimes of size 2 (i) and 1 (j), magma cubes of size 2 (l), 4 (u) and 1 (v); the real jump timer
           ym slime = types.charAt(i) == 'i' || types.charAt(i) == 'j' ? new ym(w) : new yf(w);
           java.lang.reflect.Method setSize = ym.class.getDeclaredMethod("a", int.class); setSize.setAccessible(true); setSize.invoke(slime, types.charAt(i) == 'j' || types.charAt(i) == 'v' ? 1 : types.charAt(i) == 'u' ? 4 : 2);
@@ -190,6 +195,7 @@ public class EndermanWolfProbe {
       for (String fn : new String[] {"y", "aO", "aM", "aN", "aP"}) MobMoveProbe.set(e, fn, 0f);
       logs[i] = new DLog(seed * 10 + i);
       MobMoveProbe.set(e, "Z", logs[i]);
+      if (e instanceof ws) MobMoveProbe.set(e, "by", 1.0F / (new Random(seed * 10 + i).nextFloat() + 1.0F) * 0.2F); // the constructor rolled rotationVelocity with an unseeded Random: the first draw of the seeded stream, as SquidBatProbe
       VillageFightProbe.at(e, pos[i][0], pos[i].length > 2 ? pos[i][2] : 0, pos[i][1]);
       MobMoveProbe.set(e, "D", true);
       VillagerProbe.World.entities.add(e); // the player too: selectEntitiesWithinAABB (zombie targeting) reads this list
@@ -312,7 +318,7 @@ public class EndermanWolfProbe {
       else if (B46) { cpx = player.s; cpy = player.t; cpz = player.u; } // the client's position for this tick (after the script's walk)
       if (t % 60 == 0) c.a(52, 0, 52);
       c.a();
-      for (VillageFightProbe.Log l : logs) l.log.clear();
+      if (System.getenv("VF_KEEP") == null) for (VillageFightProbe.Log l : logs) l.log.clear();
       for (VillageFightProbe.Log l : kidLogs) l.log.clear();
       if (!B47H) VillagerProbe.World.sounds.clear(); // batch 47 (horses2): the sounds a script op makes (feeding, rearing) stay in the tick's row
       if (!B46 || B47) player.aa++; // (b47sp: the world tick's EntityPlayerMP.onUpdate counts it) // (b46mp: mw.i counts it) EntityPlayerMP.onUpdate: ++ticksExisted (the player is not ticked otherwise); EntityLivingBase.getAITarget's window and the owner's wolves read it
@@ -384,6 +390,9 @@ public class EndermanWolfProbe {
         if (e instanceof wv) { wv wf = (wv) e; flags = "[" + (wf.ci() ? 1 : 0) + "," + (wf.ca() ? 1 : 0) + "," + (wf.bZ() ? 1 : 0) + "," + (MobMoveProbe.b(wf.cc(), "b") ? 1 : 0) + "," + (e.L() ? 1 : 0) + (B44 ? "," + MobMoveProbe.field(wf.class, "bp").getInt(e) + "," + ((rx) e).d() : "") + "]"; }
         else if (B45 && e instanceof wi) flags = horseFlags((wi) e);
         else if (B44 && e instanceof wf) flags = "[" + MobMoveProbe.field(wf.class, "bp").getInt(e) + "," + ((rx) e).d() + "]"; // love, growing age
+        if (B93 && e instanceof ws) { String[] fs = {"bp","bq","br","bs","bt","bv","bw","bx","by","bz","bA","bB","bC"}; StringBuilder b = new StringBuilder("["); for (String fn : fs) b.append(VillageFightProbe.num(flv(ws.class, e, fn))).append(","); flags = b.append(MobMoveProbe.method(wu.class, "ar").invoke(e)).append("]").toString(); } // batch 93: squid pitch, prevPitch, yaw, prevYaw, rotation, tentacle, prevTentacle, motionSpeed, rotationVelocity, rotateSpeed, vector x y z, air
+        else if (B93 && e instanceof we) { r sp = (r) MobMoveProbe.field(we.class, "h").get(e); flags = "[" + (((we) e).bP() ? 1 : 0) + "," + (sp == null ? "null" : "[" + sp.a + "," + sp.b + "," + sp.c + "]") + "]"; } // batch 93: bat hanging, spawnPosition
+        if (B93 && e instanceof xc) { xc wt = (xc) e; int[] bt = (int[]) MobMoveProbe.field(xc.class, "bt").get(e), bu = (int[]) MobMoveProbe.field(xc.class, "bu").get(e); flags = "[" + wt.ca() + "," + MobMoveProbe.field(xc.class, "bv").getInt(e) + "," + bt[0] + "," + bt[1] + "," + bu[0] + "," + bu[1] + "]"; } // batch 93: the wither's invulnerable ticks, block-break counter and head target timers
         row.append("[").append(VillageFightProbe.num(e.s)).append(",").append(VillageFightProbe.num(e.t)).append(",").append(VillageFightProbe.num(e.u)).append(",").append(VillageFightProbe.num(((sv) e).aS()))
           .append(",").append(index(ents, tgt)).append(",").append(index(ents, rv)).append(",").append(flags).append(",[").append(VillageFightProbe.draws(logs[i].log)).append("],[").append(VillageFightProbe.num(e.v)).append(",").append(VillageFightProbe.num(e.w)).append(",").append(VillageFightProbe.num(e.x)).append(",")
           .append(VillageFightProbe.num(e.y)).append(",").append(VillageFightProbe.num(e.z)).append(",").append(VillageFightProbe.num(flv(sv.class, e, "aO"))).append(",").append(VillageFightProbe.num(flv(sv.class, e, "aM"))).append(",").append(e.D ? 1 : 0).append(",").append(MobMoveProbe.b(e, "bc") ? 1 : 0).append(",").append(VillageFightProbe.num(flv(sv.class, e, "be"))).append(",").append(VillageFightProbe.num(flv(sv.class, e, "bd"))).append("]]");
@@ -477,7 +486,8 @@ public class EndermanWolfProbe {
     B47 = B48 || (args.length > 0 && (args[0].equals("b47sp") || args[0].equals("b46mp"))); // b50: the b46mp scenarios run under the b47 client / server-copy rules (client position, C03 packets, ticksExisted counted by the world tick)
     B46 = B47 || (args.length > 0 && args[0].equals("b46mp"));
     B87W = args.length > 0 && args[0].equals("b87wf");
-    B92 = args.length > 0 && args[0].equals("b92mr");
+    B93 = args.length > 0 && args[0].equals("b93mr"); VillagerProbe.World.byId = B93;
+    B92 = B93 || (args.length > 0 && args[0].equals("b92mr"));
     B91 = B92 || (args.length > 0 && args[0].equals("b91mr")); VillagerProbe.World.immediateSlimes = B91; // b91: a split slime is visible to getEntitiesWithinAABB the moment ym.B() spawns it (LegacyAiProbe does the same)
     B90 = B91 || (args.length > 0 && args[0].equals("b90mr"));
     B89 = B90 || (args.length > 0 && args[0].equals("b89mr"));
@@ -485,6 +495,6 @@ public class EndermanWolfProbe {
     if (B88) B47 = B46 = true; // b88mr: the b47 serverplayer harness (a ticked EntityPlayerMP, so its potion effects run)
     BCW = B46 || B87W || (args.length > 0 && args[0].equals("b45cw"));
     B44 = B45 || BCW || (args.length > 0 && args[0].equals("b44"));
-    if (B92) EndermanWolfScenarios.run92(); else if (B91) EndermanWolfScenarios.run91(); else if (B90) EndermanWolfScenarios.run90(); else if (B89) EndermanWolfScenarios.run89(); else if (B88) EndermanWolfScenarios.run88(); else if (B87W) EndermanWolfScenarios.run87(); else if (args.length > 0 && args[0].equals("b51sf")) EndermanWolfScenarios.run51(); else if (args.length > 0 && args[0].equals("b50lb")) EndermanWolfScenarios.run50(); else if (args.length > 0 && args[0].equals("b49po")) EndermanWolfScenarios.run49(); else if (B48) EndermanWolfScenarios.run48(); else if (B47H) EndermanWolfScenarios.run47h(); else if (B45) EndermanWolfScenarios.run45(); else if (args.length > 0 && args[0].equals("b46mp")) EndermanWolfScenarios.run46(); else if (B47) EndermanWolfScenarios.run47(); else if (B46) EndermanWolfScenarios.run46(); else if (BCW) EndermanWolfScenarios.runCW(); else if (B44) EndermanWolfScenarios.run44(); else if (args.length > 0 && args[0].equals("b43")) EndermanWolfScenarios.run43(); else EndermanWolfScenarios.run();
+    if (B93) EndermanWolfScenarios.run93(); else if (B92) EndermanWolfScenarios.run92(); else if (B91) EndermanWolfScenarios.run91(); else if (B90) EndermanWolfScenarios.run90(); else if (B89) EndermanWolfScenarios.run89(); else if (B88) EndermanWolfScenarios.run88(); else if (B87W) EndermanWolfScenarios.run87(); else if (args.length > 0 && args[0].equals("b51sf")) EndermanWolfScenarios.run51(); else if (args.length > 0 && args[0].equals("b50lb")) EndermanWolfScenarios.run50(); else if (args.length > 0 && args[0].equals("b49po")) EndermanWolfScenarios.run49(); else if (B48) EndermanWolfScenarios.run48(); else if (B47H) EndermanWolfScenarios.run47h(); else if (B45) EndermanWolfScenarios.run45(); else if (args.length > 0 && args[0].equals("b46mp")) EndermanWolfScenarios.run46(); else if (B47) EndermanWolfScenarios.run47(); else if (B46) EndermanWolfScenarios.run46(); else if (BCW) EndermanWolfScenarios.runCW(); else if (B44) EndermanWolfScenarios.run44(); else if (args.length > 0 && args[0].equals("b43")) EndermanWolfScenarios.run43(); else EndermanWolfScenarios.run();
   }
 }
