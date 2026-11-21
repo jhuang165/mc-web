@@ -262,6 +262,8 @@ export function awayEntities(plan, { world, ticking, entityTicks = ticking, rt, 
       portalTravel("mob", mobs, mobs.entities);
       portalTravel("item", items, items.items);
       portalTravel("orb", xp, xp.orbs);
+      portalTravel("arrow", arrows, arrows.list); // b91 entnbt91: zc.h (sa.h -> sa.C, then I() = doBlockCollisions) and zf.h (moveEntity) reach a portal block like the live tick's (dimension-live.js tickEntities)
+      portalTravel("rocket", rockets, rockets.rockets);
       tickNo++;
       clock++;
       trace.sample();
@@ -312,7 +314,8 @@ export function awayEntities(plan, { world, ticking, entityTicks = ticking, rt, 
       // Entities outside the 32-block rule do not update (and so do not run Entity.onEntityUpdate's portal step); a mob with a rider or a vehicle is not a portal collider.
       if (!entityTicks(c.x, c.z)) continue;
       const riding = kind === "mob" && !!(c.rider || c.vehicle || c.ridingEntity || c.riddenBy);
-      const r = portals.step(c, kind, { dim: 0, getId, riding, ridden: vehicle && !!(c.rider || c.passenger) });
+      const shot = kind === "arrow" || kind === "rocket"; // b91 entnbt91: their own update ran sa.C's countdown; an arrow that started in the ground touched no portal
+      const r = portals.step(c, kind, { dim: 0, getId, riding, ridden: vehicle && !!(c.rider || c.passenger), ...(shot ? { counted: true, noCollide: kind === "arrow" && c.groundAtStart === true } : {}) });
       if (!r) continue;
       const d = entityDeparture(portals, kind, c, r, owner);
       // Live depart(): a mob that mounted the vehicle after the collision stays behind, unmounted (the copy is made from the vehicle's own NBT).
