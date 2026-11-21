@@ -20,10 +20,12 @@ const NO_FX = { spawn() {} };
 export const clientWorld = { rand: null };
 export const clientWorldRandom = () => (clientWorld.rand ??= new JavaRandom(BigInt(Math.floor(Math.random() * 2 ** 48))));
 
+// b91 mobpackets91: watcher 8 (EntityLivingBase.updatePotionEffects): 1 when PotionHelper.func_82817_b (aen.b) finds every effect ambient, 0 with no effects (bytecode-read sv.bo).
+const allAmbient = (e) => !!e.effects?.length && e.effects.every((x) => x.ambient === true);
 // The watched values of the live mob `e` (null for an entity that is not a living mob).
 export function copyMetaOf(e) {
   if (typeof e.health !== "number" || !e.type) return null;
-  const m = { potion: e.effects?.length ? potionColor(e.effects) : 0, invisible: e.effects?.length ? isInvisible(e) : false };
+  const m = { potion: e.effects?.length ? potionColor(e.effects) : 0, ambient: allAmbient(e), invisible: e.effects?.length ? isInvisible(e) : false };
   m.burning = e.fire > 0; // batch 63: Entity.onEntityUpdate `setFlag(0, fire > 0)` on the server (bytecode-read); the copy reads it through isBurning (`isRemote && getFlag(0)`)
   if (e.type !== "squid") m.air = e.air ?? 300;
   if (e.type === "enderman") m.screaming = !!e.screaming;
@@ -38,13 +40,15 @@ export function copyMetaDiffReference(last, e) {
   for (const k in now) if (last[k] !== now[k]) { (out ??= {})[k] = last[k] = now[k]; }
   return out;
 }
-// b85 mpperf85: the same comparison in copyMetaOf's key order (potion, invisible, burning, air, screaming, invul, health) without the record of the current values.
+// b85 mpperf85: the same comparison in copyMetaOf's key order (potion, ambient, invisible, burning, air, screaming, invul, health) without the record of the current values.
 function copyMetaDiffFast(last, e) {
   if (typeof e.health !== "number" || !e.type) return null;
   let out = null;
   const fx = e.effects?.length, t = e.type;
   const potion = fx ? potionColor(e.effects) : 0;
   if (last.potion !== potion) (out ??= {}).potion = last.potion = potion;
+  const ambient = fx ? allAmbient(e) : false;
+  if (last.ambient !== ambient) (out ??= {}).ambient = last.ambient = ambient;
   const invisible = fx ? isInvisible(e) : false;
   if (last.invisible !== invisible) (out ??= {}).invisible = last.invisible = invisible;
   const burning = e.fire > 0;
@@ -56,6 +60,20 @@ function copyMetaDiffFast(last, e) {
     if (last.health !== e.health) (out ??= {}).health = last.health = e.health;
   }
   return out;
+}
+// b91 mobpackets91: DataWatcher.hasChanges (the third term of my.a(List)'s gate, `ticks % frequency == 0 || isAirBorne || hasChanges`, bytecode-read; executed in
+// mobpackets91-reference.json: a Speed add sends S1C, S20, S19 and S12 in a tick that is not a frequency tick): true when copyMetaDiff would send something. Reads only.
+export function copyMetaDirty(last, e) {
+  if (!last || typeof e.health !== "number" || !e.type) return false;
+  const fx = e.effects?.length, t = e.type;
+  if (last.potion !== (fx ? potionColor(e.effects) : 0)) return true;
+  if (last.ambient !== (fx ? allAmbient(e) : false)) return true;
+  if (last.invisible !== (fx ? isInvisible(e) : false)) return true;
+  if (last.burning !== (e.fire > 0)) return true;
+  if (t !== "squid" && last.air !== (e.air ?? 300)) return true;
+  if (t === "enderman" && last.screaming !== !!e.screaming) return true;
+  if (t === "wither" && (last.invul !== (e.invul ?? 0) || last.health !== e.health)) return true;
+  return false;
 }
 export function copyMetaDiff(last, e) {
   const mode = fast85.mode;
