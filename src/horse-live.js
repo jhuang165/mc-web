@@ -122,7 +122,7 @@ export function horseSeats(mobs) {
     updateRiderPosition(v) {
       const e = v.entity, rider = e?.rider;
       if (!rider) return;
-      const r = rearSeat(e.horseAnim?.rearAmount ?? 0, e.renderYawOffset ?? 0), lift = r.dy; // wi.ac(): the rider also shifts 0.7 * bM along the body yaw (horse-copy.js)
+      const r = rearSeat(e.horseAnim?.prevRearAmount ?? 0, e.renderYawOffset ?? 0), lift = r.dy; // wi.ac(): the rider also shifts 0.7 * bM along the body yaw (horse-copy.js); bM is the PREVIOUS rear amount (b93 horse93: the seat is taken after the horse's own update, which has copied bL into bM)
       // EntityPig keeps Entity.getMountedYOffset (height * 0.75, pig-saddle.js).
       // Any other mob a save seats the player on (level.dat Player.Riding) keeps Entity.getMountedYOffset: height * 0.75 (mob-riding.js).
       const offset = e.type === "pig" ? PIG_MOUNTED_OFFSET : e.type === "horse" ? H.mountedOffset(view(e)) : mountedYOffset(mobs.size(e)[1]);
@@ -166,12 +166,12 @@ export function horseJumpCounter(rider, jump, onHorse, send) {
 const rideMoves = new WeakMap(), riddenMoves = new WeakSet();
 // b91 horse91: wi.e(FF) and wi.bh() test `l instanceof sv` (EntityLivingBase) and cu() (saddled), not EntityPlayer (bytecode-read), so a mob that rides a saddled horse (only by
 // command / NBT: /summon with Riding, or a saved pair) steers it too and blocks its AI. The rider's input is what its own last onLivingUpdate left: the AI-set moveForward /
-// moveStrafing times 0.98 (the port's rider walk does not run, so the decay happens here) with its rotationYaw / rotationPitch. Rider input values are Port-read, not executed.
+// moveStrafing already times 0.98 (the port's rider walk decays them; b93 horse93 executed it) with its rotationYaw / rotationPitch.
 export function steeringRider(e) {
   if (e.rider) return e.rider;
   const m = e.riddenBy;
   if (!m || m === e || m.boat || m.vehicle || !Number.isFinite(m.rotationYaw)) return null;
-  return { yaw: m.rotationYaw, pitch: m.rotationPitch, moveStrafing: f(f(m.moveStrafing || 0) * f(0.98)), moveForward: f(f(m.moveForward || 0) * f(0.98)) };
+  return { yaw: m.rotationYaw, pitch: m.rotationPitch, moveStrafing: m.moveStrafing || 0, moveForward: m.moveForward || 0 }; // b93 horse93: the rider's fields as its own walk left them (sv.e multiplies bd / be by 0.98 in place, executed in horse93-reference.json); wi.e(FF) reads them raw
 }
 export function horseRideThink(mobs, e) {
   const rider = steeringRider(e), h = e.horse;

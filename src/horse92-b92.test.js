@@ -133,7 +133,7 @@ for (const sc of href.mobRider) {
     const skeleton = sc.rider === "skeleton";
     sc.ticks.forEach((t, i) => {
       if (i === sc.rearTick) w.horseRear(horse);
-      Object.assign(rider, { moveForward: sc.forward / 0.98, moveStrafing: sc.strafe / 0.98 });
+      Object.assign(rider, { moveForward: sc.forward, moveStrafing: sc.strafe });
       w.tick({ x: 64, y: 0, z: 90 }, new Survival({}));
       const at = `${sc.name} tick ${i}`;
       assert.equal(!!rider.ridingEntity, t.linked, `${at} linked`);

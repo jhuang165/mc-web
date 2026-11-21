@@ -28,10 +28,11 @@ export const NOT_CREATURES = new Set(["ghast", "slime", "magma_cube", "ender_dra
 export const isSkeletonType = (type) => type === "skeleton" || type === "wither_skeleton";
 export function seatPosition(mount, rider, mountHeight) {
   if (isVehicle(mount)) return vehicleSeat(mount, riderYOffset(rider.type)); // boats and minecarts (vehicle-seat.js)
-  if (mount.type === "horse" && mount.horseAnim?.prevRearAmount > 0) {
+  const anim = mount.horseAnim ?? mount.horse; // a live horse keeps its counters in horseAnim; the tracker's client copy holds them in `horse` (stepHorseCopy), where `horse` of a live mob is plain data
+  if (mount.type === "horse" && anim?.prevRearAmount > 0) {
     // EntityHorse.updateRiderPosition (wi.ac, executed in horse92-reference.json mobRider): wf.ac seats the rider, then while bM (the PREVIOUS rear amount, bL is the new one) > 0 it moves
     // 0.7 * bM back along renderYawOffset and 0.15 * bM up, and gives a living rider the horse's renderYawOffset.
-    const r = rearSeat(mount.horseAnim.prevRearAmount, mount.renderYawOffset ?? 0);
+    const r = rearSeat(anim.prevRearAmount, mount.renderYawOffset ?? 0);
     return { x: mount.x + r.dx, y: mount.y + mountedYOffset(mountHeight) + riderYOffset(rider.type) + r.dy, z: mount.z + r.dz, renderYaw: mount.renderYawOffset };
   }
   if (mount.type === "chicken") {
