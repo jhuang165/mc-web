@@ -39,7 +39,6 @@ const pitchRoll = (rand) => f(f(f(rand.nextFloat() - rand.nextFloat()) * f(0.2))
 // ahb.func_82739_e / playAuxSFX level events: 1013 (mob.wither.spawn, heard 2 blocks from the listener towards the origin),
 // 1014 (mob.wither.shoot, volume 2) and 1012 (mob.zombie.woodbreak, volume 2) at the block, centred.
 export function levelEvent(m, id, x, y, z) {
-  m.worldRandom ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48));
   if (id === 1013) {
     const p = m.ai?.player;
     let at = { x, y, z };
@@ -53,7 +52,9 @@ export function levelEvent(m, id, x, y, z) {
   // b64 `aux.local`: World.playAuxSFX (a WorldManager S28 to the players within 64 blocks in this dimension, bytecode-read mp.a(yz,IIIII)), not a sound packet; the cell is (int) pos (d2i)
   // b65 mpuse2 (xc.a / xc.bn bytecode-read: d2i on posX / posY / posZ before ahb.a(Lyz;IIIII)): the event cell truncates toward zero, so a wither at x -0.5 reports cell 0, not -1.
   const cx = Math.trunc(x) || 0, cy = Math.trunc(y) || 0, cz = Math.trunc(z) || 0; // `|| 0` turns -0 into 0
-  m.events.push({ sound: id === 1014 ? "mob.wither.shoot" : "mob.zombie.woodbreak", volume: 2, pitch: pitchRoll(m.worldRandom), position: { x: cx + 0.5, y: cy + 0.5, z: cz + 0.5 }, aux: { id, x: cx, y: cy, z: cz, local: true } });
+  // b91 mobrec91 (bytecode-read bma.a(yz,IIIII)): the pitch is drawn by the client from its own world's random (bjf.s), not the server's: no draw from the world random (as the blaze, b90).
+  m.clientAuxRandom ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48));
+  m.events.push({ sound: id === 1014 ? "mob.wither.shoot" : "mob.zombie.woodbreak", volume: 2, pitch: pitchRoll(m.clientAuxRandom), position: { x: cx + 0.5, y: cy + 0.5, z: cz + 0.5 }, aux: { id, x: cx, y: cy, z: cz, local: true } });
 }
 
 // EntityWither.getLivingSound: mob.wither.idle at the mob interval of 80.

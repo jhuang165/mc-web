@@ -54,7 +54,8 @@ export function legacyThink(ew, e, t, aiMoveSpeed, entityRandom, hooks = null) {
   const world = ew.world, rand = entityRandom(e), path = (make) => (m.navigator.spend() ? make(m.navigator.finder()) : null);
   const env = {
     rand, remote: false,
-    closestPlayer: (me, range) => (p?.alive && (range < 0 || m.distSq(p) < range * range) ? p : null),
+    closestPlayer: (me, range) => (p && !p.left && (range < 0 || m.distSq(p) < range * range) ? p : null), // World.getClosestPlayer (ahb.a(DDDD)) tests only the distance: a dead player stays (b91 mobrec91, bytecode-read; the blaze's executed b90mr-blaze-dead-9021)
+    lookGone: (x) => (x === p ? !p || !!p.left || (p.deadTicks ?? 0) > 20 : x.alive === false), // sw.bq drops the look target on sa.K (isDead), not health (b91 mobrec91: every legacy mob, as the blaze in b90)
     // EntitySpider.bR: only in light below 0.5, no sight test. EntityPigZombie.bR: nothing while calm. EntityMob.bR: a visible player.
     findPlayerToAttack: (me) => {
       if (hooks?.findPlayerToAttack) return hooks.findPlayerToAttack(me);

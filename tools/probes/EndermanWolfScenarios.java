@@ -265,6 +265,36 @@ public class EndermanWolfScenarios {
     sc88("b90mr-blaze-dead-9022", 9022, 200, "a", new double[][] {{70.5, 64.5, 10}, {64.5, 64.5}}, 15, "0 realhp 20", "45 health 1 0.0");
     sc88("b90mr-blaze-dead-9023", 9023, 160, "a", new double[][] {{70.5, 64.5, 6}, {64.5, 64.5}}, 15, "0 realhp 20", "20 health 1 0.0");
   }
+  // Batch 91 (mobrec91, b91mr): the b90mr harness (EndermanWolfProbe B91). The dead probe player (health 0) keeps ticking in EntityPlayerMP.onUpdateEntity (nh.a(jd) never tests isDead), so a mob that
+  // pushed it keeps pushing and it keeps falling; legacy (non-AI-task) mobs read it through World.getClosestPlayer (no alive test) and sw.bq's look target (isDead). Slimes and magma cubes fight the player;
+  // an iron golem fights what the rest of the harness has not covered. Types: i slime 2, j slime 1, l magma cube 2, u magma cube 4.
+  static void run91() throws Exception {
+    double[][] six = {{70.5, 64.5}, {64.5, 64.5}};
+    // the player is knocked into the air by a zombie (EntityLivingBase.knockBack) and dies in flight: the copy keeps its motion and falls
+    sc88("b91mr-dead-flight-9101", 9101, 120, "Z", new double[][] {{67.5, 64.5}, {64.5, 64.5}}, 15, "0 realhp 20", "10 hit 1 0 1", "12 health 1 0.0");
+    sc88("b91mr-dead-flight-9102", 9102, 120, "Z", new double[][] {{66.5, 64.5, 0}, {64.5, 64.5}}, 15, "0 realhp 20", "5 hit 1 0 1", "6 health 1 0.0");
+    sc88("b91mr-dead-spider-9111", 9111, 160, "B", six, 0, "0 realhp 20", "40 health 1 0.0");
+    sc88("b91mr-dead-spider-9112", 9112, 160, "B", new double[][] {{66.5, 64.5}, {64.5, 64.5}}, 0, "0 realhp 20", "30 health 1 0.0");
+    for (int sd : new int[] {9124, 9126}) sc88("b91mr-dead-silverfish-" + sd, sd, 160, "f", new double[][] {{68.5, 64.5}, {64.5, 64.5}}, 15, "0 realhp 20", "40 health 1 0.0");
+    sc88("b91mr-dead-giant-9131", 9131, 160, "g", new double[][] {{72.5, 64.5}, {64.5, 64.5}}, 15, "0 realhp 20", "40 health 1 0.0");
+    sc88("b91mr-dead-zombie-9151", 9151, 160, "Z", six, 15, "0 realhp 20", "40 health 1 0.0");
+    // slimes and magma cubes against the player
+    for (int sd : new int[] {9201, 9202}) sc88("b91mr-slime-fight-" + sd, sd, 240, "i", new double[][] {{68.5, 64.5}, {64.5, 64.5}}, 15);
+    sc88("b91mr-slime-small-9203", 9203, 200, "j", new double[][] {{67.5, 64.5}, {64.5, 64.5}}, 15);
+    for (int sd : new int[] {9211, 9212}) sc88("b91mr-magma-fight-" + sd, sd, 240, "l", new double[][] {{68.5, 64.5}, {64.5, 64.5}}, 15);
+    sc88("b91mr-magma-big-9213", 9213, 240, "u", new double[][] {{70.5, 64.5}, {64.5, 64.5}}, 15);
+    sc88("b91mr-magma-creative-9214", 9214, 200, "l", new double[][] {{67.5, 64.5}, {64.5, 64.5}}, 15, "0 creative 1 on");
+    // an iron golem against the mobs the earlier records left out (its target class is every IMob that is not a creeper or ghast); size 1 slime and magma cube, as the probe keeps a split child as a static, targetable entity
+    double[][] gz = {{120.5, 64.5}, {126.5, 64.5}, {64.5, 64.5}};
+    sc88("b91mr-golem-slime-9301", 9301, 240, "Gj", gz, 15);
+    sc88("b91mr-golem-magma-9302", 9302, 240, "Gv", gz, 15);
+    sc88("b91mr-golem-silverfish-9303", 9303, 200, "Gf", gz, 15);
+    sc88("b91mr-golem-witch-9304", 9304, 240, "GK", gz, 15);
+    sc88("b91mr-golem-pigman-9305", 9305, 200, "Gz", gz, 15, "10 hit 1 0 1");
+    sc88("b91mr-golem-giant-9306", 9306, 200, "Gg", new double[][] {{120.5, 64.5}, {130.5, 64.5}, {64.5, 64.5}}, 15);
+    // the golem is hurt by the player (EntityAIHurtByTarget retaliation)
+    sc88("b91mr-golem-hurt-9307", 9307, 200, "G", new double[][] {{67.5, 64.5}, {64.5, 64.5}}, 15, "20 melee 0");
+  }
   static void runCW() throws Exception {
     double[][] six = {{70.5, 64.5}, {64.5, 64.5}};
     sc("b45cw-swell-approach-7001", 7001, 160, "X", six, "0 look 90 0");

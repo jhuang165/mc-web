@@ -1473,6 +1473,11 @@ class PlayerView {
     this.invisible = !!survival.effects?.has?.(INVISIBILITY);
     this.armorPieces = (survival.inventory?.armor ?? []).filter(Boolean).length;
   }
+  // b91 mobrec91: still in the world's entity lists. A dead copy (health 0) stays in World.loadedEntityList and its chunk until onDeathUpdate's setDead (deathTime 20) is swept, so mobs keep
+  // colliding with it and spawns keep seeing it for those 20 updates (executed b91mr-dead-spider-9111: a push at 2 ticks after the death).
+  get inWorld() {
+    return !this.left && (this.alive || (this.deadTicks ?? 0) <= 20);
+  }
   // EntityPlayer.getArmorVisibility (yz.bE): worn pieces over the four armour slots, as a float.
   get armorVisibility() {
     return f(this.armorPieces / 4);
