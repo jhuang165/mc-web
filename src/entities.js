@@ -67,6 +67,7 @@ import { isSlimeLike } from "./slime.js";
 import { PIGMAN, MAGMA, isPigman, isMagma, magmaDamage, magmaJumpMotion, pigmanEquipment } from "./nether-melee.js";
 import { pigmanFields, pigmanFieldsFrom, pigmanHurt, pigmanTick, pigStrike } from "./nether-melee-live.js";
 import { isLegacyCreature, legacyThink } from "./legacy-creature.js";
+import { keptCopy94 } from "./mpperf94-fast.js"; // b94 mpperf94
 import { SQUID, BAT, squidCanSpawn, batCanSpawn, legacyBodyTurn, squidWet, squidLivingUpdate } from "./squid-bat.js";
 import { ENDER_CRYSTAL_TYPE, crystalUpdate, crystalAttack } from "./ender-crystal-mobs.js";
 import { installMooshroomGolem } from "./mooshroom-golem-live.js";
@@ -546,7 +547,7 @@ function scratchBox(e, w, h, half, s) {
   if (e.bb) return copyBox(bb, e.bb);
   const a = takeAnchorBox(e);
   if (a) return copyBox(bb, a);
-  if (keptBox(e, w, h, bb)) { checkSameBox(bb, keptBox(e, w, h), "keptBox"); return bb; }
+  if (keptBox(e, w, h, bb)) { if (keptCopy94(fast81.mode)) checkSameBox(bb, keptBox(e, w, h), "keptBox"); return bb; } // b94 mpperf94: the comparison copy only where it is checked
   bb[0] = e.x - half; bb[1] = e.y; bb[2] = e.z - half; bb[3] = e.x + half; bb[4] = e.y + h; bb[5] = e.z + half;
   return bb;
 }

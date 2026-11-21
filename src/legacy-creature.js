@@ -5,6 +5,7 @@
 import { creatureActionState, pathWeight } from "./silverfish.js";
 import { isSpider } from "./spider.js";
 import { fast89 } from "./mpperf89-fast.js"; // b89 mpperf89
+import { fast94, createLegacyEnv94, sameEnv94 } from "./mpperf94-fast.js"; // b94 mpperf94
 
 const f = Math.fround;
 export const isLegacyCreature = (e) => isSpider(e.type) || e.type === "pigman";
@@ -34,6 +35,14 @@ function mobAttackEntity(e, st, target, d, height) {
   return false;
 }
 
+// b94 mpperf94: the environment below as one shared object (mpperf94-fast.js); the attack body is the closure's.
+const SHARED94 = createLegacyEnv94((c, target, d) => {
+  const { ew, e, st, p, s, spider, light, rand, t } = c;
+  const due = spider ? spiderAttackEntity(e, st, target, d, light, rand, t.height) : mobAttackEntity(e, st, target, d, t.height);
+  if (!due) return;
+  if (target === p) ew.hitPlayer(e, s);
+  else if (target.e) ew.hitMob(e, target.e);
+}, (ew, x, y, z) => pathWeight(0, ew.ai.brightness(x, y, z)));
 // One update of the action state. `ew` is the EntityWorld, `e` the mob. The returned flag is not used; the state lives in
 // ew.silverfishState(e) (target, path, entityAge, attackTime) and the results go to e (rotation, moveForward, jumping, idle).
 // `hooks` (optional, for other EntityMob subclasses on this flow, e.g. the enderman): { findPlayerToAttack(me) } replaces the spider/pigman/EntityMob search.
@@ -51,8 +60,17 @@ export function legacyThink(ew, e, t, aiMoveSpeed, entityRandom, hooks = null) {
   if (light > 0.5) st.entityAge += 2; // EntityMob.onLivingUpdate
   if (fast89.mode === "off" || m.senseCache.size !== 0) // b89 mpperf89: Map.prototype.clear allocates even on an empty map
   m.senseCache.clear();
-  const world = ew.world, rand = entityRandom(e), path = (make) => (m.navigator.spend() ? make(m.navigator.finder()) : null);
-  const env = {
+  const rand = entityRandom(e);
+  const shared = SHARED94.bind(ew, e, t, p, s, m, st, spider, pigman, light, hooks, rand); // b94 mpperf94: null when off or nested
+  if (shared !== null) {
+    try {
+      if (fast94.mode === "verify") sameEnv94(shared, buildEnv(), e, p, st);
+      creatureActionState(st, shared);
+    } finally { SHARED94.release(); }
+  } else creatureActionState(st, buildEnv());
+  function buildEnv() {
+  const path = (make) => (m.navigator.spend() ? make(m.navigator.finder()) : null);
+  return {
     rand, remote: false,
     closestPlayer: (me, range) => (p && !p.left && (range < 0 || m.distSq(p) < range * range) ? p : null), // World.getClosestPlayer (ahb.a(DDDD)) tests only the distance: a dead player stays (b91 mobrec91, bytecode-read; the blaze's executed b90mr-blaze-dead-9021)
     lookGone: (x) => (x === p ? !p || !!p.left || (p.deadTicks ?? 0) > 20 : x.alive === false), // sw.bq drops the look target on sa.K (isDead), not health (b91 mobrec91: every legacy mob, as the blaze in b90)
@@ -80,7 +98,7 @@ export function legacyThink(ew, e, t, aiMoveSpeed, entityRandom, hooks = null) {
     pathWeight: (me, x, y, z) => pathWeight(0, ew.ai.brightness(x, y, z)), // yg.a(III)F: 0.5 - getLightBrightness
     setDead: () => ew.ai.despawn(e),
   };
-  creatureActionState(st, env);
+  }
   st.randomYaw = f(f(st.randomYaw || 0) * f(0.9)); // EntityLivingBase.onLivingUpdate: randomYawVelocity *= 0.9F after the action state
   e.idle = st.entityAge;
   e.rotationYaw = st.rotationYaw; e.rotationPitch = st.rotationPitch;
