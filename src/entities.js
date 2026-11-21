@@ -1679,9 +1679,10 @@ export class EntityWorld {
   // own slowdown, the magic-crit particles, the hotbar).
   // EnchantmentHelper.func_151384_a(victim, attacker) for a mob victim (thorns-live.js): its equipment rolls on its own Random and `hurt(n)` / `sound()` act on the attacker. Reached by a
   // landed player hit (below) and, b92 credit92 (bytecode-read zc.h 1065-1088), by a landed arrow of any living shooter (bow.js).
-  thornsOfVictim(e, { hurt, sound }) {
+  // b94 credit94 (afv.a bytecode-read): `byPlayer` (the attacker is an EntityPlayer) visits the victim's held item a second time.
+  thornsOfVictim(e, { hurt, sound, byPlayer = false }) {
     return mobThornsOnPlayerHit(e, entityRandom(e), {
-      hurt, sound,
+      hurt, sound, byPlayer,
       breakSound: () => this.events.push({ sound: "random.break", volume: 0.8, pitch: breakSoundPitch((this.worldRandom ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48)))), position: { x: e.x, y: e.y, z: e.z } }),
     });
   }
@@ -1729,6 +1730,7 @@ export class EntityWorld {
       this.ai.playerHit(living ? e : null); // EntityLivingBase.setLastAttacker: the owner's wolves join in (EntityAIOwnerHurtTarget); b80: the dragon is hit through a part, not living, so sv.l(sa) stores null (bytecode-read)
       // EnchantmentHelper.func_151384_a(target, player): a mob wearing Thorns hurts the player back (thorns-live.js, DamageSource.causeThornsDamage).
       if (living) this.thornsOfVictim(e, {
+        byPlayer: true,
         hurt: (n) => survival.damage(n, "thorns", true, "thorns", e),
         sound: () => this.events.push({ sound: "damage.thorns", volume: 0.5, pitch: 1, position: { x: player.x, y: player.y ?? e.y, z: player.z } }),
       });
@@ -1978,7 +1980,7 @@ export class EntityWorld {
     // EntityMob.attackEntityAsMob (yg.n) ends with EnchantmentHelper.func_151385_b(this, target) on a landed hit: Bane of Arthropods on the mob's five equipment
     // slots (EntityLiving.getLastActiveItems) and its held item again, rolled on the mob's own Entity.rand; the Slowness IV lands on an arthropod target.
     if (hit && e.equipment) {
-      const ticks = arthropodSlowness(e.equipment, e.equipment[0], target.type, entityRandom(e));
+      const ticks = arthropodSlowness(e.equipment, null, target.type, entityRandom(e)); // b94 credit94: no separate held roll for a mob (afv.b adds be() only for an EntityPlayer; slot 0 is in ak())
       if (ticks != null) addMobEffect(target, 2, ticks, 3);
     }
     if (hit && e.type === "zombie") {

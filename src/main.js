@@ -3080,7 +3080,7 @@ function showGameOver() {
 // where it was removed (the Nether and End death position too). The body is built where the player died, before leaveByDeath moves him, and given to the lists of the dimension he is in
 // when the respawn finishes (the Overworld's) and, for a Nether/End death, to the live lists he leaves behind.
 let pendingDeathBody = null;
-function deathBodyHere() { return { corpseOf: "player", dead: true, position: { x: position.x, y: position.y, z: position.z }, survival: { creative: !!survival.creative, held: survival.held ? { ...survival.held } : null, health: 0 } }; }
+function deathBodyHere() { return { corpseOf: "player", dead: true, position: { x: position.x, y: position.y, z: position.z }, survival: { creative: !!survival.creative, held: survival.held ? { ...survival.held } : null, health: 0, inventory: { armor: (survival.inventory?.armor ?? []).map((a) => (a ? { ...a } : a)) } } }; } // b94 credit94: armour left after the death drop (keepInventory keeps it) for Bane on the body's arrows
 function giveDeathBody(body) { for (const b of projectiles.balls) if (!b.dead && !b.dispensed) b.ownerBody ??= body; for (const b of mobs?.potions?.projectiles?.balls ?? []) if (!b.dead && b.owner === "player") b.ownerBody ??= body; for (const a of arrows.list) if (!a.dead && a.shooter === "player") a.ownerBody ??= body; }
 async function respawnPlayer() {
     if (dimensionOf(active)) { // died in the Nether/End: back to the Overworld, then the usual respawn below

@@ -21,10 +21,11 @@ export const NO_THORNS_ATTACKER = new Set(["wolf", "slime", "magma_cube", "iron_
  *  A stack past its maximum stays in the slot as a zero-size stack with damage 0 (it keeps its Thorns, keeps rolling and is worn again), and
  *  `broken(stack)` runs renderBrokenItemStack: by default the 15 Random draws; `breakSound()` plays random.break (zero-stacks-reference.json
  *  mobThorns; ThornsWearProbe's double overrode renderBrokenItemStack, so its rows pass `broken: () => {}`). Returns the damages dealt. */
-export function mobThornsOnPlayerHit(mob, random, { hurt, sound, breakSound = () => {}, broken = () => { breakSound(); brokenItemDraws(random); } }) {
+export function mobThornsOnPlayerHit(mob, random, { hurt, sound, byPlayer = false, breakSound = () => {}, broken = () => { breakSound(); brokenItemDraws(random); } }) {
   if (!mob.equipment) return [];
   return thornsReaction({
     items: () => mob.equipment, random, hurt, sound,
+    extra: byPlayer ? () => mob.equipment[0] : null, // afv.a(sv, sa): a player attacker adds the victim's held item a second time (its slot 0 is already in the list)
     wear: (i, amount) => {
       const stack = mob.equipment[i];
       if (!stack) return;

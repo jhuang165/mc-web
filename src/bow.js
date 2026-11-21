@@ -16,7 +16,7 @@ import { HEIGHT, TNT, blockBounds } from "./world.js";
 import { isStair, stairBoxes } from "./stairs.js";
 import { waterAcceleration, entityWaterBox, inLava } from "./fluids.js";
 import { enterWater } from "./fx.js";
-import { GaussianRandom, intercept, rayTraceBlocks } from "./projectiles.js";
+import { GaussianRandom, intercept, rayTraceBlocks, saveOwnerBody, loadOwnerBody } from "./projectiles.js";
 import { aimPart } from "./dragon-parts.js";
 import { addStuckArrow } from "./stuck-arrows.js";
 import { bowEffects } from "./mob-equipment.js";
@@ -489,7 +489,7 @@ export class Arrows {
     if (typeof mobs?.arrowBane !== "function") return;
     if (s === "player") {
       const body = a.ownerBody, sv = (body ?? a.owner)?.survival ?? ctx.survival;
-      mobs.arrowBane(ref, { armor: body ? null : sv?.inventory?.armor, held: sv?.held ?? null });
+      mobs.arrowBane(ref, { armor: sv?.inventory?.armor ?? null, held: sv?.held ?? null }); // b94 credit94: the old body keeps the armour it still wore (keepInventory; otherwise dropAllItems emptied it)
     } else if (s && typeof s === "object" && s !== ref && mobsHas(mobs, s)) mobs.arrowBane(ref, { mob: s });
   }
   // b92 credit92 (bytecode-read zc.h 1065-1088, afv.a(sv, sa)): a landed arrow on a living mob runs the Thorns of that mob's equipment on the shooter (a mob wears Thorns only from NBT or a
@@ -500,9 +500,9 @@ export class Arrows {
     if (!ref.equipment || typeof mobs?.thornsOfVictim !== "function") return;
     if (s === "player") {
       if (ctx.thornsOnShooter) { ctx.thornsOnShooter(a, ref); return; }
-      const survival = ctx.survival, p = ctx.player;
-      if (!survival) return;
-      mobs.thornsOfVictim(ref, { hurt: (n) => survival.damage(n, "thorns", true, "thorns", ref), sound: () => this.events.push({ sound: "damage.thorns", volume: 0.5, pitch: 1, position: { x: p?.x ?? a.x, y: p?.y ?? a.y, z: p?.z ?? a.z } }) });
+      const survival = ctx.survival, p = a.ownerBody?.position ?? ctx.player; // b94 credit94: the dead old body takes no damage (sv.a: health <= 0) but the sound plays at it
+      if (!survival && !a.ownerBody) return;
+      mobs.thornsOfVictim(ref, { byPlayer: true, hurt: (n) => a.ownerBody ? false : survival.damage(n, "thorns", true, "thorns", ref), sound: () => this.events.push({ sound: "damage.thorns", volume: 0.5, pitch: 1, position: { x: p?.x ?? a.x, y: p?.y ?? a.y, z: p?.z ?? a.z } }) });
     } else if (s && typeof s === "object" && s !== ref && mobsHas(mobs, s)) {
       mobs.thornsOfVictim(ref, {
         hurt: (n) => mobs.attackEntityFrom(s, n, { from: { x: ref.x, z: ref.z }, attacker: ref, name: "thorns" }),
@@ -551,6 +551,7 @@ export class Arrows {
       x: a.x, y: a.y, z: a.z, mx: a.mx, my: a.my, mz: a.mz, yaw: a.yaw, pitch: a.pitch,
       xTile: a.xTile, yTile: a.yTile, zTile: a.zTile, life: a.ticksInGround, inTile: a.inTile, inData: a.inData,
       shake: a.shake, inGround: a.inGround, pickup: a.pickup, damage: a.damage, ...(a.fire ? { fire: a.fire } : {}), // b84 cmdfix84: any nonzero short
+      ...(a.ownerBody ? { shooter: "player", ...saveOwnerBody(a) } : {}), // b94 credit94: the dead body keeps shooting after a Nether/End stash
       ...keptBaseSave(a), // b88 entnbt88: Air, UUID, PortalCooldown, Dimension as read
     });
   }
@@ -568,6 +569,7 @@ export class Arrows {
       ticksInGround: int(d.life, 0, DESPAWN, 0), inTile: int(d.inTile, 0, 255, 0), inData: int(d.inData, 0, 15, 0),
       shake: int(d.shake, 0, 127, 0), inGround: d.inGround === true, pickup: int(d.pickup, 0, 2, 1),
       damage: ok(d.damage) ? d.damage : 2, fire: int(d.fire, -32768, 32767, 0), // b84 cmdfix84: the whole short (was 0..2000)
+      ...(d.shooter === "player" && d.ownerBody ? { shooter: "player", ...loadOwnerBody(d) } : {}), // b94 credit94
       ...keptBaseRestore(d), // b88 entnbt88
     });
   }

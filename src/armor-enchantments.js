@@ -111,8 +111,10 @@ export function decreaseAir(armor, air, rand) {
 // `items()` returns the live armour array (boots first), `hurt(damage)` hurts the attacker (DamageSource.causeThornsDamage:
 // an entity damage source whose entity is the wearer), `sound()` plays the sound and `wear(index, amount)` is
 // ItemStack.damageItem(amount, wearer). Returns the damage dealt to the attacker per hit, in order.
-export function thornsReaction({ items, random, hurt = () => {}, sound = () => {}, wear = () => {} }) {
+// `extra` (b94 credit94, afv.a(sv, sa) bytecode-read: `attacker instanceof EntityPlayer` adds victim.getHeldItem() after getLastActiveItems) is a stack visited once more after the list.
+export function thornsReaction({ items, random, hurt = () => {}, sound = () => {}, wear = () => {}, extra = null }) {
   const dealt = [], snapshot = items().slice();
+  if (extra) snapshot.push(extra());
   for (const stack of snapshot) {
     if (!stack) continue;
     for (const { id, lvl } of Array.isArray(stack.enchantments) ? stack.enchantments : []) {

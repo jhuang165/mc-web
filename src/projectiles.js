@@ -394,6 +394,19 @@ export function mobTargets(entities, player, width = 0.6, height = 1.8) {
 // and is knocked away from the thrower (not along the ball's path) through
 // EntityWorld.damage. EntityAnimal.attackEntityFrom sets fleeingTick 60 and
 // cancels love first, even for a rejected hit. Health never changes.
+// b94 credit94: a ball, potion or arrow whose thrower died keeps the old EntityPlayerMP (b92/b93 `ownerBody`). A Nether/End stash is a saved record, so the body travels in it
+// (position, dimension, the frozen Creative flag and held item); the away run then hits as a dead attacker instead of an ownerless ball. Natively the dimension's world stays loaded.
+export function saveOwnerBody(b) {
+  const o = b?.ownerBody, p = o?.position;
+  if (!o || !p || ![p.x, p.y, p.z].every(Number.isFinite)) return {};
+  const held = o.survival?.held;
+  return { ownerBody: { position: { x: p.x, y: p.y, z: p.z }, ...(Number.isInteger(o.dimension) ? { dimension: o.dimension } : {}), survival: { creative: !!o.survival?.creative, held: held ? JSON.parse(JSON.stringify(held)) : null, health: 0 } } };
+}
+export function loadOwnerBody(d) {
+  const o = d?.ownerBody, p = o?.position;
+  if (!o || !p || ![p.x, p.y, p.z].every(Number.isFinite)) return {};
+  return { ownerBody: { corpseOf: "player", dead: true, position: { x: p.x, y: p.y, z: p.z }, ...(Number.isInteger(o.dimension) ? { dimension: o.dimension } : {}), survival: { creative: !!o.survival?.creative, held: o.survival?.held ? JSON.parse(JSON.stringify(o.survival.held)) : null, health: 0 } } };
+}
 export function thrownHit(mobs, e, from, ball = from) {
   if (!mobs.entities.includes(e)) return false;
   // b92 credit92 (bytecode-read zk.j, zj.a, zm.a, ro.a(sa, sa)): a ball in flight keeps the EntityPlayerMP that threw it (the field `g`), also after respawnPlayer removed it; the hit's
@@ -724,7 +737,7 @@ export class Projectiles {
       if (b.kind === "enderPearl" && b.owner != null && b.owner !== "player") throw new Error("Cannot save ender pearl without local owner token");
       return { x: b.x, y: b.y, z: b.z, mx: b.mx, my: b.my, mz: b.mz, yaw: b.yaw, pitch: b.pitch,
         ...(b.kind === "egg" ? { kind: "egg" } : b.kind === "enderPearl" ? { kind: "enderPearl", ...(b.owner === "player" ? { owner: b.owner } : {}) } : {}),
-        ...(b.fire ? { fire: b.fire } : {}), ...(b.dispensed ? { dispensed: true } : {}), ...keptBaseSave(b) }; /* b88 entnbt88: Air, UUID, PortalCooldown, Dimension */ // b84 cmdfix84: any nonzero short; b80 fluids80: Entity.writeToNBT's Fire
+        ...(b.fire ? { fire: b.fire } : {}), ...(b.dispensed ? { dispensed: true } : {}), ...saveOwnerBody(b), ...keptBaseSave(b) }; /* b88 entnbt88: Air, UUID, PortalCooldown, Dimension */ // b84 cmdfix84: any nonzero short; b80 fluids80: Entity.writeToNBT's Fire
     });
   }
   load(list) {
@@ -735,7 +748,7 @@ export class Projectiles {
       if (d && kindKnown && [d.x, d.y, d.z, d.mx, d.my, d.mz].every(ok) && (d.kind !== "enderPearl" || d.owner === "player" || d.owner === undefined)) {
         const yaw = ok(d.yaw) ? f(d.yaw) : 0, pitch = ok(d.pitch) ? f(d.pitch) : 0;
         const kind = d.kind === "egg" ? "egg" : d.kind === "enderPearl" ? "enderPearl" : "snowball", rand = this.rng();
-        this.balls.push({ kind, ...(kind === "enderPearl" ? { ...(d.owner === "player" ? { owner: "player" } : {}), random: rand } : {}), x: d.x, y: d.y, z: d.z, px: d.x, py: d.y, pz: d.z, mx: d.mx, my: d.my, mz: d.mz, yaw, pitch, prevYaw: yaw, prevPitch: pitch, ticks: 0, rand, dead: false, ...(Number.isInteger(d.fire) && d.fire !== 0 ? { fire: Math.max(-32768, Math.min(32767, d.fire)) } : {}), ...(d.dispensed === true ? { dispensed: true } : {}), ...keptBaseRestore(d) }); // b89 credit89: a dispensed ball stays ownerless // b88 entnbt88: kept Entity keys // b84 cmdfix84: a negative counter too
+        this.balls.push({ kind, ...(kind === "enderPearl" ? { ...(d.owner === "player" ? { owner: "player" } : {}), random: rand } : {}), x: d.x, y: d.y, z: d.z, px: d.x, py: d.y, pz: d.z, mx: d.mx, my: d.my, mz: d.mz, yaw, pitch, prevYaw: yaw, prevPitch: pitch, ticks: 0, rand, dead: false, ...(Number.isInteger(d.fire) && d.fire !== 0 ? { fire: Math.max(-32768, Math.min(32767, d.fire)) } : {}), ...(d.dispensed === true ? { dispensed: true } : {}), ...loadOwnerBody(d), ...keptBaseRestore(d) }); // b89 credit89: a dispensed ball stays ownerless // b88 entnbt88: kept Entity keys // b84 cmdfix84: a negative counter too
       }
     }
   }

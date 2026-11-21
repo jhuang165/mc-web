@@ -179,7 +179,7 @@ export class ServerSurvival {
   deadBody(p) {
     const s = p.survival, held = s.held ? { ...s.held } : null, look = { yaw: p.serverLook?.yaw ?? p.yaw, pitch: p.serverLook?.pitch ?? p.pitch };
     return { corpseOf: p, dead: true, id: p.id, name: p.name, position: { x: p.position.x, y: p.position.y, z: p.position.z }, yaw: look.yaw, pitch: look.pitch, serverLook: look,
-      dimension: p.dimension, sleeping: false, survival: { creative: !!s.creative, held, health: 0, inventory: { armor: [] } } };
+      dimension: p.dimension, sleeping: false, survival: { creative: !!s.creative, held, health: 0, inventory: { armor: (s.inventory?.armor ?? []).map(a => a ? { ...a } : a) } } }; // b94 credit94: the old EntityPlayerMP still wears what dropAllItems left (all of it under keepInventory)
   }
   leaveBody(p) {
     const dims = this.sim.dimensions, lists = new Set([this.sim.dispense, dims?.nether?.dispense, dims?.end?.n?.dispense].filter(Boolean).map(d => d.primed).filter(Array.isArray));
