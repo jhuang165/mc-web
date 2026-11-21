@@ -39,7 +39,7 @@ const playerView = (p) => ({ x: p.x, minY: p.y, z: p.z, height: p.height });
 // the previous action state), the client's crackle (one in 24) and the 0.6 fall damping, then the two largesmoke puffs. In that draw order.
 // The action state itself (target, path, the volley) is blazeThink.
 export function blazeUpdate(m, e, t, corpse = false) {
-  const rand = entityRandom(e), s = (e.blaze ??= blazeState()), st = m.silverfishState(e), p = m.ai.player;
+  const rand = entityRandom(e), s = (e.blaze ??= { ...blazeState(), attackTime: e.attackTime > 0 ? e.attackTime : 0 }), st = m.silverfishState(e), p = m.ai.player;
   // b89 mobrec89: xx.e reads bT() (entityToAttack) with no isEntityAlive test; a dead mob target is cleared by the action state (td.bq) after the hover read, so a dying
   // golem knocked upward still pulls the blaze up this tick (executed, b89mr-snow-blaze-8902). The player branch is unchanged.
   const target = st.target;
@@ -58,7 +58,7 @@ export function blazeUpdate(m, e, t, corpse = false) {
 // EntityMob.onLivingUpdate's entityAge += 2 (the blaze's getBrightness is 1.0). hasAttacked (set by the attack in range) skips the
 // re-path and wander and strafes around the target. blaze-ghast.md: bytecode-read td.bq / xx.e, replayed against legacy-ai-reference.json.
 export function blazeThink(m, e, t, aiMoveSpeed) {
-  const brain = m.ai.brain(e), p = m.ai.player, survival = m.ai.survival, st = m.silverfishState(e), s = (e.blaze ??= blazeState());
+  const brain = m.ai.brain(e), p = m.ai.player, survival = m.ai.survival, st = m.silverfishState(e), s = (e.blaze ??= { ...blazeState(), attackTime: e.attackTime > 0 ? e.attackTime : 0 });
   const rand = entityRandom(e), path = (make) => {
     if (!brain.navigator.spend()) return null;
     const n = brain.navigator; // td.bq asks World.getPathEntityToEntity / getEntityPathToXYZ with (openDoors true, breakDoors false, avoidWater false, canSwim true)

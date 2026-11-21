@@ -63,7 +63,12 @@ function projectileRecordOf(entity, { shiftX = 0, shiftZ = 0, convertItem = null
     const direction = numbers(entity, 'direction', NBT.DOUBLE, 3);
     if (!direction) return { lost: 'no direction' };
     const power = nbtGet(entity, 'ExplosionPower', NBT.INT);
-    return { list, record: { kind: FIREBALL_KINDS[id], x: base.x, y: base.y, z: base.z, vx: direction[0], vy: direction[1], vz: direction[2], ax: 0, ay: 0, az: 0,
+    // b92 entnbt92: EntityFireball.readEntityFromNBT (ze.a, bytecode-read) takes xTile/yTile/zTile (shorts), inTile (byte & 255) and inGround (byte == 1); a tag without them reads 0
+    // (a fresh ball is -1, -1, -1, 0 and false). A ball that is not the fresh default keeps its tile; Fireballs.stick runs the in-ground update (a missing block lets go on the first update).
+    const tileRaw = [nbtGet(entity, 'xTile', NBT.SHORT, 0), nbtGet(entity, 'yTile', NBT.SHORT, 0), nbtGet(entity, 'zTile', NBT.SHORT, 0)], orig = nbtGet(entity, 'inTile', NBT.BYTE, 0) & 255;
+    const grounded = nbtGet(entity, 'inGround', NBT.BYTE, 0) === 1, fresh = tileRaw.every((v) => v === -1) && orig === 0 && !grounded;
+    const block = fresh ? null : fromOriginal(orig, 0), tileFields = fresh ? {} : { tile: { x: tileRaw[0] + shiftX, y: tileRaw[1], z: tileRaw[2] + shiftZ, id: block && block.id <= 255 ? block.id : -1, orig }, ...(grounded ? { inGround: true } : {}) };
+    return { list, record: { ...tileFields, kind: FIREBALL_KINDS[id], x: base.x, y: base.y, z: base.z, vx: direction[0], vy: direction[1], vz: direction[2], ax: 0, ay: 0, az: 0,
       ...(id === 'Fireball' ? { power: Number.isFinite(power) ? power : 1 } : {}), rotation, dimension, ...(nbtGet(entity, 'Fire', NBT.SHORT, 0) !== 0 ? { fire: nbtGet(entity, 'Fire', NBT.SHORT, 0) } : {}) } }; // b84 cmdfix84: Fire (setFire(1) lifts it to 20 on the first update) // b81 render81: Entity.readFromNBT's Rotation, which RenderWitherSkull draws (b82 fireext82: every fireball keeps it)
   }
   if (id === 'EyeOfEnderSignal') {
@@ -134,7 +139,8 @@ export function javaProjectileToNbt(list, e, { ox = 0, oz = 0, itemNbt = null } 
     // adds ExplosionPower (int). The acceleration, the shooter and the wither skull's dangerous flag are not saved.
     const id = FIREBALL_IDS[e.kind];
     if (!id || ![e.vx, e.vy, e.vz].every(Number.isFinite)) return null;
-    return { id, fields: { xTile: short(-1), yTile: short(-1), zTile: short(-1), inTile: byte(0), inGround: byte(0),
+    const t = e.tile && [e.tile.x, e.tile.y, e.tile.z].every(Number.isInteger) ? e.tile : null, tOrig = t ? (Number.isInteger(t.orig) ? t.orig : t.id >= 0 ? toOriginal(t.id, 0)?.[0] ?? 0 : 0) : 0; // b92 entnbt92: ze.b writes the stored tile and block id
+    return { id, fields: { xTile: short(t ? t.x + ox : -1), yTile: short(t ? t.y : -1), zTile: short(t ? t.z + oz : -1), inTile: byte(tOrig), inGround: byte(t && e.inGround === true ? 1 : 0),
       direction: tag(NBT.LIST, { elementType: NBT.DOUBLE, items: [e.vx, e.vy, e.vz] }), ...(id === 'Fireball' ? { ExplosionPower: int(Number.isInteger(e.power) ? e.power : 1) } : {}),
       // b81 render81: a wither skull's saved rotation as Entity.writeToNBT's Rotation (replaces the exporter's record yaw/pitch, which fireball records lack); b82 fireext82: every fireball.
       ...(Array.isArray(e.rotation) && e.rotation.length === 2 && e.rotation.every(Number.isFinite) ? { Rotation: tag(NBT.LIST, { elementType: NBT.FLOAT, items: e.rotation.map(Math.fround) }) } : {}) } };

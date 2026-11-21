@@ -1071,7 +1071,9 @@ export class EntityWorld {
       // yv.cd's flag is not saved; a cured villager's +5 reputation is given on its first village refresh.
       defaultReputation: undefined,
       wander: 0,
-      hurt: 0,
+      // b92 entnbt92 (bytecode-read sv.b / sv.a): EntityLivingBase writes HurtTime, DeathTime and AttackTime as shorts and reads them back; sv's update counts both down
+      hurt: Number.isInteger(e.hurt) ? (e.hurt << 16) >> 16 : 0,
+      ...(Number.isInteger(e.attackTime) && e.attackTime !== 0 ? { attackTime: (e.attackTime << 16) >> 16 } : { attackTime: e.type === "pigman" ? 0 : undefined }),
       recentlyHit: 0,
       attack: 0,
       flee: 0,
@@ -2533,6 +2535,7 @@ export class EntityWorld {
         // Entity.onEntityUpdate still runs the fire (attackEntityFrom refuses the hits); b83: and the sprint draws, handleWaterMovement (splash, extinguish) and the air reset (corpse-living.js).
         corpseEntityUpdate(this, e, t);
         e.hurt = Math.max(0, e.hurt - 1);
+        if (e.attackTime > 0 && !TARGETS_ATTACKER.has(e.type)) e.attackTime--;
         this.dying(e, t);
         if (e.rider?.sneakDismount) this.riderSneakOff(e); // b90 horse90: a dying pig's sneaking rider gets off after the corpse's update too (a horse corpse already did, in horseTick)
         continue;
@@ -2583,6 +2586,7 @@ export class EntityWorld {
       // hurtResistantTime run down, a mob at 0 health goes on to onDeathUpdate (a mob the
       // fire or water killed counts its first death tick now), then recentlyHit runs down.
       e.hurt = Math.max(0, e.hurt - 1);
+      if (e.attackTime > 0 && !TARGETS_ATTACKER.has(e.type)) e.attackTime--; // b92 entnbt92: sv.e counts attackTime down for every living entity; the legacy mobs count their own (silverfishState, e.blaze)
       if (e.health <= 0) {
         this.dying(e, t);
         if (e.rider?.sneakDismount) this.riderSneakOff(e); // b90 horse90: a dying pig's sneaking rider gets off after the corpse's update too (a horse corpse already did, in horseTick)
@@ -3279,7 +3283,7 @@ export class EntityWorld {
   // The legacy AI fields of one silverfish (silverfish.js): kept off the saved record.
   silverfishState(e) {
     let st = this.fishStates.get(e);
-    if (!st) this.fishStates.set(e, (st = { ...silverfishFields(), persistent: false }));
+    if (!st) this.fishStates.set(e, (st = { ...silverfishFields(), persistent: false, ...(e.attackTime > 0 ? { attackTime: e.attackTime } : {}) })); // b92 entnbt92: a loaded AttackTime
     return st;
   }
   // Adds a silverfish at the centre of a block cell (BlockSilverfish.onBlockDestroyedByPlayer /
@@ -3531,6 +3535,9 @@ export class EntityWorld {
   serializeOne(e) {
     const saved = { ...e };
     for (const key of INTERPOLATED) delete saved[key];
+    // b92 entnbt92: the live attackTime of a legacy mob (its own state) or the record's; HurtTime is `hurt`
+    const at = e.type === "blaze" && e.blaze ? e.blaze.attackTime : this.fishStates.get(e)?.attackTime ?? e.attackTime;
+    if (at > 0 || at < 0) saved.attackTime = at; else delete saved.attackTime;
     Object.assign(saved, mobBaseSave(e)); // b88 entnbt88: writeToNBT's Fire, OnGround, FallDistance and Rotation pitch (they were transient)
     const riding = ridingId(e);
     if (riding) saved.riding = riding;

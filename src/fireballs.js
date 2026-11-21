@@ -260,6 +260,7 @@ export class Fireballs {
     return this.list.filter((b) => !b.dead).map((b) => ({
       kind: b.kind, x: b.x, y: b.y, z: b.z, vx: b.vx, vy: b.vy, vz: b.vz, ax: b.ax, ay: b.ay, az: b.az, ticks: b.ticks, dimension,
       ...(b.large ? { power: b.power } : {}), ...(b.blue ? { blue: true } : {}),
+      ...(b.tile ? { tile: { ...b.tile }, ...(b.inGround ? { inGround: true } : {}) } : {}), // b92 entnbt92: ze.b's xTile/yTile/zTile/inTile/inGround (stick() runs the in-ground update)
       ...(Number.isInteger(b.fire) && b.fire !== 0 ? { fire: b.fire } : {}), // b84 cmdfix84: Entity.writeToNBT's Fire (20 after the first update: ze.h setFire(1))
       ...keptBaseSave(b), // b88 entnbt88: Air, UUID, PortalCooldown, Dimension as read (nbtDimension; `dimension` is the list it flies in)
       rotation: [b.yaw ?? 0, b.pitch ?? 0], // b82 fireext82: Entity.writeToNBT's Rotation, which every entity writes (render81 had it for the skulls only)
@@ -285,6 +286,7 @@ export class Fireballs {
       const ball = this.build({ ...r, ax: ok(r.ax) ? r.ax : 0, ay: ok(r.ay) ? r.ay : 0, az: ok(r.az) ? r.az : 0 });
       if (ok(r.ticks)) ball.ticks = Math.max(0, r.ticks | 0);
       if (r.blue === true) ball.blue = true;
+      if (r.tile && [r.tile.x, r.tile.y, r.tile.z, r.tile.id].every(Number.isInteger)) { ball.tile = { x: r.tile.x, y: r.tile.y, z: r.tile.z, id: r.tile.id, ...(Number.isInteger(r.tile.orig) ? { orig: r.tile.orig } : {}) }; ball.inGround = r.inGround === true; ball.ticksAlive = 0; if (ball.inGround) ball.rand = new JavaRandom(this.mobs.fireballSeed?.(null, ball.large) ?? seedOf(this.mobs)); } // b92 entnbt92: a ball that lets go draws its three motion factors from its own Entity.rand
       if (Number.isInteger(r.fire) && r.fire !== 0) ball.fire = Math.max(-32768, Math.min(32767, r.fire)); // b84 cmdfix84
       Object.assign(ball, keptBaseRestore(r)); // b88 entnbt88
       // b88 blast88 (bytecode-read ze.b(dh) / ze.a(dh)): EntityFireball writes xTile, yTile, zTile, inTile, inGround and direction (zg adds ExplosionPower), never the shooter, so a

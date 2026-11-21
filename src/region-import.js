@@ -705,7 +705,7 @@ export async function importJavaRegionArea(regions, options = {}) {
       const m = motion && motion.every(Number.isFinite) ? motion : [0, 0, 0];
       // Saved y is the bounding-box bottom; Pos[1] is posY (yOffset 0.125 above it).
       drops.push({ stack, x, y: pos[1] - 0.125, z, mx: m[0], my: m[1], mz: m[2],
-        age: get(entity, 'Age', NBT.SHORT, 0), /* b87 summon87: xk.a(dh) keeps the raw short (a negative Age ages up from it; 6000 or more dies on the first update) */ delay: Math.max(0, Math.min(40, get(entity, 'PickupDelay', NBT.SHORT, 0))), fire: get(entity, 'Fire', NBT.SHORT, 0),
+        age: get(entity, 'Age', NBT.SHORT, 0), /* b87 summon87: xk.a(dh) keeps the raw short (a negative Age ages up from it; 6000 or more dies on the first update) */ delay: 0 /* b92 entnbt92: xk.a(dh) reads no pickup delay (delayBeforeCanPickup b starts 0 and is not saved; bytecode-read) */, fire: get(entity, 'Fire', NBT.SHORT, 0),
         health: get(entity, 'Health', NBT.SHORT, 0) & 255, ...invulnerableFields(entity), ...(get(entity, 'OnGround', NBT.BYTE, 0) !== 0 ? { onGround: true } : {}) }); // b86 summon86: EntityItem.readEntityFromNBT's Health & 255 (xk.a) and Entity's Invulnerable/OnGround // b79 falling79: Entity.fire is saved as is; an unticked item exports it back
       // EntityItem.readEntityFromNBT: Owner and Thrower strings (Bytecode-read xk.a(dh): hasKey, then getString) and Entity.readFromNBT's PortalCooldown; the live item
       // already keeps and saves all three (item-entities.js), the import dropped them before b77.

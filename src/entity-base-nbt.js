@@ -111,6 +111,9 @@ export function mobBaseOf(tag) {
   if (nbtGet(tag, "OnGround", NBT.BYTE, 0) !== 0) o.onGround = true;
   const fall = f(nbtGet(tag, "FallDistance", NBT.FLOAT, 0));
   if (fall !== 0) o.fallDistance = fall;
+  const hurt = nbtGet(tag, "HurtTime", NBT.SHORT, 0), attack = nbtGet(tag, "AttackTime", NBT.SHORT, 0); // b92 entnbt92: sv.a reads both shorts (a missing one is 0)
+  if (hurt !== 0) o.hurt = hurt;
+  if (attack !== 0) o.attackTime = attack;
   const air = nbtGet(tag, "Air", NBT.SHORT, 300); // b91 entnbt91: sv.C counts it only in water, so a loaded mob keeps the saved supply (a record without `air` is 300)
   if (air !== 300) o.air = air;
   return o;

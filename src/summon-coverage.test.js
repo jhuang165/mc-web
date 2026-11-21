@@ -56,7 +56,7 @@ test('summon MinecartSpawner reads the logic keys and spawns a type 4 cart', () 
 test('summon Item, XPOrb, PrimedTnt, FallingSand and Boat build the entity at the command position', () => {
   const g = game();
   assert.ok(!failed(g.run('/summon Item ~ ~ ~ {Item:{id:264s,Count:3b,Damage:0s},Age:5s,PickupDelay:10s,Motion:[0.1d,0.2d,0.3d]}')));
-  assert.deepEqual([g.calls.items[0].x, g.calls.items[0].y, g.calls.items[0].z, g.calls.items[0].stack.count, g.calls.items[0].delay, g.calls.items[0].age], [10.5, 61, 10.5, 3, 10, 5]);
+  assert.deepEqual([g.calls.items[0].x, g.calls.items[0].y, g.calls.items[0].z, g.calls.items[0].stack.count, g.calls.items[0].delay, g.calls.items[0].age], [10.5, 61, 10.5, 3, 0, 5]);
   assert.ok(!failed(g.run('/summon XPOrb ~ ~ ~ {Value:7s}')));
   assert.equal(g.calls.orbs[0].value, 7);
   assert.ok(!failed(g.run('/summon PrimedTnt ~ ~ ~ {Fuse:20b}')));

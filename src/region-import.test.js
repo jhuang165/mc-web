@@ -157,7 +157,7 @@ test('chests, furnaces, dropped items and mobs convert; other tile entities and 
   assert.deepEqual(player.furnaces['53,70,53'], {items: [{id: 323, count: 5, damage: 0}, {id: 301, count: 3, damage: 0}, {id: 324, count: 2, damage: 0}], burn: 900, burnTotal: 1600, cook: 150, lit: false}); // lit follows the saved block id (61, unlit)
   assert.equal(items.items.length, 1);
   assert.deepEqual(items.items[0].stack, {id: 303, count: 2, damage: 0});
-  assert.deepEqual([items.items[0].x, items.items[0].z, items.items[0].age, items.items[0].delay], [51.5, 51.5, 100, 10]);
+  assert.deepEqual([items.items[0].x, items.items[0].z, items.items[0].age, items.items[0].delay], [51.5, 51.5, 100, 0]);
   assert.ok(Math.abs(items.items[0].y - 71) < 1e-9);
   assert.equal(player.mode ?? record.mode, 'survival');
   assert.deepEqual(report.tileEntities, {total: 5, converted: {Chest: 1, Furnace: 1, Skull: 1},
