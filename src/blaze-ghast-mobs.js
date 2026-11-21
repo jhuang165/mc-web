@@ -38,7 +38,9 @@ const playerView = (p) => ({ x: p.x, minY: p.y, z: p.z, height: p.height });
 // The action state itself (target, path, the volley) is blazeThink.
 export function blazeUpdate(m, e, t, corpse = false) {
   const rand = entityRandom(e), s = (e.blaze ??= blazeState()), st = m.silverfishState(e), p = m.ai.player;
-  if (st.target && (st.target === p ? !(p?.alive && !m.ai.survival.creative) : st.target.alive === false)) st.target = null; // the player, or a mob that hurt it (EntityMob.attackEntityFrom)
+  // b89 mobrec89: xx.e reads bT() (entityToAttack) with no isEntityAlive test; a dead mob target is cleared by the action state (td.bq) after the hover read, so a dying
+  // golem knocked upward still pulls the blaze up this tick (executed, b89mr-snow-blaze-8902). The player branch is unchanged.
+  if (st.target && st.target === p && !(p?.alive && !m.ai.survival.creative)) st.target = null; // the player, or a mob that hurt it (EntityMob.attackEntityFrom)
   const target = st.target;
   if (!corpse && wet(m, e, t)) { m.hazard(e, 1, "drown"); if (e.health <= 0) return; }
   e.vy = blazeHover(s, rand, { y: e.y, eye: f(t.height * f(0.85)), vy: e.vy }, target ? { y: target.y, eye: target.eyeHeight ?? 1.62 } : null, { onGround: !!e.onGround });

@@ -60,7 +60,7 @@ export function buildSnowGolemTasks(m, K) {
       const d = this.range();
       let best = null, bd = Infinity;
       for (const o of m.nearby(d, 4, d, (b) => SNOW_GOLEM_TARGETS.has(b.e.type) && b.alive)) {
-        if (o.e?.type === "creeper") continue; // b88 mobrec88: EntityAITarget.isSuitableTarget asks EntityLiving.canAttackClass (sw.a(Class)), false for EntityCreeper and EntityGhast (bytecode-read; executed, enderman-wolf-b88mr snow-creeper-*)
+        if (o.e?.type === "creeper" || o.e?.type === "ghast") continue; // b88 mobrec88: EntityAITarget.isSuitableTarget asks EntityLiving.canAttackClass (sw.a(Class)), false for EntityCreeper and EntityGhast (bytecode-read; executed, enderman-wolf-b88mr snow-creeper-*); b89 mobrec89: the ghast too, now that SNOW_GOLEM_TARGETS holds every IMob
         const s = m.distSq(o);
         if (s < bd && this.isSuitableTarget(o) && s <= d * d) { best = o; bd = s; }
       }

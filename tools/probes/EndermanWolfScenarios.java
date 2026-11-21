@@ -229,6 +229,30 @@ public class EndermanWolfScenarios {
     sc88("b88mr-snow-creeper-8861", 8861, 200, "NX", new double[][] {{120.5, 64.5}, {127.5, 64.5}, {64.5, 64.5}}, 15);
     sc88("b88mr-snow-creeper-8862", 8862, 200, "NX", new double[][] {{120.5, 64.5}, {127.5, 64.5}, {64.5, 64.5}}, 15, "10 hit 0 1 1");
   }
+  // Batch 89 (mobrec89, b89mr): the b88mr harness (EndermanWolfProbe B89): a snow golem against a blaze (its fireballs fly), poison and regeneration on mobs (undead, spiders and the witch's
+  // magic resistance), Poison II and IV on the player, and the player's real health with its food stats (op realhp: max health 20, no 1000 reset; op food: level, saturation).
+  static void run89() throws Exception {
+    double[][] far = {{120.5, 64.5}, {64.5, 64.5}};
+    for (int sd : new int[] {8901, 8902, 8903}) sc88("b89mr-snow-blaze-" + sd, sd, 200, "Na", new double[][] {{120.5, 64.5}, {128.5, 64.5}, {64.5, 64.5}}, 15);
+    sc88("b89mr-poison-pig-8911", 8911, 300, "P", far, 15, "0 effect 0 19 300");
+    sc88("b89mr-poison2-pig-8912", 8912, 160, "P", far, 15, "0 effect 0 19 200 1");
+    sc88("b89mr-poison-zombie-8913", 8913, 120, "Z", far, 15, "0 health 0 10", "0 effect 0 19 100", "0 effect 0 10 100", "0 effect 0 1 100");
+    sc88("b89mr-poison-spider-8914", 8914, 160, "B", far, 15, "0 health 0 10", "0 effect 0 19 100", "0 effect 0 10 150");
+    sc88("b89mr-poison-witch-8915", 8915, 300, "K", far, 15, "0 effect 0 19 300");
+    sc88("b89mr-poison-snowgolem-8916", 8916, 120, "N", far, 15, "0 effect 0 19 120");
+    sc88("b89mr-poison2-golem-8917", 8917, 160, "G", far, 15, "0 effect 0 19 150 1");
+    sc88("b89mr-poison-pigman-8918", 8918, 120, "z", far, 15, "0 health 0 10", "0 effect 0 19 100", "0 effect 0 10 100");
+    double[][] pig = {{120.5, 64.5}, {64.5, 64.5}};
+    sc88("b89mr-player-poison2-8921", 8921, 220, "P", pig, 15, "0 effect 1 19 200 1");
+    sc88("b89mr-player-poison4-8922", 8922, 120, "P", pig, 15, "0 effect 1 19 100 3");
+    sc88("b89mr-player-poison2-cave-8923", 8923, 260, "J", new double[][] {{68.5, 64.5}, {64.5, 64.5}}, 0, "0 look 90 0", "0 effect 1 19 240 1", "60 health 0 1", "61 melee 0");
+    sc88("b89mr-food-regen-8931", 8931, 400, "P", pig, 15, "0 realhp 10", "0 food 20 5");
+    sc88("b89mr-food-poison-8932", 8932, 400, "P", pig, 15, "0 realhp 10", "0 food 20 5", "0 effect 1 19 300");
+    sc88("b89mr-food-poison2-floor-8933", 8933, 200, "P", pig, 15, "0 realhp 4", "0 food 10 0", "0 effect 1 19 200 1");
+    sc88("b89mr-food-starve-8934", 8934, 400, "P", pig, 15, "0 realhp 6", "0 food 0 0", "0 effect 1 19 200");
+    sc88("b89mr-food-hunger-8935", 8935, 400, "P", pig, 15, "0 realhp 16", "0 food 20 0", "0 effect 1 17 400 2", "0 effect 1 19 100");
+    sc88("b89mr-food-cave-8936", 8936, 300, "J", new double[][] {{68.5, 64.5}, {64.5, 64.5}}, 0, "0 look 90 0", "0 realhp 20", "0 food 20 0", "60 health 0 1", "61 melee 0");
+  }
   static void runCW() throws Exception {
     double[][] six = {{70.5, 64.5}, {64.5, 64.5}};
     sc("b45cw-swell-approach-7001", 7001, 160, "X", six, "0 look 90 0");

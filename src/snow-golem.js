@@ -11,7 +11,9 @@ export const SNOW_GOLEM = Object.freeze({
 export const SNOW_BLOCK = 23; // original 80, a full block
 export const IRON_BLOCK = 26;
 // Monsters that EntityAINearestAttackableTarget(EntityLiving, 0, true, false, IMob.selector) picks (every IMob type of this build).
-export const SNOW_GOLEM_TARGETS = new Set(["zombie", "skeleton", "spider", "cave_spider", "creeper", "silverfish", "witch", "slime", "enderman"]);
+// b89 mobrec89: IMob.mobSelector is every IMob (iron-golem.js IMOB_TYPES, probe-checked): the blaze, ghast, magma cube, pigman and the rest too (executed, b89mr-snow-blaze-8901: the golem
+// targets the blaze on its first tick).
+export const SNOW_GOLEM_TARGETS = new Set(["zombie", "pigman", "skeleton", "wither_skeleton", "spider", "cave_spider", "creeper", "enderman", "silverfish", "witch", "blaze", "giant", "wither", "slime", "magma_cube", "ghast", "ender_dragon"]);
 
 // BlockPumpkin.onBlockAdded, snow branch: a pumpkin or jack o'lantern above two snow blocks. Returns the cells to clear and where the
 // golem spawns, or null.
