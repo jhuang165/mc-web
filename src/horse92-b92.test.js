@@ -17,9 +17,12 @@ import { tickMinecartSimulation, tickBoatSimulation } from "./structure-simulati
 import { createPlayerRider, moveRidingPlayer, finishVehicleTick } from "./vehicle-simulation.js";
 import { DedicatedSimulation } from "./multiplayer/simulation.js";
 import { IDLE_INPUT } from "./multiplayer/protocol.js";
-import { EntityWorld } from "./entities.js";
+import { EntityWorld, setEntityRandom } from "./entities.js";
+import { JavaRandom } from "./java-random.js";
 import { Survival } from "./survival.js";
 
+// Interval draws never hit (nextInt(n) != 0 for n > 1): the probe records no idle talk, rear, heal or eat, and the port's Random is seeded from Math.random (b94 horse94).
+class NoHit extends JavaRandom { constructor() { super(1); } nextInt(n) { return n > 1 ? n - 1 : 0; } }
 const load = (name) => JSON.parse(readFileSync(new URL(`../public/research/${name}`, import.meta.url), "utf8"));
 const vref = load("vehicle92-reference.json"), href = load("horse92-reference.json");
 const internal = { 1: 3, 9: WATER, 66: RAIL };
@@ -126,6 +129,7 @@ for (const sc of href.mobRider) {
       { id: "mob-1", type: "horse", x: 64, y: 0, z: 64, health: 53, horse: { type: 0, tame: true, saddled: sc.saddled, owner: "player", speed: sc.speed, jump: sc.jumpAttr, maxHealth: 53 } },
       { id: "mob-2", type: sc.rider, x: 64, y: 1.2, z: 64, health: 20, riding: "mob-1" }], () => 0.5);
     const horse = w.entities[0], rider = w.entities[1];
+    setEntityRandom(horse, new NoHit()); setEntityRandom(rider, new NoHit());
     Object.assign(horse, { vx: 0, vy: 0, vz: 0, onGround: true, aiMoveSpeed: 0, rotationYaw: 0 });
     // The probe stubs the rider's own AI / living update (h()), so only the rider's input is replayed; an unsaddled horse's own AI is off too (random wandering has no record).
     const think = w.ai.think; w.ai.think = (e) => { if (e === rider || !sc.saddled) return; return think.call(w.ai, e); };
