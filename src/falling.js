@@ -283,6 +283,7 @@ export class FallingBlocks {
     if (typeof s.dropItem === "boolean") e.dropItem = s.dropItem; // EntityFallingBlock.DropItem
     if (typeof s.hurtEntities === "boolean") Object.assign(e, { hurtEntities: s.hurtEntities, fallHurtAmount: Number.isFinite(s.fallHurtAmount) ? s.fallHurtAmount : 2, fallHurtMax: Number.isInteger(s.fallHurtMax) ? s.fallHurtMax : 40 });
     this.entities.push(e);
+    this.spawned?.(e); // b90 mpobjects90: a loaded block's join state (the dedicated server's tracker copies it, falling-lane.js)
   }
 }
 // new EntityFallingBlock(world, x + 0.5, y + 0.5, z + 0.5, block, meta): setPosition puts the

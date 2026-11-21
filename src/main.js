@@ -4895,6 +4895,8 @@ function shadowCasters(partial) {
   if (minecarts) for (const c of vehicleViews(objectTracker, minecarts.carts, (live) => rider.vehicle === live, (x, z) => !world.streaming || world.isLoaded(x, z))) list.push({ ...SHADOWS.minecart, x: lerp(c.px, c.x), y: lerp(c.py, c.posY), z: lerp(c.pz, c.z), pos: { x: c.x, y: c.posY, z: c.z }, height: 0 });
   // b71 RenderFallingBlock: shadowSize 0.5, getShadowSize 0 (cast from posY = box bottom + 0.49, height 0).
   for (const e of objectViews(objectTracker, falling?.entities ?? [], "falling")) list.push({ ...SHADOWS.falling_block, x: lerp(e.px, e.x), y: lerp(e.py, e.y) + 0.49, z: lerp(e.pz, e.z), pos: { x: e.x, y: e.y + 0.49, z: e.z }, height: 0 });
+  // b90 mpobjects90: the multiplayer client's falling-block copies cast the same shadow (their rows hold the box bottom, as the single-player entities).
+  for (const e of remoteDispense?.falling ?? []) list.push({ ...SHADOWS.falling_block, x: lerp(e.px, e.x), y: lerp(e.py, e.y) + 0.49, z: lerp(e.pz, e.z), pos: { x: e.x, y: e.y + 0.49, z: e.z }, height: 0 });
   for (const e of mobs?.entities ?? []) {
     const child = e.growingAge < 0;
     // RendererLivingEntity passes Render.doRenderShadowAndFire no shadow for an invisible mob.

@@ -25,9 +25,16 @@ export function liftSummonedCrystal(e) {
 // b89 mpobjects89 (bytecode-read): TileEntityPiston moves a crystal with Entity.moveEntity (sa.d), which moves the posY-centred box and sets posY =
 // minY + yOffset - ySize. The crystal's stepHeight (sa.W) is never set (0), canTriggerWalking (wz.g_) is false (no step sound) and Entity.fall does nothing
 // for it. `move` is entities.js moveEntity(world, e, w, h, dx, dy, dz, step): it moves the box whose bottom is e.y, so e.y is the box bottom during the call.
-export function crystalPushMove(world, e, dx, dy, dz, move) {
+export function crystalPushMove(world, e, dx, dy, dz, move, hooks) {
   e.y -= CRYSTAL_Y_OFFSET;
-  try { return move(world, e, CRYSTAL_WIDTH, CRYSTAL_HEIGHT, dx, dy, dz, 0); } finally { e.y += CRYSTAL_Y_OFFSET; }
+  try { return move(world, e, CRYSTAL_WIDTH, CRYSTAL_HEIGHT, dx, dy, dz, 0, hooks); } finally { e.y += CRYSTAL_Y_OFFSET; }
+}
+// b90 mpobjects90 (bytecode-read): sa.d ends with doBlockCollisions (sa.I at offset 1887, called with no class test) and the burning-box test (ahb.e(box.contract(0.001)) at 1955, then
+// dealFireDamage f(1)); wz overrides neither, and wz.a(ro, float) explodes the crystal for ANY source (only isEntityInvulnerable refuses). So a crystal a piston pushes into a cactus or
+// into fire or lava is hurt (cactus 1, inFire 1) and goes off at its posY. The hooks are block-collisions.js's: `hurt` explodes through `attack`; wet is false (wz.h never runs sa.h,
+// so the crystal's inWater is never set, and a burning crystal is dead already). While the move runs e.y is the box bottom, so the attack sees posY again.
+export function crystalPushHooks(e, attack) {
+  return { wet: false, hurt: () => { e.y += CRYSTAL_Y_OFFSET; try { attack(e); } finally { e.y -= CRYSTAL_Y_OFFSET; } } };
 }
 // RenderEnderCrystal: the cube spins at innerRotation * 3 degrees and bobs by sin(t * 0.2) / 2 + 0.5.
 // innerRotation starts at random.nextInt(100000) (unseeded in the original: only the range is checked).

@@ -27,6 +27,9 @@ export function hookFallingJoin(falling, tracks) {
   const joined = (e) => { before?.(e); tracks.birth([{ e, kind: 'falling' }]); };
   joined[HOOKED] = tracks; joined.before = before;
   falling.joined = joined;
+  // b90 mpobjects90: a summoned (/summon FallingSand, entity-summon.js) or loaded (restoreEntity) block is spawned too: World.spawnEntityInWorld hands its S0E the state it was given
+  // (position, motion), whatever tick it joined in. `joined` stays the scheduled-update spawn's hook (the walk list in single player).
+  falling.spawned = (e) => tracks.birth([{ e, kind: 'falling' }]);
 }
 
 export function fallingTrackList(dispense) {
