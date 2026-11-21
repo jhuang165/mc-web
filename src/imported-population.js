@@ -282,7 +282,7 @@ export async function populateImportedColumns({ population, origin, worldKey, co
       for (const t of tiles.dispensers) if (w.getBlock(t.x, t.y, t.z) === DISPENSER_ID) {
         const items = Array(9).fill(null);
         for (const s of t.items ?? []) { const m = itemFromOriginal(s.id, s.damage); if (m && s.slot < 9) items[s.slot] = makeStack(m.id, s.count, m.damage, s.stored); }
-        out.dispensers[`${t.x - ox},${t.y},${t.z - oz}`] = { items, facing: t.facing };
+        out.dispensers[`${t.x - ox},${t.y},${t.z - oz}`] = { items }; // b94 tiles94: the cell metadata is the direction (b90)
       }
       for (const t of tiles.pots) if (inside(t.x, t.z)) out.pots.push({ ...t, x: t.x - ox, z: t.z - oz });
       for (const t of w.liveSpawners()) if (inside(t.x, t.z)) { const l = local(t); out.spawners = out.spawners.filter((s) => !(s.x === l.x && s.y === l.y && s.z === l.z)); out.spawners.push({ ...l, EntityId: t.name }); }

@@ -85,6 +85,9 @@ export function awayCommands({ plan, world, rt, weather, tiles, entities, wanted
   const now = () => state.clock + state.step;
   const beginTick = (n) => { state.ran = n; state.step = cycleOn() ? 1 : 0; state.pre = state.clock; state.gained += state.step - state.start; };
   const endTick = () => { state.clock += state.step; };
+  // b94 tiles94: a run stopped by the wall budget leaves `n` ticks unsimulated. The trip still lasted them (the live clock already counts all of plan.ticks), and natively the
+  // world keeps ticking, so they move the clock under the rule as it stands when the run stops: `gained` takes the step difference of those ticks too.
+  const skipTicks = (n) => { if (n > 0) state.gained += n * ((cycleOn() ? 1 : 0) - state.start); };
   const env = {
     active: () => active, world: () => seen, weather: () => weather, survival: () => sv,
     mobs: () => entities()?.mobs ?? null, minecarts: () => entities()?.minecarts, spawners: () => null, rockets: () => entities()?.rockets,
@@ -312,7 +315,7 @@ export function awayCommands({ plan, world, rt, weather, tiles, entities, wanted
   host.selectPlayerForAway = (text) => selectLocal(text, host);
 
   return {
-    host, stats, chat, state, queue, beginTick, endTick, now,
+    host, stats, chat, state, queue, beginTick, endTick, skipTicks, now,
     execute,
     spawn: () => active.worldSpawn,
     rule: (name) => ruleOn(active, name), // b86 awaystore86: the run's game rules as /gamerule leaves them (GameRules is read on every call)

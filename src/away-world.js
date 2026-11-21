@@ -345,6 +345,7 @@ function runAwayTicks(plan, { now = () => performance.now(), budgetMs = WALL_BUD
     cmds.endTick(); ents?.endTick();
     if (((plan.tickBase | 0) + ran + 1) % 900 === 0) { const now = cmds.spawn(); if (now[0] !== areas[areas.length - 1][0] || now[2] !== areas[areas.length - 1][2]) { areas.push([...now]); cmds.stats.areaMoves = (cmds.stats.areaMoves ?? 0) + 1; } }
   }
+  if (stopped === "budget") cmds.skipTicks(plan.ticks - ran); // b94 tiles94
   rt.flush();
   const entityLists = ents?.finish() ?? null;
   return {
