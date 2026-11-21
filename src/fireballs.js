@@ -16,6 +16,7 @@ import { gameRule } from "./game-rules.js";
 import { setMobFire } from "./armor-enchantments.js";
 import { orderTargets, stampEntity } from "./candidate-order.js"; // b72
 import { keptBaseSave, keptBaseRestore } from "./entity-base-nbt.js"; // b88 entnbt88
+import { tickPortalCooldown } from "./entity-base-nbt.js"; // b89 entnbt89
 const isServerPlayer = (e) => !!e && typeof e === "object" && !!e.survival && !!e.position && Number.isFinite(e.yaw); // b87 blast87: a dedicated server player record
 import { getLootingModifier } from "./enchantments.js"; // b88 blast88
 // b88 blast88 (bytecode-read MinecraftServer.v, nh.a(jd)): the server's rotationYaw / rotationPitch is what processPlayer last set (offsets 625-678: the packet's angles when
@@ -99,6 +100,7 @@ export class Fireballs {
     b.px = b.x; b.py = b.y; b.pz = b.z;
     if (this.ownerGone(b) || !this.blockExists(b)) { b.dead = true; return; }
     b.prevYaw = b.yaw ?? 0; b.prevPitch = b.pitch ?? 0; // Entity.onEntityUpdate (super.onUpdate, before the stuck test)
+    if (!mobs.remote) tickPortalCooldown(b); // b89 entnbt89: ze.h runs sa.h -> sa.C past its setDead test, which counts a positive PortalCooldown down on a WorldServer (bytecode-read)
     const box = this.boxOf(b); // before ticksInAir counts: the first update still has the constructor's box
     // Entity.handleWaterMovement (sa.h, before the sweep): the box shrunk 0.4 vertically and 0.001 all round; water also pushes the ball 0.014 along its flow.
     const water = waterAcceleration(mobs.world, entityWaterBox(box));

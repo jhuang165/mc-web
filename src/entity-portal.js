@@ -26,7 +26,7 @@ export const mcToMobYaw = (deg) => (-deg * Math.PI) / 180 + 0;
 // `teleporter`: a Teleporter over the target dimension; `spawn`/`heightAt`: the Overworld spawn and its column's height value.
 export function placeAfterTravel({ from, arg, entity, teleporter, spawn, heightAt }) {
   const e = { vx: 0, vy: 0, vz: 0, pitch: 0, teleportDirection: 0, ...entity };
-  if (from === END && arg === END) {
+  if (travelRoute(from, arg).spawn) { // b89 entnbt89: `from` is the saved Dimension (travelSource)
     // travelToDimension: world.getSpawnPoint, posY = getHeightValue; the copy keeps yaw, pitch and motion, no Teleporter.
     return { to: OVERWORLD, e: { ...e, x: spawn.x, y: heightAt(spawn.x, spawn.z), z: spawn.z }, teleporter: false };
   }
@@ -36,6 +36,18 @@ export function placeAfterTravel({ from, arg, entity, teleporter, spawn, heightA
   if (tt.teleporter) teleporter.placeInPortal(e, tt.origin.x, tt.origin.y, tt.origin.z, tt.origin.yaw);
   e.yaw %= 360; // the copy is built from NBT: Entity.readFromNBT keeps rotationYaw % 360
   return { to: arg, e, teleporter: tt.teleporter };
+}
+
+// b89 entnbt89 (bytecode-read sa.b(I), MinecraftServer.a(I), oi.a(sa, int, mt, mt)): travelToDimension takes its source as `this.dimension`, the saved Dimension tag
+// (nbtDimension; a record without one is in the dimension it was made in), not the world it stands in. j = this.dimension, i = the argument: the destination is
+// worldServerForDimension(i), or the Overworld (and dimension 0) when j == 1 and i == 1; transferEntityToWorld(entity, j, world(j), world(i)) scales by the new dimension
+// (-1: / 8, 0: * 8, else the End's entrance, or the spawn when j == 1) and runs the Teleporter only when j != 1; the copy goes to the world spawn's top only when
+// j == 1 and i == 1. world(j) itself only takes the old entity's chunk bookkeeping (updateEntityWithOptionalForce), which the port does not keep. So a /summon in the
+// End (Dimension 0) that walks into the exit portal lands on the End's obsidian platform at (100, 49, 0), and an entity tagged Dimension 1 elsewhere skips the Teleporter.
+export const travelSource = (e, live) => (Number.isInteger(e?.nbtDimension) ? e.nbtDimension : live);
+export function travelRoute(source, arg) {
+  const exit = source === END && arg === END;
+  return { to: exit ? OVERWORLD : arg, spawn: exit, teleporter: source !== END };
 }
 
 // Per-entity Entity.timeUntilPortal / portalCounter / inPortal. The cooldown is the saved PortalCooldown tag (record.portalCooldown).
@@ -86,12 +98,13 @@ export function entityDeparture(portals, kind, e, r, owner) {
   const vehicle = kind === "cart" || kind === "boat";
   delete rec.rider; // the player never travels with the vehicle
   rec.portalCooldown = portals.cooldownAfter(e, r) || undefined;
+  const source = Number.isInteger(e.nbtDimension) ? e.nbtDimension : undefined; // b89 entnbt89: travelToDimension's source (travelSource); undefined = the live dimension
   delete rec.nbtDimension; // b88 entnbt88: travelToDimension (sa.b(I), bytecode-read) sets Entity.dimension to the destination, which copyDataFrom carries over
   const v = { vx: e.vx ?? e.mx ?? 0, vy: e.vy ?? e.my ?? 0, vz: e.vz ?? e.mz ?? 0 };
   const mc = vehicle ? { x: e.x, y: e.posY, z: e.z, ...v, yaw: e.yaw ?? 0, pitch: 0 }
     : kind === "mob" ? { x: e.x, y: e.y, z: e.z, ...v, yaw: mobYawToMc(e.yaw ?? 0), pitch: 0 }
     : { x: e.x, y: e.y + POS_Y[kind], z: e.z, ...v, yaw: 0, pitch: 0 };
   mc.teleportDirection = r.direction;
-  return { rec, mc, arg: r.arg };
+  return { rec, mc, arg: r.arg, source };
 }
 export { OVERWORLD, NETHER, END };

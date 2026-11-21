@@ -4,6 +4,7 @@ import { moveParticleEntity } from './particles.js';
 import { waterAcceleration, entityWaterBox, inLava } from './fluids.js';
 import { burningIn } from './mpperf81-fast.js';
 import { entityWet, wetFizz } from './entity-wet.js';
+import { tickPortalCooldown } from './entity-base-nbt.js'; // b89 entnbt89
 const f = Math.fround, PI_F = f(Math.PI), SIZE = f(0.25);
 
 // zf(world, x, y, z, stack): flight = 1 + Fireworks.Flight; gaussian*0.001 sideways, 0.05 up,
@@ -31,6 +32,7 @@ export function tickRocket(r, world, rand, { remote = false, server = true, enti
   const out = { launch: false, spark: null, explode: null };
   r.px = r.x; r.py = r.y; r.pz = r.z;
   r.prevPitch = r.pitch; r.prevYaw = r.yaw; // Entity.onEntityUpdate
+  if (server) tickPortalCooldown(r); // b89 entnbt89: zf.h calls sa.h -> sa.C first, which counts a positive PortalCooldown down on a WorldServer (bytecode-read)
   // Entity.handleWaterMovement (executed, firework-fluid-reference.json): flowing water pushes the motion by 0.014 along its flow before the rocket's own update; entering
   // water after the first update draws the splash's 32 Entity.rand floats (sound 2, six bubbles x 3, six splashes x 2), which the client copy's spark gaussians then follow.
   const water = waterAcceleration(world, entityWaterBox(r.box));
