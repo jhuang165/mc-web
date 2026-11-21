@@ -6,7 +6,7 @@
 - `src/main.js`: instead of `left = !!dims.busy` each frame, hands `copy.departing = { skip: dims.listSkip }` to the walk; a failed trip (`!dims.busy`) clears `left`/`departing`. `feet`/`tickBeacons` keep `dims.busy` (tile pass runs after the removal).
 - `src/dimension-live.js`: `listSkip = !exit && !death` set in `travel()`.
 - `src/player-edit-simulation.js`: `applyEditInner` returns `{ handled: false, branch: 'player-left' }` while `left`. Gates hits, entity clicks, callReinforcement, leashFence and block clicks during the async trip window.
-- `public/research/spcopy92-reference.jsonl` (5.7 KB): probe output. Probe in git-ignored `tools/research/spcopy92-probe/`.
+- `public/research/spcopy92-reference.jsonl` (5.7 KB): probe output. Probe source committed as `tools/probes/SpCopy92Probe.java` by the lead (its run harness stays in git-ignored `tools/research/spcopy92-probe/`).
 - `src/spcopy92-b92.test.js` (7 tests). `src/spcopy89-b89.test.js`: one source-shape regex updated (it matched the old `left = !!dims.busy` line, not behaviour; the behaviour assertions in that test are unchanged and pass).
 
 ## Evidence

@@ -145,6 +145,22 @@ Batch 79 (2026-11-16/18, ten tracks in `../wt79-<name>` on `batch79-<name>`, cut
 - Verification: the first full run hung on those two files; after the fix one full `npm test` on 536376793: 8964 tests, 8964 pass. Build and bridge tests ok. No browser checks.
 - Open: "Still open from batch 79" in `public/research/remaining-gaps.md`.
 
+Batch 92 (2026-11-21, ten tracks in `../wt92-<name>` on `batch92-<track>92`, cut from a5c011b4f, merged --no-ff on `batch92-lead`; track agents ran on Sonnet, by request; shared rules `../artifacts/b92-lead/track-rules.md`; lead note `b92-lead-track.md`; no browser checks or full test runs in tracks, by request):
+- 0.121.0, by track (details in the `*-b92-track.md` notes and "Done in batch 92" in `public/research/remaining-gaps.md`):
+  - horse92: `Vehicle92Probe` (push order already native), C0C before C02 dropped (`takeRideOrQueue`), `Horse92Probe` mob rider yaw, rear seat and body yaw; the non-native rider half-turn removed.
+  - mpobjects92: server tick order sleep skip, scheduled ticks and block events, random ticks, entities, tile systems, tracker (`tickScheduledSystems`, `tickTileSystems`); `spawnsPending` for same-pass spawns.
+  - portals92: server portal travel for mobs, items, orbs, carts and boats (`server-portal-travel.js`).
+  - spcopy92: `SpCopy92Probe`; `left` flips at the player's list turn with the native skip; away `absent` reads as `left`; edits gated while `left`.
+  - credit92: dead thrower's balls and pearls keep the old body; arrow Thorns on mob victims (`thornsOfVictim`).
+  - console92: native-schedule S1C counting, creeper/enderman/wither watcher values, cart/boat join S1C and S12, TNT and fireball tracker packets (`Console92Probe`).
+  - mpperf92: `mpperf92-fast.js` behind `MC_MPPERF92=on|off|verify`; target box store carried across ticks (`carryBoxStore`, `mobTargetAt92`), shared `PathFinder`, pooled `beginMemo` (heap per tick about -6 to -9% travel, -11% terrain).
+  - tiles92: entity-time darkness for random ticks and sleep; the away clock starts at the trip start and follows `doDaylightCycle`.
+  - entnbt92: HurtTime/AttackTime, witch equipment, fireball in-ground state, firework `Explosions`, no `PickupDelay` read, hanging `Fire` 0 (`Entnbt92Probe`).
+  - mobrec92: 15 executed records (ticked slime and magma cube splits, snow golem fights, golem vs blaze); slimeball drop id 460, sized slime target boxes, child body yaw, copy push order, witch mob target.
+- Lead fixes: the `projectiles.js` conflict (mobrec92's sized slime box through mpperf92's `mobTargetAt92`); `SpCopy92Probe.java` committed.
+- Verification: one full `npm test` on the merged tree: 10331/10331. No browser checks.
+- Open: "Still open from batch 92" in `public/research/remaining-gaps.md`.
+
 Batch 91 (2026-11-21, ten tracks in `../wt91-<name>` on `batch91-<track>91`, cut from 94e060855, merged --no-ff on `batch91-lead`; track agents ran on Sonnet, by request; shared rules `../artifacts/b91-lead/track-rules.md`; lead note `b91-lead-track.md`; no browser checks or full test runs in tracks, by request):
 - 0.120.0, by track (details in the `*-b91-track.md` notes and "Done in batch 91" in `public/research/remaining-gaps.md`):
   - horse91: `Vehicle91Probe` boat and cart sneak records (port already matched), a living mob rider steers a saddled horse (`steeringRider`).

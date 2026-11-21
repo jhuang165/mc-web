@@ -2,6 +2,50 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 92
+
+Batch 92 covered these areas (track agents ran on Sonnet):
+- **Horses.** `Vehicle92Probe` showed the released rider's push runs in the network tick after the world tick whatever the list order, so the port was already native. A C0C sent before the C02 mount is dropped, as natively (`takeRideOrQueue`). `Horse92Probe` (9 scenarios): a mob rider sets `prevRotationYaw`, the rear seat shift uses `prevRearAmount`, riders copy the mount's body yaw, and the port's non-native half-turn of the rider in `endRidden` is gone.
+- **Multiplayer objects.** The dedicated server and its Nether run the sleep skip, then scheduled ticks and block events, then random ticks, then entities, then hoppers, brewing stands and moving pistons, then the tracker flush (`tickScheduledSystems`, `tickTileSystems` in `world-tick.js`; bytecode-read `mt.b` / `ahb.h`). Same-pass spawns survive a removal in the same turn.
+- **Portals.** Mobs, dropped items, XP orbs, minecarts and boats cross portals on the dedicated server with the 300-tick cooldown, placement through the Teleporter path, riders put down and leads dropped (`server-portal-travel.js`, reusing `EntityPortals.step`, `entityDeparture` and `ServerPortalShots.placed`). Ridden mobs, the dragon and crystals stay.
+- **The single-player copy.** `SpCopy92Probe` ran the real `transferPlayerToDimension`: the old world drops the player at its turn in the entity walk and the entity that moves into its slot is skipped that tick (not for End exits). The port now flips `left` at the player's turn with the same skip. The away run's `absent` stand-in reads as `left`, and player edits return `player-left` while away.
+- **Kill credit.** A dead thrower's snowballs, eggs, pearls and potions keep the old body as thrower (knockback from its position, mobs target it); a dead thrower's pearl moves the new player without the 5 damage. An arrow landing on a mob that wears Thorns hurts the shooter, on the server and in single player (`thornsOfVictim`).
+- **The dedicated server.** S1C changes count on the native schedule (a still mob no longer undercounts), including creeper state, enderman carried block and wither targets; the S1C and S12 after a cart or boat join count; TNT and fireballs send one S0E, then tracker moves and an S13 (`Console92Probe`).
+- **Server speed.** Behind `MC_MPPERF92=on|off|verify`: the mob target box store now survives `tickMobs` replacing the list (it had been thrown away every tick), and boxes are rewritten in place across ticks; one shared `PathFinder` and pooled `beginMemo` pages. Heap per tick is about 6 to 9% lower in travel and 11% in terrain; tick time is within noise.
+- **Tiles.** Single-player random-tick and sleep light reads use the entity-time darkness. The away run's clock started at the trip's end time; it now starts at `plan.time - ticks`, counts only while `doDaylightCycle` is on, and reads darkness at the native point.
+- **Entity NBT.** `HurtTime` and `AttackTime` round-trip; a witch keeps Equipment, DropChances and CanPickUpLoot; fireballs keep their in-ground state; the firework item writes `Explosions` only when it had one; the item import no longer reads `PickupDelay`; hanging entities write `Fire` 0 (`Entnbt92Probe`).
+- **Mob records.** 15 new executed records replay with no divergence, including size 2 and 4 slime and magma cube splits with ticked children (the probe now updates spawned entities for `b92mr` records), snow golem fights and an iron golem against a blaze. Fixes: a size 1 slime dropped this build's Water bucket (item 341) instead of the Slimeball (460); slime and magma cube target boxes now scale with size, so bigger ones are hit; split children start at body yaw 0; the server copy pushes at its own list place; a witch reads a mob target's health and effects.
+
+Found wrong in the batch 91 list:
+- "Box reuse would alias held records": the store was discarded every tick, so there was no cross-tick reuse to alias.
+- "`sleep.worldTick` stays after the darkness capture" was wrong: native computes skylight after the skip.
+- Dead entities leave the list in their own turn; only unloaded ones are swept at the start of the next pass.
+- "A forward key in the mounting tick arrives late" was a harness limit; the real gap was a C0C before the C02.
+- `away-entities.js` did not just keep its own clock: it started at the wrong time.
+- The away `absent` stand-in did not read as `left` (the away run despawned spiders, pigmen, silverfish, blazes and endermen on its first tick).
+- Hanging `Fire` is written as 0 natively; `PickupDelay` was a non-native import read.
+- Enderman scream and wither invulnerability were already counted, and Nether and End mob sizes were already right.
+
+Still open from batch 92:
+- **Multiplayer.**
+  - Horses: the client copy of a mob rider has no rear shift; the player seat uses `rearAmount` where native reads `bM`; mob rider input values are port-read.
+  - Objects: SpawnerAnimals still runs after the scheduled pass (inside `mobs.tick`); scheduled entries run system by system, not as one sorted tree.
+  - Portals: a leash held by a fence knot does not re-attach at the destination; server-side mob state outside the save record starts fresh; no executed probe (needs a three-world server).
+  - Kill credit: balls thrown before a dimension change keep the old player object natively; the shooter's Fire Aspect or Bane on arrow hits is not modelled.
+  - The dedicated server: command-block cart strings are not in the join S1C; golem snowballs and other `b` rows get no tracker packets; a vanished row's S13 has no one-tick delay; the Nether and End lookup is code-read.
+  - Speed: `legacyThink`, `tickMobs` shapes, `walk` and builtin `next`/`set`/`push` costs.
+  - Server commands: /publish stays off. End island tails past 128 blocks are cut on some seeds (left for the user's decision). WebSocket compression stays off.
+  - Not seen in a browser: mobs, items and vehicles arriving through server portals, boat and cart shadows, beacon particles, plus the batch 67 to 91 lists.
+- **Single player.**
+  - Tiles: a `/time` shift after the away entity tick, and a gamerule change mid-run, are not reflected in the away clock; the chest record `facing` fallback can go after this release.
+  - The copy: a held target when the arrival point is within follow range; tracker spawn timing at arrival is port-read; the old chunk-membership quirk after removal is not modelled.
+  - Kill credit: single-player Nether and End deaths, and a dead shooter's potions and arrows, get no body.
+  - Mob records: squid, bat, wither skeleton and the wither have no per-tick native record; pigman and giant snow golem fights were dropped for size.
+  - Entity NBT: `DeathTime` is always written as 0.
+  - Not seen in a browser: split slimes, snowball and potion trails, sunburn and crops with the daylight cycle off, the hurt flash after loading, plus the batch 91 list.
+- **Rendering.** No native pixel capture.
+- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+
 ## Done in batch 91
 
 Batch 91 covered these areas (track agents ran on Sonnet):
@@ -24,25 +68,7 @@ Found wrong in the batch 90 list:
 - The mob-light lag held only with a frozen clock (`doDaylightCycle` off).
 - Mobs always write `CustomName`; `PickupDelay` is not a 1.7.10 key.
 
-Still open from batch 91:
-- **Multiplayer.**
-  - Horses: a released rider's vehicle is always pushed after the vehicle update (natively entity-list order); a mob rider's yaw and the rearing seat shift are not executed; a forward key sent in the mounting tick reaches the boat a tick late on the server.
-  - Objects: scheduled block ticks still run after the entities (`tickWorldSystems` also runs hoppers, redstone and pistons); `sleep.worldTick` stays after the darkness capture.
-  - Mob packets: `adoptSpawns` misses a spawn when another entity is removed in the same turn.
-  - Kill credit: a dead thrower's snowballs and eggs read the live record; arrow Thorns on mob victims are not modelled.
-  - The dedicated server: S1C changes count only when a message already carries that mob; creeper state, enderman block and wither targets are not derived; Nether and End mobs use class defaults; a cart's S12 and the S1C after a join are not counted; TNT and fireballs count one S0E per tick.
-  - Speed: the `mobTargetAt88` box (reuse would alias held records), `tickMobs` field shapes, and the pathfinder's `finder` and `beginMemo` allocations.
-  - Entity NBT: mobs, items, orbs, carts and boats on the server do not cross portals.
-  - Server commands: /publish stays off. End island tails past 128 blocks are cut on some seeds (left for the user's decision). WebSocket compression stays off.
-  - Not seen in a browser: boat and cart shadows, beacon particles on a remote mob, arrows and rockets arriving in the Nether on the server, plus the batch 67 to 90 lists.
-- **Single player.**
-  - Tiles: the chest record's `facing` fallback can go after a release; random block ticks and the sleep checks use the scene darkness (differs only with a frozen clock); `away-entities.js` keeps its own clock.
-  - The copy: player-event readers (hits, clicks, reinforcements, `leashFence`) have no `left` gate, unreachable while away; the away-run `absent` stand-in is unchanged; the one-tick trip claim is port-read.
-  - Mob records: split slimes and magma cubes are not comparable in the probe, so splitting stays port-read.
-  - Entity NBT: `HurtTime` and `AttackTime` are always 0; a witch loses Equipment, DropChances and CanPickUpLoot on import; fireball in-ground state is not modelled; a firework item gets an empty `Explosions` list; import still reads `PickupDelay`; hanging `Fire` is unproven.
-  - Not seen in a browser: chest facing after loading an old save, sunburn with the daylight cycle off, the slime and wither sound pitch, the horse and cart sneak dismount, plus the batch 90 list.
-- **Rendering.** No native pixel capture.
-- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+Still open from batch 91: carried into the batch 92 list above, less what batch 92 fixed or found wrong.
 
 ## Done in batch 90
 
