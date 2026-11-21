@@ -51,6 +51,8 @@ export const fightReference86 = JSON.parse(readFileSync(new URL("../public/resea
 // Batch 87: village-fight-b87-reference.json (zombie pigmen on Easy and Normal, a group whose anger spreads to the pigmen within 32 blocks, pigmen killed by an iron golem; a villager
 // killed by a baby zombie (script op `baby k`: EntityZombie.setChild(true)) and by a zombie villager, on Easy, Normal and Hard).
 export const fightReference87 = JSON.parse(readFileSync(new URL("../public/research/village-fight-b87-reference.json", import.meta.url)));
+// Batch 90: village-fight-b90-reference.json (a skeleton jockey on a spider climbing a stone ring; mathRandom records the knockback nudge of the rider's own arrow).
+export const fightReference90 = JSON.parse(readFileSync(new URL("../public/research/village-fight-b90-reference.json", import.meta.url)));
 class LogRandom extends JavaRandom {
   log = [];
   logBooleans = false;

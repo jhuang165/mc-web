@@ -837,7 +837,7 @@ class TargetBase extends Task {
     return this.m.navigator.followRange;
   }
   isSuitableTarget(t, mustSee) {
-    if (!t || !t.alive) return false;
+    if (!t || t === this.m || !t.alive) return false; // EntityAITarget.isSuitableTarget: the owner itself is never a target (a revenge target that is the mob itself, e.g. its own arrow)
     if (t.isPlayer && !mustSee && t.creative) return false;
     if (this.checkSight && !this.m.canSee(t)) return false;
     return true;
@@ -1460,6 +1460,7 @@ class PlayerView {
     if (mounting) this.setLocation({ x: this.x, y: this.y, z: this.z }, { late: true }); // b89 spcopy89: mountEntity(vehicle) -> setPlayerLocation at the copy's spot; the riding client takes the S08 and answers from there
     if (lying) { this.motion.x = this.motion.y = this.motion.z = 0; this.setLocation(player, { late: true }); } // b89 spcopy89: sleepInBedAt -> setPlayerLocation at the bed, where the client lies (main.js enterSleep)
     if (alive && !this.alive) { this.motion.x = this.motion.y = this.motion.z = 0; this.fallDistance = 0; this.inWater = false; } // a respawned player is a new EntityPlayerMP
+    this.deadTicks = alive ? 0 : (this.deadTicks ?? 0) + 1; // b90 mobrec90: world ticks the copy has been at health 0; EntityLivingBase.onDeathUpdate's setDead (isDead, sa.K) comes with deathTime 20, after 20 updates
     this.alive = alive;
     survival.serverPlayer = this; // player-knockback.js gives this copy the hits' motion at once
     this.creative = !!survival.creative;

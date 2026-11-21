@@ -12,7 +12,7 @@ export const revengeOf = (e) => revengeBy.get(e) ?? null;
 export function sourceEntity(ew, victim, source) {
   if (source.player) return "player";
   const by = source.shooter ?? source.attacker;
-  return by && typeof by === "object" && by !== victim && ew.entities.includes(by) ? by : null;
+  return by && typeof by === "object" && ew.entities.includes(by) ? by : null;
 }
 // getAITarget as the Brain view the target tasks use (null for none, a dead target counted as cleared).
 export function revengeBrain(ai, e) {
