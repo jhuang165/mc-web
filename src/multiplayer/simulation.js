@@ -82,7 +82,7 @@ import { loadVillages, saveVillages } from './server-villagers.js'; // b66 mpvil
 import { ServerLeads } from './server-leads.js'; // b62
 import { tickSpawners, overworldLight } from './server-spawners.js'; // b63 mpnether3
 import { ServerTrade, installTrade } from './server-trade.js'; // b66 mptrade: villager trading windows
-import { ServerVehicles, takeRide } from './server-vehicles.js'; // b61: minecarts, boats and riding; b86 seat86: takeRide (the C0C)
+import { ServerVehicles, takeRide, takeRideOrQueue } from './server-vehicles.js'; // b61: minecarts, boats and riding; b86 seat86: takeRide (the C0C)
 import { ObjectTracker } from './server-object-tracker.js'; // b71 mptrackers71: per-player item and orb tracking
 import { upgradeLegacyEnd } from './server-end-upgrade.js';
 import { velocityField } from './server-velocity.js'; // b77 mpvelocity77
@@ -305,7 +305,7 @@ export class DedicatedSimulation {
     if (!p || !input || !look || !Number.isInteger(message.current) || message.current < 0 || message.current > 8) return false;
     if (!p.window && !this.serverItems.adopt(p, message)) return false; // an open container window owns the server inventory (server-containers.js)
     Object.assign(p, look, { input, lastInput: this.ticks, moved: true });
-    takeRide(p, message.ride); // b86 seat86: a riding client's C0C
+    takeRideOrQueue(this, p, id, message.ride); // b86 seat86: a riding client's C0C (b92 horse92: read in arrival order, dropped unless mounted)
     p.survival.inventory.current = message.current;
     return true;
   }
@@ -650,9 +650,10 @@ export class DedicatedSimulation {
     }
     this.serverItems.tickOrbs();
     this.achievements.tick(); // b60: biomes and beacons
-    for (const { id, place, dig, use, attack, animUse, claim, veh, pvp, air, look } of this.actions.splice(0)) {
+    for (const { id, place, dig, use, attack, animUse, claim, veh, pvp, air, look, ride } of this.actions.splice(0)) {
       const p = this.players.get(id);
       if (!p || p.dead) continue;
+      if (ride) { if (p.mount) takeRide(p, ride); continue; } // b92 horse92: a C0C that waited behind the C02 that mounts
       if (veh) { this.dimensions.within(p, () => this.vehicles.act(p, veh)); continue; } // b61 (b63: a Nether rider uses the Nether's vehicles)
       if (animUse !== undefined) { this.dimensions.within(p, () => this.mobs.interact(p, animUse, claim)); continue; } // b63: the Nether's animals (sim.mobs is that dimension's) // b61: C02 interact
       if (p.animHandled && this.ticks <= p.animHandled + 1 && (place === true || use === true)) { p.animHandled = 0; continue; } // the click the animal took is not also an item use

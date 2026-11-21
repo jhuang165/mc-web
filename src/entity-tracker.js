@@ -27,7 +27,7 @@
 // Not modelled: the chunk send queue (chunks are watched at once), a mount the player rides (it keeps its live position for the camera), every entity
 // that is not a mob, client movement of flying and swimming mobs (CLIENT_PHYSICS_OFF: they are interpolated only).
 import { trackingRange, trackerLimit } from "./ring-events.js";
-import { mountEntity, seatPosition } from "./mob-riding.js";
+import { mountEntity, seatPosition, NOT_CREATURES } from "./mob-riding.js";
 import { wrapFloat, wrapDouble, wingFlapPitch, moveNoClip, setPosition as setDragonPosition, updateParts, PART_SIZES, partBox, DRAGON_MAX_HEALTH, DRAGON_CRYSTAL_RANGE } from "./dragon.js";
 import { squidState } from "./squid-bat.js";
 import { JavaRandom } from "./java-random.js";
@@ -45,7 +45,7 @@ export const CLIENT_INTERPOLATION = 3; // setPositionAndRotation2(..., 3)
 // Mobs whose client class is not run at all: the dragon moves by its ring buffer of positions (dragon.js) and keeps its live position. The
 // ghast (EntityFlying), squid, bat, wither and blaze run their own client onUpdate (entities.js moveClient, clientEnvironment and
 // clientAfterMove), as the executed flyGhast / flySquid / flyBat / flyWither / flyBlaze records show.
-export const NOT_CREATURES = new Set(["ghast", "slime", "magma_cube", "ender_dragon", "bat"]);
+export { NOT_CREATURES };
 // The dragon's client onLivingUpdate is its own (ClientEntity.dragonUpdate); it has no moveEntityWithHeading call, so only the body turn runs after it.
 const CLIENT_PHYSICS_OFF = new Set(["ender_dragon"]);
 // hy / fz: motion clamped to 3.9, (int)(m * 8000)

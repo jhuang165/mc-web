@@ -62,6 +62,15 @@ export function cleanRide(r) {
 }
 // The `input` message's C0C half (simulation.js input): the newest one is kept on the player; `rideSeen` marks a client that sends them (an older client gets the controls rule).
 export function takeRide(p, ride) { p.ride = cleanRide(ride); if (p.ride) p.rideSeen = true; }
+// b92 horse92: mw.a(FFZZ) is a no-op unless ridingEntity != null (bytecode-read), and the network queue runs the packets in arrival order, so a C0C that arrives before the C02 that
+// mounts is dropped (the old code kept it and the mount's first tick used it). `queued`: this player already has a C02 / interact waiting in the tick's action list, which may mount
+// before this C0C is read; the C0C then waits behind it in the same list and is read as `{ id, ride }` (simulation.js actions loop) only if the player is mounted by then.
+export function takeRideOrQueue(host, p, id, ride) {
+  if (p.mount) { takeRide(p, ride); return; }
+  if (!cleanRide(ride)) return;
+  p.rideSeen = true; // the client is a C0C sender whatever happened to this one
+  if (host.actions.some(a => a.id === id && (a.veh || a.animUse !== undefined))) host.actions.push({ id, ride });
+}
 // NetHandlerPlayServer.processInput (nh.a(jk)) -> EntityPlayerMP.setEntityActionState (mw.a(FFZZ), bytecode-read): only while ridingEntity != null, moveStrafing and moveForward each
 // take the packet's value when it lies in [-1, 1] (else the old one stays), isJumping = jump, setSneaking(sneak). The boat reads them in the world tick that follows (the C05 before it
 // ran mw.i(), whose sv.e scaled the OLD values by 0.98F, then the C0C overwrote them), so a server boat steers on the client's newest C0C.

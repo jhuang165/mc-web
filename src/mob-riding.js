@@ -11,6 +11,7 @@ import { markMoved } from "./push-grid.js"; // b75: the push grid files a mob ag
 import { mhSin, mhCos } from "./lighting.js";
 import { isVehicle, vehicleSeat } from "./vehicle-seat.js";
 import { liveAttribute, healthBoostExtra } from "./mob-attributes.js";
+import { rearSeat } from "./horse-copy.js";
 
 const f = Math.fround;
 
@@ -22,8 +23,17 @@ export const mountedYOffset = (height) => f(height) * 0.75;
 // Entity.updateRiderPosition: rider.setPosition(x, posY + getMountedYOffset() + rider.getYOffset(), z). EntityChicken
 // (wg.ac) instead sits the rider on the chicken's body: (x + 0.1F * sin, y + height * 0.5F + rider.getYOffset(),
 // z - 0.1F * cos) from renderYawOffset, and gives a living rider the chicken's renderYawOffset.
+// Not an EntityCreature (td): the mounts a skeleton's updateRidden (yl.ab) does not take the body yaw from (entity-tracker.js shares the list).
+export const NOT_CREATURES = new Set(["ghast", "slime", "magma_cube", "ender_dragon", "bat"]);
+export const isSkeletonType = (type) => type === "skeleton" || type === "wither_skeleton";
 export function seatPosition(mount, rider, mountHeight) {
   if (isVehicle(mount)) return vehicleSeat(mount, riderYOffset(rider.type)); // boats and minecarts (vehicle-seat.js)
+  if (mount.type === "horse" && mount.horseAnim?.prevRearAmount > 0) {
+    // EntityHorse.updateRiderPosition (wi.ac, executed in horse92-reference.json mobRider): wf.ac seats the rider, then while bM (the PREVIOUS rear amount, bL is the new one) > 0 it moves
+    // 0.7 * bM back along renderYawOffset and 0.15 * bM up, and gives a living rider the horse's renderYawOffset.
+    const r = rearSeat(mount.horseAnim.prevRearAmount, mount.renderYawOffset ?? 0);
+    return { x: mount.x + r.dx, y: mount.y + mountedYOffset(mountHeight) + riderYOffset(rider.type) + r.dy, z: mount.z + r.dz, renderYaw: mount.renderYawOffset };
+  }
   if (mount.type === "chicken") {
     const a = f(f(mount.renderYawOffset * f(Math.PI)) / 180), s = mhSin(a), c = mhCos(a);
     return { x: mount.x + f(f(0.1) * s), y: mount.y + f(f(mountHeight) * f(0.5)) + riderYOffset(rider.type) + 0, z: mount.z - f(f(0.1) * c), renderYaw: mount.renderYawOffset };
@@ -32,9 +42,6 @@ export function seatPosition(mount, rider, mountHeight) {
 }
 
 const hide = (o, key, value) => Object.defineProperty(o, key, { value, writable: true, configurable: true, enumerable: false });
-// Entity.rotation deltas (entityRiderYawDelta, entityRiderPitchDelta), never saved.
-const deltas = new WeakMap();
-
 // Entity.setLocationAndAngles: the position and angles, with last tick's position the same.
 export function setLocationAndAngles(e, x, y, z, yaw, pitch) {
   e.x = e.px = x;
@@ -50,7 +57,6 @@ export function setLocationAndAngles(e, x, y, z, yaw, pitch) {
 // the rider already carries (anywhere up its own chain) is refused. Mounting releases a previous mount and overwrites whatever
 // rode the new one. Returns whether the link changed.
 export function mountEntity(rider, mount, heightOf) {
-  deltas.set(rider, { yaw: 0, pitch: 0 });
   if (!mount) {
     const old = rider.ridingEntity;
     if (!old) return false;
@@ -126,20 +132,11 @@ export function endRidden(e, heightOf) {
   e.z = seat.z;
   markMoved(e);
   if (seat.renderYaw !== undefined && e.health > 0) e.renderYawOffset = seat.renderYaw;
-  const d = deltas.get(e) ?? { yaw: 0, pitch: 0 };
-  d.yaw += f((m.rotationYaw ?? m.yaw ?? 0) - (m.prevRotationYaw ?? m.prevYaw ?? 0));
-  d.pitch += f((m.rotationPitch ?? m.pitch ?? 0) - (m.prevRotationPitch ?? m.prevPitch ?? 0));
-  while (d.yaw >= 180) d.yaw -= 360;
-  while (d.yaw < -180) d.yaw += 360;
-  while (d.pitch >= 180) d.pitch -= 360;
-  while (d.pitch < -180) d.pitch += 360;
-  const clamp = (v) => Math.max(-10, Math.min(10, v * 0.5)), dy = clamp(d.yaw), dp = clamp(d.pitch);
-  d.yaw -= dy;
-  d.pitch -= dp;
-  deltas.set(e, d);
-  e.rotationYaw = f(e.rotationYaw + dy);
-  e.rotationPitch = f((e.rotationPitch ?? 0) + dp);
-  e.yaw = (-e.rotationYaw * Math.PI) / 180;
+  // EntitySkeleton.updateRidden (yl.ab, bytecode-read, executed in horse92-reference.json): after the seat, a skeleton on any EntityCreature takes its renderYawOffset (no health test)
+  if (isSkeletonType(e.type) && !isVehicle(m) && !NOT_CREATURES.has(m.type)) e.renderYawOffset = m.renderYawOffset;
+  // b92 horse92: Entity.updateRidden (sa.ab, bytecode-read 101-298) only accumulates and clamps entityRiderYawDelta / PitchDelta (h, g) and subtracts the half it would turn; it never
+  // writes the rider's rotationYaw / rotationPitch (no putfield y or z in the method; executed in horse92-reference.json: a rider keeps its pitch under a horse whose pitch changes).
+  // The port used to add that half to the rider's yaw and pitch, so a mob rider drifted; nothing reads the deltas, so they are not kept.
 }
 
 // A saved rider records its mount's id; loading rebuilds the links and drops an id nothing carries.
