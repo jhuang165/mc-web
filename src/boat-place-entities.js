@@ -18,14 +18,20 @@ import { isFrozen } from "./saved-order.js";
 import { isDragon, dragonBox, reachesDragon } from "./dragon-parts.js";
 import { FALLING_SIZE } from "./falling.js";
 import { TNT_SIZE } from "./explosion.js";
+import { crystalBox } from './ender-crystal.js'; // b88 boatray88: the one definition (ender-crystal.js)
 
 const f = Math.fround;
 export const BOAT_ENTITY_SIZES = { item: 0.25, orb: 0.5, arrow: 0.5, ball: 0.25, eye: 0.25, hook: 0.25, rocket: 0.25, fireball: 1, smallFireball: 0.3125, witherSkull: 0.3125, falling: f(FALLING_SIZE), tnt: TNT_SIZE, crystal: 2, knot: 0.5 };
 // A `size` cube whose bottom is `y`.
 export const boxFrom = (x, y, z, s) => [x - s / 2, y, z - s / 2, x + s / 2, y + s, z + s / 2];
 // EntityEnderCrystal: posY is the box centre (wz.<init> yOffset = 1).
-export const crystalBox = (x, posY, z) => [x - 1, posY - 1, z - 1, x + 1, posY + 1, z + 1];
+export { crystalBox };
 const gone = (e) => !e || e.dead || isFrozen(e);
+// b88 boatray88: a dead server player (`dead`, `deathTime` from server-survival.js) is still in the chunk lists through the tick its deathTime reaches 20. Bytecode-read:
+// sv.aF (onDeathUpdate) does ++deathTime and calls setDead (sa.B: isDead = true) at 20; EntityPlayerMP runs it only from processPlayer (nh.a(jd) -> mw.i -> yz.h; mw.h never
+// calls aF, and neither yz nor mw overrides it), i.e. in the network tick. The chunk query (apx.a(sa, azt, List, sj)) has no isDead test, and only World.updateEntities
+// (ahb.h, "remove" section: if isDead -> apx.b(sa), list.remove, onEntityRemoved) takes it out, in the next tick's world pass, before that tick's packets. A respawn replaces it.
+export const playerListed = (q) => !q?.dead || (q.deathTime ?? 0) <= 20;
 const livingPresent = (e) => e.health > 0 || (e.death ?? 0) < 20;
 const knotBox = (k) => { const c = k.summoned ? { x: k.px, y: k.py, z: k.pz } : { x: k.x + 0.5, y: k.y + 0.5, z: k.z + 0.5 }; return [c.x - 0.25, c.y, c.z - 0.25, c.x + 0.25, c.y + 0.5, c.z + 0.25]; };
 

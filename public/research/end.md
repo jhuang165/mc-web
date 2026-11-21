@@ -20,3 +20,4 @@ Target is 1.7.10. Not full parity; the Ender Dragon, its healing beam and End tr
 - Egg teleport: client particle destination mismatch kept as in the original. The unloaded-chunk instant-fall branch is not modelled.
 - Exit portal torch metadata is left to the lead's callbacks.
 - `ignite` depends on `fire.js`.
+- Batch 88 (boatray88, 2026-11-20) correction: EntityEnderCrystal's box is centred on posY, [posY - 1, posY + 1] (bytecode-read wz.<init>: setSize(2, 2), yOffset = height / 2). Placement, spawn checks, the dragon's crystal query, the crosshair, projectiles, lightning, pistons, plates and vehicles now use it (`crystalBox`, ender-crystal.js); they used a feet box [posY, posY + 2]. Carts pass through crystals (no canBePushed) and boats stop at them.

@@ -53,6 +53,7 @@
 //             { box, move, entity } with `entity` the pushed object (the extra itself when it has no `entity`).
 //   Returned object: { frame(partial), tick(), tiles(), pushBoxes(), moves, save(), restore(list) }.
 //
+import { crystalBox } from "./ender-crystal.js"; // b88 boatray88: EntityEnderCrystal's box [y - 1, y + 1] (bytecode-read wz.<init>)
 import { fromOriginal } from "./block-registry.js";
 import { blockBounds, collisionBounds } from "./world.js";
 import { pistonQuads, FACING_OFFSETS, PISTON, STICKY_PISTON, PISTON_HEAD } from "./dispenser-piston.js";
@@ -221,7 +222,7 @@ export function installPistons({ redstone, scene = null, world = null, entities 
       if (!t || !(e.health > 0 || (e.death ?? 0) < 20)) continue;
       const [width, height] = source?.size ? source.size(e) : [t.width * ((e.growingAge ?? 0) < 0 ? 0.5 : 1), t.height * ((e.growingAge ?? 0) < 0 ? 0.5 : 1)];
       out.push({
-        box: pushBox(e, width, height), entity: e,
+        box: e.type === "ender_crystal" ? crystalBox(e.x, e.y, e.z) : pushBox(e, width, height), entity: e, // b88 boatray88: the crystal's box
         // EntityWorld.pushMove: the mob's own moveEntity (stepHeight, cactus/fire tails, steps, fall); else entities.js moveEntity.
         move: (dx, dy, dz) => {
           if (entities.move) return entities.move(e, dx, dy, dz);

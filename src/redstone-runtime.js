@@ -19,6 +19,7 @@
 //   game.maxStack(stack)
 //   game.subtracted() -> skylight subtracted     game.angle() -> celestial angle in [0, 1)
 //   game.skyLight(x, y, z)
+import { crystalBox } from "./ender-crystal.js"; // b88 boatray88: EntityEnderCrystal's box [y - 1, y + 1] (bytecode-read wz.<init>)
 import { installCommandBlocks } from "./command-block.js";
 import { installNoteBlocks } from "./note-blocks.js";
 import { installJukeboxes, JUKEBOX_ID } from "./jukebox.js";
@@ -77,6 +78,7 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
     const mobs = game.mobs?.();
     for (const e of mobs?.entities ?? []) {
       if (!(e.health > 0) || !ENTITY_TYPES[e.type] || (tripwire && e.type === "bat")) continue;
+      if (e.type === "ender_crystal") { if (mode === "all" && !collider && inside(crystalBox(e.x, e.y, e.z), box)) out.push(e); continue; } // b88 boatray88: amu.e lists Entity (everything) or EntityLivingBase (mobs); the crystal never moves, so never collides
       if (inside(pushBox(e, ...mobs.size(e)), box)) out.push(e);
     }
     if (mode !== "all") return out;

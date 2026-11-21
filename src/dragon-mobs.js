@@ -3,6 +3,7 @@
 //
 // Hooks in the shared files (each one line): entities.js loop (`dragonUpdate`), entityHit (`dragonHit`), `pushable`, and the
 // installDragonMobs call; commands.js (/summon EnderDragon); region-export.js (name map); mob-renderer.js (rig dispatch).
+import { crystalBox } from "./ender-crystal.js"; // b88 boatray88: EntityEnderCrystal's box [y - 1, y + 1] (bytecode-read wz.<init>)
 import { ENTITY_TYPES, nearAngle, livingSoundRoll } from "./entities.js";
 import { legacyBodyTurn } from "./squid-bat.js";
 import { JavaRandom } from "./lighting.js";
@@ -55,7 +56,7 @@ export function dragonHost(mobs, e, ctx = {}) {
   const world = mobs.world, edits = [], rand = rngOf(e), p = ctx.player, survival = ctx.survival;
   // b64 mpdragon: the server hands every player of the dragon's world (`mobs.dragonViews`); single player has the one.
   const viewsOf = () => mobs.dragonViews ? mobs.dragonViews() : p && survival ? [{ x: p.x, y: p.y, z: p.z, survival, push: (x, y, z) => mobs.events.push({ dragonPush: { x, y, z } }) }] : [];
-  const boxOf = (o) => { const t = ENTITY_TYPES[o.type]; return [o.x - t.width / 2, o.y, o.z - t.width / 2, o.x + t.width / 2, o.y + t.height, o.z + t.width / 2]; };
+  const boxOf = (o) => { if (o.type === "ender_crystal") return crystalBox(o.x, o.y, o.z); const t = ENTITY_TYPES[o.type]; return [o.x - t.width / 2, o.y, o.z - t.width / 2, o.x + t.width / 2, o.y + t.height, o.z + t.width / 2]; };
   const at = { x: e.x, y: e.y, z: e.z };
   const host = {
     rand,

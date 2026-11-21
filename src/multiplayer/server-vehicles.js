@@ -15,7 +15,7 @@
 import { serverRiderFall } from './server-rider-fall.js';
 import { Minecarts } from '../minecarts.js';
 import { canLightningStrikeAt } from '../weather.js'; // b83 rain83
-import { Boats, boatClearCell } from '../boats.js';
+import { Boats, boatClearCell, boatRay } from '../boats.js';
 import { makeStack } from '../inventory.js';
 import { registerBoatWorld, worldBoatBoxes } from '../entity-collision.js';
 import { EntityIds } from '../entity-ids.js';
@@ -33,7 +33,7 @@ import { useEntityInReach } from './use-entity-reach.js'; // b70 mpclicks: proce
 import { vehicleSprintPush } from './server-vehicle-hit.js'; // b75 mpusesweep75
 import { CartTracker } from './server-cart-track.js'; // b71 mpreach71: minecart tracker cadence (80 / 3 / velocity)
 import { ServerHanging } from './server-hanging.js'; // b68 mppaintings: paintings, item frames and knots of this dimension
-import { boatPlaceEntities, mobBallLists } from '../boat-place-entities.js'; // b87 boatcheck87
+import { boatPlaceEntities, mobBallLists, playerListed, crystalBox } from '../boat-place-entities.js'; // b87 boatcheck87 (b88 boatray88: playerListed)
 import { serverPosY, SLEEP_BOX } from '../sleeper-eye.js';
 
 const f = Math.fround;
@@ -153,8 +153,10 @@ export class ServerVehicles {
       return true;
     }
     if (!item.boat) return false;
-    const pos = p.position, half = PHYSICS.width / 2, eye = [pos.x, pos.y + PHYSICS.eye, pos.z];
-    const dir = [-Math.sin(p.yaw) * Math.cos(p.pitch), Math.sin(p.pitch), -Math.cos(p.yaw) * Math.cos(p.pitch)];
+    const pos = p.position, half = PHYSICS.width / 2;
+    // b88 boatray88: abj.a's own ray (boats.js boatRay): MathHelper's sin / cos tables of the float rotation the C05 / C06 carried (Math.sin / Math.cos before), from
+    // posY + 1.62 - yOffset with EntityPlayerMP's yOffset 0 (posY = box bottom - ySize, as the player tracker reads it).
+    const { eye, dir } = boatRay(pos, p.motion?.ySize ?? 0, f(180 - p.yaw * 180 / Math.PI), f(-p.pitch * 180 / Math.PI), 0);
     const pbox = [pos.x - half, pos.y, pos.z - half, pos.x + half, pos.y + PHYSICS.height, pos.z + half];
     const sight = this.boatEntities(p); // b87 boatcheck87: every entity kind of this dimension with its native box, canBeCollidedWith and border (boat-place-entities.js)
     if (!this.boats.place(this.host.world, { eye, dir, yaw: f(180 - p.yaw * 180 / Math.PI), box: pbox }, [{ bb: pbox }, ...sight], sight)) return false;
@@ -169,7 +171,7 @@ export class ServerVehicles {
   boatEntities(p) {
     const host = this.host, mobs = host.mobs?.mobs, d = host.dispense, players = [...host.players.values()];
     return boatPlaceEntities({
-      players: players.filter(q => q !== p && q.position).map(q => this.boatPlayerBox(q)), mobs, items: host.items?.items ?? [], orbs: host.serverItems?.xp?.orbs ?? [],
+      players: players.filter(q => q !== p && q.position && playerListed(q)).map(q => this.boatPlayerBox(q)) /* b88 boatray88: a dead one until the tick after deathTime 20 */, mobs, items: host.items?.items ?? [], orbs: host.serverItems?.xp?.orbs ?? [],
       arrows: d?.arrows?.list ?? [], balls: [d?.balls?.balls, d?.potions?.projectiles?.balls, ...mobBallLists(mobs)], fireballs: [mobs?._fireballs, mobs?._skulls].filter(Boolean),
       falling: host.falling?.entities ?? [], primed: d?.primed ?? [], rockets: d?.rockets?.rockets ?? [], eyes: d?._eyes?.system.eyes ?? [],
       hooks: players.map(q => host.fishing?.hookOf?.(q)).filter(Boolean), vehicles: [this.carts.carts, this.boats.carts], hanging: this.hanging?.entities ?? [],
@@ -184,7 +186,7 @@ export class ServerVehicles {
   playerBox(p) { const h = PHYSICS.width / 2; return [p.position.x - h, p.position.y, p.position.z - h, p.position.x + h, p.position.y + PHYSICS.height, p.position.z + h]; }
   boxesOfMobs() {
     const mobs = this.host.mobs.mobs;
-    return mobs.entities.filter(e => e.health > 0).map(e => { const [w, h] = mobs.size(e); return { bb: [e.x - w / 2, e.y, e.z - w / 2, e.x + w / 2, e.y + h, e.z + w / 2], ref: e }; });
+    return mobs.entities.filter(e => e.health > 0).map(e => { if (e.type === 'ender_crystal') return { bb: crystalBox(e.x, e.y, e.z), ref: e }; const [w, h] = mobs.size(e); return { bb: [e.x - w / 2, e.y, e.z - w / 2, e.x + w / 2, e.y + h, e.z + w / 2], ref: e }; });
   }
 
   // C02 UseEntity as the server queues it: `{ v, hit }`. Reach is the server's, from the player's eye to the vehicle's box centre.
@@ -295,7 +297,7 @@ export class ServerVehicles {
     const host = this.host, world = host.world;
     // Blockers: every player (a rider excludes its own vehicle through `ref`) and every living mob.
     const blockers = [...host.players.values()].map(p => ({ bb: this.playerBox(p), ref: p.mount?.rider ?? p })).concat(this.boxesOfMobs());
-    this.carts.tick(world, { entities: [...blockers, ...this.boats.carts.filter(b => !b.dead).map(b => ({ bb: b.bb, ref: b }))], host: this.cartHost });
+    this.carts.tick(world, { entities: [...blockers.filter(b => b.ref?.type !== 'ender_crystal') /* b88 boatray88: xl.h needs canBePushed, which a crystal is not */, ...this.boats.carts.filter(b => !b.dead).map(b => ({ bb: b.bb, ref: b }))], host: this.cartHost });
     this.boats.tick(world, { entities: [...blockers, ...this.carts.carts.filter(c => !c.dead).map(c => ({ bb: c.bb, ref: c }))], hooks: this.boatHooks });
     // EntityLivingBase.collideWithNearbyEntities: players and mobs against the vehicles; the vehicle moves too (collide adds its side).
     for (const system of [this.carts, this.boats]) {
@@ -306,6 +308,7 @@ export class ServerVehicles {
         p.velocity.x += vx; p.velocity.z += vz;
       }
       for (const b of this.boxesOfMobs()) {
+        if (b.ref.type === 'ender_crystal') continue; // b88 boatray88: not living, not canBePushed: no push
         const e = b.ref, [vx, vz] = system.pushEntity(e, b.bb); // b62: the mob itself, so a fast empty cart picks it up (cartPicksUp; boats ignore it)
         e.vx = (e.vx ?? 0) + vx; e.vz = (e.vz ?? 0) + vz;
       }

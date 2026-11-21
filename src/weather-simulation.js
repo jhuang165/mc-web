@@ -1,4 +1,5 @@
 import { ENTITY_TYPES } from './entities.js';
+import { crystalBox } from './ender-crystal.js'; // b88 boatray88: EntityEnderCrystal's box [y - 1, y + 1] (bytecode-read wz.<init>)
 import { powerCreeper } from './creeper.js';
 import { entityBox, overlaps, strikeBox, struckByLightning } from './weather.js';
 
@@ -7,7 +8,7 @@ export function strikeMobs(mobs, bolt) {
   const box = strikeBox(bolt);
   for (const e of [...(mobs?.entities || [])]) {
     const type = ENTITY_TYPES[e.type];
-    if (!type || e.health <= 0 || !overlaps(entityBox(e, type.width, type.height), box)) continue;
+    if (!type || e.health <= 0 || !overlaps(e.type === 'ender_crystal' ? crystalBox(e.x, e.y, e.z) : entityBox(e, type.width, type.height), box)) continue; // b88 boatray88: the crystal's box
     if (e.type === 'pig' && mobs.pigStruck) { mobs.pigStruck(e); continue; } // EntityPig.onStruckByLightning: a zombie pigman, no damage
     const hit = struckByLightning(e.fire || 0, e.equipment ?? []);
     mobs.hazard(e, hit.damage, 'inFire');

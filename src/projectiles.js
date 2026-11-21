@@ -1,4 +1,5 @@
 import { isFrozen } from "./saved-order.js"; // b62: an unloaded chunk's entities are in no chunk list (getEntitiesWithinAABB misses them)
+import { crystalBox } from "./ender-crystal.js"; // b88 boatray88: EntityEnderCrystal's box [y - 1, y + 1] (bytecode-read wz.<init>)
 import { ringEntityActive } from './streaming-ticks.js';
 import { orderTargets, stampEntity } from "./candidate-order.js"; // b72
 // EntitySnowball (zj) from the 1.7.10 JAR, with EntityThrowable (zk) and
@@ -364,6 +365,7 @@ export function mobTargets(entities, player, width = 0.6, height = 1.8) {
   const st = boxStore(entities), out = mobTargetList(entities, (e, i) => { // b83 mpperf83: a loop, not flatMap (same list)
     // The ender dragon is not collidable; its parts are (each EntityDragonPart box), and `part` tells aimPart which one was struck.
     if (e.type === "ender_dragon") return dragonPartTargets(e).map(({ target, part, box, reach }) => ({ ref: target, part, box, reach }));
+    if (e.type === "ender_crystal") return [{ ref: e, box: crystalBox(e.x, e.y, e.z) }]; // b88 boatray88: the crystal box is centred on posY (ender-crystal.js)
     const t = ENTITY_TYPES[e.type];
     if (st !== null && fast87.mode !== "off") return mobTargetAt(st, i, e, t, e.growingAge < 0); // b87 mpperf87: the sizes worked out in place, the record kept with its box while nobody marks it
     const s = e.growingAge < 0 ? 0.5 : 1, w = f(t.width * s), h = f(t.height * s), hw = f(w / 2);

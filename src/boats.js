@@ -22,9 +22,19 @@ import { traceBucket } from "./buckets.js";
 import { ringEntityActive } from "./streaming-ticks.js";
 import { JavaRandom } from "./java-random.js";
 import { entityWet, wetFizz } from "./entity-wet.js";
+import { mhSin, mhCos } from "./fishing-line.js"; // b88 boatray88: MathHelper.sin / cos (qh.a / qh.b) for boatRay
 
 const f = Math.fround;
 export const BOAT_ITEM = 495, PLANKS = 7, STICK = 300;
+// ItemBoat's own ray (abj.a, bytecode-read): start (posX, posY + 1.62 - yOffset, posZ), direction from MathHelper.sin / cos (qh.a / qh.b, the 65536-entry float table) of the
+// tick rotation (partial 1.0): yaw angle -yaw * 0.017453292F - 3.1415927F, pitch angle -pitch * 0.017453292F, look (sin(yaw) * -cos(pitch), sin(pitch), cos(yaw) * -cos(pitch)).
+// `position` is the box bottom, `ySize` the step smoothing (posY = minY + yOffset - ySize), `mcYaw` / `mcPitch` Minecraft degrees (floats). `yOffset` is the player's:
+// 1.62 on the client (EntityPlayer.<init>), 0 on the server (b88 boatray88: EntityPlayerMP mw.<init> and mw.e_ put 0.0F in L, bytecode-read).
+const RAD = f(0.017453292), PI_F = f(3.1415927), CLIENT_Y_OFFSET = f(1.62);
+export function boatRay(position, ySize, mcYaw, mcPitch, yOffset = CLIENT_Y_OFFSET) {
+  const yawA = f(f(f(-mcYaw) * RAD) - PI_F), pitchA = f(f(-mcPitch) * RAD), cy = mhCos(yawA), sy = mhSin(yawA), cp = f(-mhCos(pitchA)), sp = mhSin(pitchA);
+  return { eye: [position.x, position.y + yOffset - (ySize ?? 0) + 1.62 - yOffset, position.z], dir: [f(sy * cp), sp, f(cy * cp)] };
+}
 // b86 seat86: xi.h's two clears (bytecode-read, xi.h offsets 1259-1314): a snow layer goes by World.setBlockToAir (ahb.f(III) = setBlock(air, 0, 3): no level event, no drop),
 // a lily pad by World.func_147480_a(x, y, z, true) (ahb.a(IIIZ)): level event 2001 with getIdFromBlock + (meta << 12) to every world access (ahb.c(IIIII) -> a(null, ..):
 // RenderGlobal's break sound and particles on a client, WorldManager's S28 to every player within 64 blocks on a server), then Block.dropBlockAsItem(meta, fortune 0) (nothing on a

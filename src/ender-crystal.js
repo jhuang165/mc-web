@@ -3,6 +3,11 @@
 export const ENDER_CRYSTAL = "ender_crystal";
 export const CRYSTAL_WIDTH = 2, CRYSTAL_HEIGHT = 2, CRYSTAL_HEALTH = 5;
 export const CRYSTAL_EXPLOSION_POWER = 6;
+// b88 boatray88 (bytecode-read, javap -c -p): wz.<init> calls setSize(2.0F, 2.0F) and then puts height / 2 = 1.0F in yOffset (sa.L); Entity.setPosition (sa.b(DDD))
+// builds the box from posY - yOffset + ySize, and the port's crystal `y` is posY (WorldGenSpikes asl spawns it through setLocationAndAngles, which adds yOffset:
+// posY = top of the pillar + 1; the client's spawn object packet 51 builds wz(world, x, y, z), whose setPosition takes the packet's posY). So the box is centred on
+// posY: [x - 1, posY - 1, z - 1, x + 1, posY + 1, z + 1], not a feet box. canBePushed (sa.S) and getBoundingBox (sa.J) are not overridden (false / null).
+export const crystalBox = (x, posY, z) => [x - 1, posY - 1, z - 1, x + 1, posY + 1, z + 1];
 export const CRYSTAL_FIRE = 51;
 // RenderEnderCrystal: the cube spins at innerRotation * 3 degrees and bobs by sin(t * 0.2) / 2 + 0.5.
 // innerRotation starts at random.nextInt(100000) (unseeded in the original: only the range is checked).

@@ -7,6 +7,7 @@
 // full loot every time. The records therefore become live state only once, when a world record has
 // no saved structure state yet (its first launch); afterwards the saved `spawners` / `minecarts`
 // fields are the truth: a looted cart stays looted, a broken cart or spawner stays gone.
+import { crystalBox } from "./ender-crystal.js"; // b88 boatray88: EntityEnderCrystal's box [y - 1, y + 1] (bytecode-read wz.<init>)
 import { isFrozen, liveOrder } from "./saved-order.js"; // b62: unloaded chunks' entities are in no chunk list
 import { MobSpawners, boxesIntersect, mobBox, updateSpawner, updateSpawnerClient } from "./mob-spawner.js";
 import { Minecarts } from "./minecarts.js";
@@ -71,16 +72,19 @@ export function tickMinecartSimulation(state, hooks = {}) {
   const { world, minecarts } = state;
   if (!minecarts?.carts.length) return [];
   const { blockers } = vehicleBlockers(state);
-  minecarts.tick(world, { entities: blockers, host: hooks.cartHost ?? null });
+  minecarts.tick(world, { entities: cartBlockers(blockers), host: hooks.cartHost ?? null });
   return pushAndDrain(state, hooks, minecarts);
 }
 
 // The solid boxes a vehicle's move meets, at the positions the entities have now: the player (a rider's stand-in keeps its identity, so its own cart
 // excludes it) and every living mob. `sized` boxes a mob.
+// b88 boatray88: EntityMinecart.getCollisionBox (xl.h) returns only a canBePushed entity's box, and EntityEnderCrystal does not override canBePushed (false), so a cart
+// passes through crystals; EntityBoat.getCollisionBox (xi.h) returns any entity's box, so a boat stops at the crystal's (bytecode-read).
+const cartBlockers = (list) => list.filter((b) => b.ref?.type !== "ender_crystal");
 function vehicleBlockers(state) {
   const { mobs, position, width, height, alive = true, rider = null } = state;
   const living = liveOrder(mobs, mobs?.entities ?? []).filter((e) => e.health > 0 || (e.death ?? 0) < 20);
-  const sized = (e) => { const [w, h] = mobs.size(e); return mobBox(e.x, e.y, e.z, w, h); };
+  const sized = (e) => { if (e.type === "ender_crystal") return crystalBox(e.x, e.y, e.z); const [w, h] = mobs.size(e); return mobBox(e.x, e.y, e.z, w, h); };
   const pBox = playerBox(position, width, height);
   const player = rider ? Object.assign(rider, { x: position.x, y: position.y, z: position.z, dead: !alive, bb: pBox }) : { ...position, bb: pBox };
   return { living, sized, pBox, player, blockers: [...(alive ? [player] : []), ...living.map((e) => ({ bb: sized(e), ref: e }))] };
@@ -99,6 +103,7 @@ function pushAndDrain(state, hooks, system, mobsPushed = false) {
     if (copy) { copy.x += vx; copy.z += vz; }
   }
   if (!mobsPushed) for (const e of living) {
+    if (e.type === "ender_crystal") continue; // b88 boatray88: a crystal is not living (no collideWithNearbyEntities) and not canBePushed
     const [vx, vz] = system.pushEntity(e, sized(e));
     e.vx += vx;
     e.vz += vz;
@@ -120,7 +125,7 @@ const solidVehicles = (system) => (system?.carts ?? []).filter((v) => !v.dead &&
 export function tickMinecartOne(state, hooks, cart) {
   const { world, minecarts } = state;
   if (!minecarts || cart.dead) return;
-  minecarts.tickOne(world, cart, [...vehicleBlockers(state).blockers, ...solidVehicles(state.boats)], hooks.cartHost ?? null);
+  minecarts.tickOne(world, cart, [...cartBlockers(vehicleBlockers(state).blockers), ...solidVehicles(state.boats)], hooks.cartHost ?? null);
   for (const d of minecarts.drain()) hooks.drop?.(d);
 }
 /** The part of tickMinecartSimulation that follows the walk: the cart's pushes on the player and the mobs, the passenger links, the leftover drops. */

@@ -1,4 +1,5 @@
 import { pushCandidates, pushNear, beginPushGrid, endPushGrid, markMoved, fineConfig } from "./push-grid.js"; // b75 mppushgrid75: cell-bucketed candidates for push
+import { crystalBox } from "./ender-crystal.js"; // b88 boatray88: EntityEnderCrystal's box [y - 1, y + 1] (bytecode-read wz.<init>)
 import { pushMeets } from "./mpperf77-fast.js"; // b77 mpperf77
 import { blockBoxes } from "./mpperf79-fast.js"; // b79 mpperf79
 import { edgeClamp } from "./mpperf80-fast.js"; // b80 mpperf80
@@ -861,7 +862,7 @@ export function entityHit(origin, dir, e, reach) {
     far = reach;
   for (const [axis, min, max] of [
     ["x", e.x - t.width / 2, e.x + t.width / 2],
-    ["y", e.y, e.y + t.height],
+    ["y", e.y - (e.type === "ender_crystal" ? 1 : 0), e.y - (e.type === "ender_crystal" ? 1 : 0) + t.height], // b88 boatray88: the crystal box is centred on posY
     ["z", e.z - t.width / 2, e.z + t.width / 2],
   ]) {
     if (Math.abs(dir[axis]) < 1e-8) {
@@ -1303,7 +1304,7 @@ export class EntityWorld {
         for (const o of this.entities) {
           if (o.health <= 0) continue;
           const s = this.ai.size(o);
-          if (meets(o, s.width / 2, s.height)) return false;
+          if (o.type === "ender_crystal" ? boxesIntersect(box, crystalBox(o.x, o.y, o.z)) : meets(o, s.width / 2, s.height)) return false; // b88 boatray88: the crystal's box
         }
         if (collisionBoxes(this.world, box).length) return false;
         for (let bx = Math.floor(box[0]); bx < Math.floor(box[3] + 1); bx++)
@@ -1501,7 +1502,7 @@ export class EntityWorld {
     const height = this.world.height ?? HEIGHT;
     // A foal rolled by onSpawnWithEgg shrinks its box with Entity.setSize after placement, which keeps the box's minimum corner (not recentred
     // until the entity's first move), so it stays anchored for the rest of that tick (anchoredShrunkBox, probed by spawn-replay3).
-    const sized = (o) => { if (o.spawnBox && o.spawnBoxTick === this.worldTicks) return o.spawnBox; const s = this.size(o); return mobBox(o.x, o.y, o.z, s[0], s[1]); };
+    const sized = (o) => { if (o.spawnBox && o.spawnBoxTick === this.worldTicks) return o.spawnBox; if (o.type === "ender_crystal") return crystalBox(o.x, o.y, o.z); const s = this.size(o); return mobBox(o.x, o.y, o.z, s[0], s[1]); };
     const light = (fn, fallback) => fn ?? ((x, y, z) => (this.lightAt ? this.lightAt(x, y, z) : fallback));
     const lightEnv = {
       skyLight: env.skyLight ?? (() => 0),
