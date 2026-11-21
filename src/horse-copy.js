@@ -35,7 +35,7 @@ export function steerHorseCopy(c, look) {
 export function copySeat(c, live) {
   if (!c) return null;
   if (live.type === "pig") return { x: c.x, y: c.y + PIG_MOUNTED_OFFSET - 0.5, z: c.z };
-  const r = rearSeat(c.horse?.rearAmount ?? 0, c.renderYawOffset);
+  const r = rearSeat(c.horse?.prevRearAmount ?? 0, c.renderYawOffset); // wi.ac() reads bM, the previous amount (the copy has already stepped this tick)
   return { x: c.x + r.dx, y: c.y + mountedOffset({ age: live.growingAge ?? 0 }) - 0.5 + r.dy, z: c.z + r.dz };
 }
 
