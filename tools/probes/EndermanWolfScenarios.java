@@ -361,6 +361,46 @@ public class EndermanWolfScenarios {
     sc88("b93mr-giant-golem-9542", 9542, 260, "gN", new double[][] {{80.5, 64.5}, {70.5, 64.5}, {20.5, 64.5}}, 15);
     sc88("b93mr-giant-fight-9544", 9544, 260, "g", new double[][] {{70.5, 64.5}, {64.5, 64.5}}, 15, "0 look 90 0");
   }
+  // Batch 94 (mobrec94, b94mr): the b93mr harness with the wither's later behaviours. Op `invul <idx> <n>` sets the Invul value (0: past the spawn phase) and `health` the health; skulls that fly are in the blast list
+  // (EW.a adds them), so a blast pushes the other skulls in flight. Walls are boxes {x0, y0, z0, x1, y1, z1, id, meta}.
+  static void sc94(String name, long seed, int ticks, String types, double[][] pos, int[][] blocks, String... script) throws Exception { EndermanWolfProbe.scenario(name, seed, ticks, types, pos, script, new int[0][0], blocks, false, 15); }
+  static int[][] box94(double cx, double cz, int r, int[] mats) {
+    // four walls r blocks from the centre (cx, cz), y 0 to 5; the south wall is striped by x over the materials, the others use one each
+    int x = (int) Math.floor(cx), z = (int) Math.floor(cz);
+    java.util.ArrayList<int[]> out = new java.util.ArrayList<>();
+    out.add(new int[] {x + r, 0, z - r, x + r, 5, z + r, mats[0], 0});
+    out.add(new int[] {x - r, 0, z - r, x - r, 5, z + r, mats[1], 0});
+    out.add(new int[] {x - r, 0, z - r, x + r, 5, z - r, mats[2], 0});
+    for (int k = 3; k < mats.length; k++) out.add(new int[] {x - r + (k - 3) * 2, 0, z + r, x - r + (k - 3) * 2 + 1, 5, z + r, mats[k], 0});
+    return out.toArray(new int[0][0]);
+  }
+  static void run94() throws Exception {
+    // blue skulls: the random shots at coordinates (the head pass, Normal difficulty, no candidate in range) are dangerous skulls; their blasts cap block resistance at 0.8 (obsidian, ender chest, enchanting table, anvil go; bedrock, frame, command block stay)
+    int[][] walls = box94(100.5, 64.5, 5, new int[] {49, 7, 1, 20, 3, 130, 116, 145, 120, 137});
+    for (int sd : new int[] {9601, 9602}) sc94("b94mr-wither-blue-" + sd, sd, 420, "w", new double[][] {{100.5, 64.5}, {64.5, 64.5}}, walls, "0 invul 0 0", "0 health 0 300");
+    sc94("b94mr-wither-blue-zombie-9603", 9603, 420, "wZ", new double[][] {{100.5, 64.5}, {103.5, 66.5}, {64.5, 64.5}}, new int[0][0], "0 invul 0 0", "0 health 0 300");
+    // armoured phase (health at or below 150): arrows bounce off, a player's blow lands, an undead attacker is refused, a cow's blow lands; the same arrow on an unarmoured wither lands
+    double[][] near = {{74.5, 64.5}, {64.5, 64.5}};
+    sc94("b94mr-wither-armor-arrow-9611", 9611, 160, "w", near, new int[0][0], "0 invul 0 0", "0 health 0 140", "0 look 90 0", "30 arrowkill 0 10", "50 melee 0", "60 arrowkill 0 10", "90 melee 0");
+    sc94("b94mr-wither-plain-arrow-9612", 9612, 160, "w", near, new int[0][0], "0 invul 0 0", "0 health 0 200", "0 look 90 0", "30 arrowkill 0 10", "50 melee 0", "60 arrowkill 0 10", "90 melee 0");
+    sc94("b94mr-wither-hit-9613", 9613, 160, "wZC", new double[][] {{74.5, 64.5}, {72.5, 64.5}, {74.5, 70.5}, {64.5, 64.5}}, new int[0][0], "0 invul 0 0", "0 health 0 200", "10 hit 0 1 5", "20 hit 0 2 5", "60 health 0 140", "70 hit 0 1 5", "80 hit 0 2 5");
+    sc94("b94mr-wither-edge-9614", 9614, 120, "w", near, new int[0][0], "0 invul 0 0", "0 health 0 150.5", "0 look 90 0", "10 arrowkill 0 0.5", "30 arrowkill 0 0.5", "50 melee 0", "70 arrowkill 0 10");
+    // block breaking: a hit starts the 20-tick counter; then every block within one block of the feet and three up goes (not bedrock, end portal frame, command block), with its drops and one level event
+    int[][] cage = {{69, 0, 63, 71, 4, 63, 1, 0}, {69, 0, 65, 71, 4, 65, 3, 0}, {69, 0, 64, 69, 4, 64, 20, 0}, {71, 0, 64, 71, 4, 64, 5, 0}, {69, 1, 62, 71, 1, 62, 49, 0}, {69, 2, 66, 71, 2, 66, 7, 0}, {69, 3, 66, 71, 3, 66, 120, 0}, {69, 0, 66, 71, 0, 66, 137, 0}, {68, 0, 64, 68, 5, 64, 54, 2}, {72, 2, 64, 72, 2, 64, 61, 2}};
+    sc94("b94mr-wither-break-9621", 9621, 120, "w", new double[][] {{70.5, 64.5}, {64.5, 64.5}}, cage, "0 invul 0 0", "0 health 0 300", "10 melee 0");
+    sc94("b94mr-wither-break-twice-9622", 9622, 160, "w", new double[][] {{70.5, 64.5}, {64.5, 64.5}}, cage, "0 invul 0 0", "0 health 0 300", "10 melee 0", "12 melee 0", "50 melee 0");
+    sc94("b94mr-wither-break-nogrief-9623", 9623, 100, "w", new double[][] {{70.5, 64.5}, {64.5, 64.5}}, cage, "0 invul 0 0", "0 health 0 300", "0 grief off", "10 melee 0");
+    // regeneration: one health every 20 ticks of age, capped at 300; the half-health mark flips the armour (the climb above a target stops)
+    sc94("b94mr-wither-regen-9631", 9631, 200, "w", new double[][] {{120.5, 64.5}, {64.5, 64.5}}, new int[0][0], "0 invul 0 0", "0 health 0 100");
+    sc94("b94mr-wither-regen-top-9632", 9632, 90, "w", new double[][] {{120.5, 64.5}, {64.5, 64.5}}, new int[0][0], "0 invul 0 0", "0 health 0 299.5");
+    sc94("b94mr-wither-cross-9633", 9633, 200, "wC", new double[][] {{78.5, 64.5}, {64.5, 70.5}, {30.5, 64.5}}, new int[0][0], "0 invul 0 0", "0 health 0 148.5");
+    // pigman group anger (EntityPigZombie.becomeAngryAt: every pigman within 32 blocks of the hit one, an expanded box, turns on the attacker) and a pigman or giant hit by a mob attacker
+    sc94("b94mr-pigman-group-9701", 9701, 240, "zzzzz", new double[][] {{70.5, 64.5}, {90.5, 64.5}, {100.5, 64.5}, {104.5, 64.5}, {70.5, 90.5}, {64.5, 64.5}}, new int[0][0], "0 look 90 0", "20 melee 0");
+    sc94("b94mr-pigman-attacker-9702", 9702, 240, "zZ", new double[][] {{70.5, 64.5}, {72.5, 66.5}, {64.5, 64.5}}, new int[0][0], "10 hit 0 1 5", "40 hit 0 1 5");
+    sc94("b94mr-pigman-attacker-group-9703", 9703, 240, "zzZ", new double[][] {{70.5, 64.5}, {85.5, 64.5}, {72.5, 66.5}, {64.5, 64.5}}, new int[0][0], "10 hit 0 2 5");
+    sc94("b94mr-giant-attacker-9704", 9704, 240, "gZ", new double[][] {{80.5, 64.5}, {82.5, 66.5}, {64.5, 64.5}}, new int[0][0], "10 hit 0 1 5", "40 hit 0 1 50");
+    sc94("b94mr-giant-pigman-9705", 9705, 240, "gzz", new double[][] {{80.5, 64.5}, {84.5, 64.5}, {96.5, 64.5}, {64.5, 64.5}}, new int[0][0], "10 hit 1 0 5", "60 hit 0 1 5");
+  }
   static void runCW() throws Exception {
     double[][] six = {{70.5, 64.5}, {64.5, 64.5}};
     sc("b45cw-swell-approach-7001", 7001, 160, "X", six, "0 look 90 0");

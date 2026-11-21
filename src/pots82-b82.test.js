@@ -166,7 +166,7 @@ test("mob-event drops carry rawDamage; a block-spread event spreads like dropBlo
   items.dropMob(RED_FLOWER, 1, { x: 1, y: 2, z: 3 }, 0, { rawDamage: 12, blockSpread: true });
   assert.deepEqual(spawned.map((e) => e.s.rawDamage), [12, 12]);
   assert.deepEqual([spawned[1].x, spawned[1].y, spawned[1].z], [1.5, 2.5, 3.5]);
-  assert.match(src("wither-boss-mobs.js"), /potHeldDrop\(pot, x, y, z, rand\)/);
+  assert.match(src("wither-boss-mobs.js"), /potHeldDrop\(pot, x, y, z, wrand\)/);
   assert.match(src("dragon-mobs.js"), /potHeldDrop\(pot, x, y, z\)/);
 });
 

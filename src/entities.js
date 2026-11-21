@@ -935,6 +935,7 @@ const SLIME_SPLIT_GUARD = SPAWN_RUNAWAY_GUARD;
 // b87 mpperf87: tickMobs' per-mob closures as module functions, so the loop body captures nothing (no context per mob). mobThink is the AI step of a mob that walks
 // (the expression the loop passed to walk); MOB_THINK tells walk to run it, mobThinkOf is the reference closure.
 function mobThink(w, e, t) {
+  if (e.health <= 0) { e.jumping = false; e.moveStrafing = 0; e.moveForward = 0; return; } // b94 mobrec94 (executed b94mr-wither-hit): EntityLivingBase.onLivingUpdate tests isMovementBlocked (health <= 0) before the AI; a mob the wither effect killed in this update's potion step runs none
   return e.type === "horse" && e.horse.saddled && steeringRider(e) ? (e.aiSkipped = (e.aiSkipped || 0) + 1, horseRideThink(w, e)) /* b82: wi.bh is true for a saddled rider too, so EntityAITasks.tickCount stays */ : e.type === "horse" && (e.rearing || e.horse?.eating) ? (e.aiSkipped = (e.aiSkipped || 0) + 1, e.jumping = false, e.moveStrafing = 0, e.moveForward = 0) : /* EntityHorse.isMovementBlocked (rearing or eating): sv.e skips the AI and zeroes the input */ isLegacyCreature(e) ? legacyThink(w, e, t, aiMoveSpeed, entityRandom) : e.type === "enderman" ? endermanThink(w, e, t, aiMoveSpeed, entityRandom, legacyThink) : e.type === "silverfish" ? w.silverfishThink(e) : e.type === "giant" ? w.giantThink(e) : e.type === "blaze" ? blazeThink(w, e, t, aiMoveSpeed) : w.ai.think(e);
 }
 const MOB_THINK = () => { throw new Error("MOB_THINK is a walk() sentinel"); };
@@ -2636,7 +2637,7 @@ export class EntityWorld {
       if (e.recentlyHit > 0) e.recentlyHit--;
       // EntityLivingBase.updatePotionEffects, the end of onEntityUpdate.
       if (fast87.mode === "off" || e.effects?.length) mobEffects(this, e, t, base); else entityRandom(e); // b87 mpperf87: tickMobEffects returns at once without effects (its random is still made); the hooks only for a mob with effects. Potion.wither / instant damage: DamageSource.wither / magic (both bypass armour)
-      if (this.curedLive !== e) this.talk(e); // b85: sw.C's ambient roll is gated on isEntityAlive, and yq.cd has set the converted zombie dead (executed, village-fight-b85-reference.json)
+      if (this.curedLive !== e && e.health > 0) this.talk(e); // b94 mobrec94: a mob the wither effect just killed rolls no ambient sound (executed b94mr-wither-cross, EntityLiving.onEntityUpdate tests isEntityAlive); b85: sw.C's ambient roll is gated on isEntityAlive, and yq.cd has set the converted zombie dead (executed, village-fight-b85-reference.json)
       if (e.type === "squid" || e.type === "bat") { squidBatUpdate(this, e, t); continue; } // squid-bat-mobs.js
       if (e.type === "ghast") { ghastUpdate(this, e, t); continue; } if (e.type === "blaze") blazeUpdate(this, e, t); // blaze-ghast-mobs.js
       if (e.type === "wither") witherUpdate(this, e, t); // wither-boss-mobs.js

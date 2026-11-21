@@ -477,7 +477,7 @@ export class Arrows {
     // b88 blast88 (bytecode-read sv.a(ro), afv.i, ro.a(zc, sa)): the arrow source's getEntity is the shooter, and onDeath gives a player killer the Looting of the item he holds
     // at that moment (EnchantmentHelper.getLootingModifier(entity), not the bow). It used to be 0 for every arrow kill. A dedicated server's arrow holds the player record (`owner`).
     const looting = s === "player" ? getLootingModifier((shooterBody?.survival ?? ctx.survival)?.held ?? null) : 0;
-    const landed = mobs.damage(ref, dmg, from.x, from.z, s === "player", s && typeof s === "object" ? s.type : null, { projectile: true, shooter: s && typeof s === "object" ? s : null, looting, ...(a.ownerBody ? { deadAttacker: true } : {}) }); // b90 credit90: the dead body shot it (oi.a(mw, int, boolean): the old EntityPlayerMP stays zc.c)
+    const landed = mobs.damage(ref, dmg, from.x, from.z, s === "player", s && typeof s === "object" ? s.type : null, { projectile: true, directArrow: true, shooter: s && typeof s === "object" ? s : null, looting, ...(a.ownerBody ? { deadAttacker: true } : {}) }); // b90 credit90: the dead body shot it (oi.a(mw, int, boolean): the old EntityPlayerMP stays zc.c)
     if (landed && ref.type !== "ender_dragon" && ref.type !== "ender_crystal") { this.victimThorns(a, ref, ctx); this.shooterBane(a, ref, ctx); }
     return landed;
   }
