@@ -72,7 +72,7 @@ import { installMooshroomGolem } from "./mooshroom-golem-live.js";
 import { installHorseGear, gearFieldsFrom } from "./horse-gear-live.js";
 import { installPigSaddle } from "./pig-saddle-live.js";
 import { takeRideMove } from "./horse-live.js";
-import { HORSE_ENTITY, horseArmorValue, horseRideThink, horseCanMate, horseSpawn, horseFields, horseFieldsFrom, horseChildFields, installHorse } from "./horse-live.js";
+import { HORSE_ENTITY, horseArmorValue, horseRideThink, steeringRider, horseCanMate, horseSpawn, horseFields, horseFieldsFrom, horseChildFields, installHorse } from "./horse-live.js";
 import { hurtSoundName as horseHurtSoundName } from "./horse.js";
 import { dragonUpdate, dragonHit, installDragonMobs } from "./dragon-mobs.js";
 import { blazeUpdate, blazeThink, ghastUpdate, fireballMobTalk, installFireballMobs } from "./blaze-ghast-mobs.js";
@@ -934,7 +934,7 @@ const SLIME_SPLIT_GUARD = SPAWN_RUNAWAY_GUARD;
 // b87 mpperf87: tickMobs' per-mob closures as module functions, so the loop body captures nothing (no context per mob). mobThink is the AI step of a mob that walks
 // (the expression the loop passed to walk); MOB_THINK tells walk to run it, mobThinkOf is the reference closure.
 function mobThink(w, e, t) {
-  return e.type === "horse" && e.rider && e.horse.saddled ? (e.aiSkipped = (e.aiSkipped || 0) + 1, horseRideThink(w, e)) /* b82: wi.bh is true for a saddled rider too, so EntityAITasks.tickCount stays */ : e.type === "horse" && (e.rearing || e.horse?.eating) ? (e.aiSkipped = (e.aiSkipped || 0) + 1, e.jumping = false, e.moveStrafing = 0, e.moveForward = 0) : /* EntityHorse.isMovementBlocked (rearing or eating): sv.e skips the AI and zeroes the input */ isLegacyCreature(e) ? legacyThink(w, e, t, aiMoveSpeed, entityRandom) : e.type === "enderman" ? endermanThink(w, e, t, aiMoveSpeed, entityRandom, legacyThink) : e.type === "silverfish" ? w.silverfishThink(e) : e.type === "giant" ? w.giantThink(e) : e.type === "blaze" ? blazeThink(w, e, t, aiMoveSpeed) : w.ai.think(e);
+  return e.type === "horse" && e.horse.saddled && steeringRider(e) ? (e.aiSkipped = (e.aiSkipped || 0) + 1, horseRideThink(w, e)) /* b82: wi.bh is true for a saddled rider too, so EntityAITasks.tickCount stays */ : e.type === "horse" && (e.rearing || e.horse?.eating) ? (e.aiSkipped = (e.aiSkipped || 0) + 1, e.jumping = false, e.moveStrafing = 0, e.moveForward = 0) : /* EntityHorse.isMovementBlocked (rearing or eating): sv.e skips the AI and zeroes the input */ isLegacyCreature(e) ? legacyThink(w, e, t, aiMoveSpeed, entityRandom) : e.type === "enderman" ? endermanThink(w, e, t, aiMoveSpeed, entityRandom, legacyThink) : e.type === "silverfish" ? w.silverfishThink(e) : e.type === "giant" ? w.giantThink(e) : e.type === "blaze" ? blazeThink(w, e, t, aiMoveSpeed) : w.ai.think(e);
 }
 const MOB_THINK = () => { throw new Error("MOB_THINK is a walk() sentinel"); };
 const mobThinkOf = (w, e, t) => () => mobThink(w, e, t);
@@ -2808,10 +2808,10 @@ export class EntityWorld {
     if (horse && entityRandom(e).nextInt(200) === 0) (e.horseAnim ??= newHorseAnim()).tail = 1;
     // b82: a movement-blocked tick runs no sw.bn, so EntityAITasks.tickCount stays (ai.js derives it from the age, which counts every tick, less aiSkipped): a revived wolf or a horse corpse
     // that runs its AI again resumes the task phase it had.
-    if (!horse || (e.rider && e.horse?.saddled) || e.rearing || e.horse?.eating) e.aiSkipped = (e.aiSkipped || 0) + 1;
+    if (!horse || (e.horse?.saddled && steeringRider(e)) || e.rearing || e.horse?.eating) e.aiSkipped = (e.aiSkipped || 0) + 1;
     const squid = e.type === "squid";
     if (squid) squidCorpse(this, e, t); // b83: ws.e(FF) is moveEntity(motion), then the push, ws.e's tail and the walking-direction body turn (corpse-living.js); no limb swing
-    else this.walk(e, t, 0, horse ? () => (e.rider && e.horse?.saddled ? horseRideThink(this, e) : e.rearing || e.horse?.eating ? (e.moveForward = 0) : this.ai.think(e)) : undefined);
+    else this.walk(e, t, 0, horse ? () => (e.horse?.saddled && steeringRider(e) ? horseRideThink(this, e) : e.rearing || e.horse?.eating ? (e.moveForward = 0) : this.ai.think(e)) : undefined);
     if (slime) this.slimeSquishFinish(e, entityRandom(e));
     if (!squid) this.push(e, t);
     this.ageAndLove(e, t); // b82: EntityAgeable / EntityAnimal.onLivingUpdate (rx.e, wf.e) test no health (bytecode-read): a corpse grows, a foal corpse's box widens, love counts down with its heart draws

@@ -164,8 +164,17 @@ export function horseJumpCounter(rider, jump, onHorse, send) {
 //   The move takes the rider's input directly: the horse's own moveStrafing / moveForward (zeroed by isMovementBlocked) are what sv.e decays by 0.98, so the rider's values are
 //   not decayed (entities.js walk -> takeRideMove). After the move, onGround clears bt and horseJumping (horseTick, riddenMoves).
 const rideMoves = new WeakMap(), riddenMoves = new WeakSet();
+// b91 horse91: wi.e(FF) and wi.bh() test `l instanceof sv` (EntityLivingBase) and cu() (saddled), not EntityPlayer (bytecode-read), so a mob that rides a saddled horse (only by
+// command / NBT: /summon with Riding, or a saved pair) steers it too and blocks its AI. The rider's input is what its own last onLivingUpdate left: the AI-set moveForward /
+// moveStrafing times 0.98 (the port's rider walk does not run, so the decay happens here) with its rotationYaw / rotationPitch. Rider input values are Port-read, not executed.
+export function steeringRider(e) {
+  if (e.rider) return e.rider;
+  const m = e.riddenBy;
+  if (!m || m === e || m.boat || m.vehicle || !Number.isFinite(m.rotationYaw)) return null;
+  return { yaw: m.rotationYaw, pitch: m.rotationPitch, moveStrafing: f(f(m.moveStrafing || 0) * f(0.98)), moveForward: f(f(m.moveForward || 0) * f(0.98)) };
+}
 export function horseRideThink(mobs, e) {
-  const rider = e.rider, h = e.horse;
+  const rider = steeringRider(e), h = e.horse;
   e.rotationYaw = f(rider.yaw % 360);
   e.yaw = f(-e.rotationYaw * Math.PI / 180);
   // wi.e(FF): rotationPitch = rider.rotationPitch * 0.5, then renderYawOffset = rotationYawHead = rotationYaw (bytecode-read b77; a rider record without a pitch leaves the pitch alone).
