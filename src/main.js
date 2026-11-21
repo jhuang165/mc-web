@@ -1727,7 +1727,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     // Saplings, tree growth and leaf decay (trees.js); it wraps world.onChange after the flowers do.
     trees = new Trees(world, {
       random: weather.random,
-      light: (x, y, z) => (scene.light ? scene.light.level(x, y, z, scene.subtracted) : 15),
+      light: (x, y, z) => (scene.light ? scene.light.level(x, y, z, entitySubtracted()) : 15), // b92 tiles92: the random tick pass reads this tick's skylightSubtracted
       apply: (changes) => { scene.updateBlocks(changes); saved = false; },
       drop: (stacks, x, y, z) => items.dropBlock(stacks.map((d) => makeStack(d.id, d.count, d.damage || 0)), x, y, z),
     }).watch();
@@ -1761,7 +1761,7 @@ async function launch(record, prepared, { slice = false } = {}) {
       redstone: (x, y, z, e) => redstoneRuntime?.redstone?.scheduleBlockUpdate(x, y, z, e.i, 0, e.p | 0),
     });
     farming=new Farming(world,record.farms);
-    farming.lightLevel=(x,y,z)=>scene.light?scene.light.level(x,y,z,scene.subtracted):15; // World.getBlockLightValue for crop and stem growth
+    farming.lightLevel=(x,y,z)=>scene.light?scene.light.level(x,y,z,entitySubtracted()):15; /* b92 tiles92: entitySubtracted */ // World.getBlockLightValue for crop and stem growth
     restorePots(world,record.pots);
     // Rain moistens farmland (BlockFarmland.updateTick: canLightningStrikeAt(x, y + 1, z)).
     farming.rained = (x, y, z) => canLightningStrikeAt(weather, world, x, y + 1, z);
@@ -1988,7 +1988,7 @@ async function launch(record, prepared, { slice = false } = {}) {
       mobs.ring.isHydrated = (cx, cz) => !streamStorage || streamStorage.loaded.has(`${cx},${cz}`);
       if (streamStorage) streamStorage.margin = 7; // hydrate the stored edits of every ring column too
       wrapMobHooks(mobs, mobs.ring, () => entitySubtracted());
-      wrapRandomTickLight(world, mobs.ring, () => scene.subtracted ?? 0, trees, farming); // random ticks in ring chunks read RingLight (natural-spawning.md "Round 8")
+      wrapRandomTickLight(world, mobs.ring, () => entitySubtracted(), trees, farming); // random ticks in ring chunks read RingLight (natural-spawning.md "Round 8")
     }
     arrows.wet = (a) => isWet(weather, world, { x: a.x, y: a.y, z: a.z, inWater: a.water }, 0.5);
     mobRenderer.clear();
@@ -2306,7 +2306,7 @@ function useBed(x, y, z) {
   if (boom) { for (const [bx, by, bz] of boom.cells) scene.updateBlock(bx, bz, by); if (boom.cells.length) explodeAt(boom.x, boom.y, boom.z, boom.size, { smoking: true, flaming: true }); return; }
   const ctx = {
     player: { x: position.x, y: position.y, z: position.z, alive: true },
-    daytime: (scene.subtracted ?? 0) < 4,
+    daytime: entitySubtracted() < 4, // b92 tiles92: a click is handled between ticks, so World.isDaytime reads what the last WorldServer.tick left
     // EntityMob within 8 x 5 x 8 of the head cell (strict box intersection).
     monsterNear: (b) => mobInBox(mobs?.entities, b, ENTITY_TYPES), // EntityMob only (bed.js ENTITY_MOB): slimes and ghasts do not block sleep
     otherSleeperAt: () => false,
@@ -2334,7 +2334,7 @@ function tickBed() {
   if (!bedSleep.sleeping && bedSleep.timer === 0) { updateBedFade(); return; }
   if (bedSleep.sleeping && survival.health < lastHealth) { lastHealth = survival.health; bedWake(true, false); return; }
   lastHealth = survival.health;
-  const call = bedSleep.tick(world, (scene.subtracted ?? 0) < 4);
+  const call = bedSleep.tick(world, entitySubtracted() < 4);
   if (call) bedWake(call[0], call[2]);
   else if (bedSleep.fullyAsleep) {
     // doDaylightCycle: worldTime + 24000 rounded down to a whole day; resetRainAndThunder; wakeAllPlayers.

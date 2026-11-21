@@ -299,7 +299,7 @@ function runAwayTicks(plan, { now = () => performance.now(), budgetMs = WALL_BUD
     }
   };
 
-  ents = awayEntities(plan, { world, ticking, entityTicks, rt, fire, weather, tiles, transfer: hoppers.host, readStack: (st) => sv.inventory.read(st, true), light, runCommand: cmds.cartRun, maxStack: (st) => sv.inventory.maxStack(st) });
+  ents = awayEntities(plan, { world, ticking, entityTicks, rt, fire, weather, tiles, transfer: hoppers.host, readStack: (st) => sv.inventory.read(st, true), light, cycling, runCommand: cmds.cartRun, maxStack: (st) => sv.inventory.maxStack(st) });
   if (ents) { ents.attachFalling(falling, plan.falling ?? []); falling.joined = (e) => ents.mobs.joined(e, "falling"); } // falling blocks tick in the one entity walk (away-entities.js)
   // (an entry held back in an unloaded column does nothing for the rest of the run, so it does not keep the run going)
   const work = (list) => { for (const e of list) if (ticking(e.x, e.z)) return true; return false; };
