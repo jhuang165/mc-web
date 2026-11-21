@@ -168,7 +168,7 @@ export class Fireballs {
       // position and, for an EntityMob on the legacy action state, becomes the dead entityToAttack that the next update clears.
       // b88 blast88 (bytecode-read sv.a(ro)): onDeath takes Looting from ro.j() when it is a player (afv.i: the held item at the death), so a punched ball's kill rolls it
       const looting = byPlayer ? getLootingModifier((isServerPlayer(b.punchedBy) ? b.punchedBy.survival : mobs.ai?.survival)?.held ?? null) : 0;
-      return mobs.attackEntityFrom(t, n, { from: from ? { x: from.x, z: from.z } : { x: b.x, z: b.z }, player: byPlayer, attacker: owner && owner !== "player" ? owner : null, name: "fireball", fireball: true, ...(from ? {} : { entity: { x: b.x, y: b.y, z: b.z } }), looting });
+      return mobs.attackEntityFrom(t, n, { from: from ? { x: from.x, z: from.z } : { x: b.x, z: b.z }, player: byPlayer, attacker: owner && owner !== "player" ? owner : null, name: "fireball", fireball: true, ...(from ? {} : { entity: { x: b.x, y: b.y, z: b.z } }), looting, ...(byPlayer && b.punchedBy?.corpseOf ? { deadAttacker: true } : {}) }); // b90 credit90: a dead body punched it
     };
     if (b.large) {
       if (hit.entity) damage(FIREBALL.largeDamage);

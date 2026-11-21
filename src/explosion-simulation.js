@@ -112,7 +112,7 @@ export function explodeMobs(state, request) {
 /** b83 blastorder83: the mob rows of doExplosionA's list (explodeMobs runs them alone); each hit is pushed to `mobHits` at its turn. */
 export function mobRows(state, request, mobHits = []) {
   const { world, mobs, position, survival = null } = state;
-  const { x, y, z, size, exploder = null, attacker = null } = request;
+  const { x, y, z, size, exploder = null, attacker = null, deadAttacker = false } = request;
   const b = blastOf(world, x, y, z, size, exploder, null), out = [];
   // Explosion.doExplosionA sees every entity before any affected block is removed.
   const hitFrom = attacker === "player" ? position : attacker;
@@ -121,7 +121,7 @@ export function mobRows(state, request, mobHits = []) {
   // sets recentlyHit 100 and attackingPlayer (XP and the player-only drops), gets the kill (onKillEntity) and lends the Looting level of the item in his hand
   // (EnchantmentHelper.getLootingModifier(placer) in onDeath). The source keeps its explosion flag, so a mob's Blast Protection counts (the old "player" / "mob" name lost it).
   const looting = attacker === "player" ? getLootingModifier(survival?.held ?? null) : 0;
-  const source = attacker === "player" ? { name: "explosion", looting } : { name: "explosion", shooter: attacker && typeof attacker === "object" ? attacker : null };
+  const source = attacker === "player" ? { name: "explosion", looting, ...(deadAttacker ? { deadAttacker: true } : {}) } : { name: "explosion", shooter: attacker && typeof attacker === "object" ? attacker : null };
   for (const entity of liveOrder(mobs, [...(mobs?.entities ?? [])])) { // the list doExplosionA collected before any attackEntityFrom (a zombie that converts a killed villager joins it later)
     if (entity === exploder) continue;
     const type = ENTITY_TYPES[entity.type];

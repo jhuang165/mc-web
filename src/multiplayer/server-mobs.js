@@ -181,8 +181,8 @@ export class ServerMobs {
     fb.tickOne = b => { b.track ??= skullEntry(b); this.target(b); return tickOne(b); }; // b82 mpball82: the entry's S0E angles at the join, as the skulls (skull-look.js)
     fb.impact = (b, hit) => {
       this.useHit(hit); // b64: the player the sweep found is the one hurt
-      const who = b.owner === 'player' ? b.punchedBy : null, v = who && this.views.get(who.id), was = ach?.attacker;
-      if (v) { this.use(v); if (ach) ach.attacker = who; }
+      const who = b.owner === 'player' ? b.punchedBy : null, v = who && (who.corpseOf ? this.corpseView(who) : this.views.get(who.id)), was = ach?.attacker; // b90 credit90: a dead body's ball keeps the body
+      if (v) { this.use(v); if (ach) ach.attacker = who.corpseOf ?? who; }
       try { return impact(b, hit); } finally { if (v && ach) ach.attacker = was; }
     };
   }
@@ -250,6 +250,16 @@ export class ServerMobs {
     if (!view) return;
     for (const v of this.views.values()) if (v.view === view) { this.use(v); return; }
   }
+  // b90 credit90 (bytecode-read oi.a(mw, int, boolean), sv.C 465-505): the AI's "player" for a dead body's blast is that dead entity (alive false, health 0), not the respawned record's view.
+  corpseView(body) {
+    if (body.aiView) return body.aiView;
+    const view = new this.mobs.ai.player.constructor();
+    view.unticked = true; view.alive = false;
+    Object.assign(view, { x: body.position.x, y: body.position.y, z: body.position.z });
+    const survival = Object.create(body.survival);
+    Object.assign(survival, { scaledDamage: () => false, damage: () => false, setFire() {} });
+    return (body.aiView = { player: body, view, survival });
+  }
   use(v) { this.mobs.ai.player = v.view; this.mobs.ai.survival = v.survival; }
   // Explosion.doExplosionA for the dedicated world: the rays, the mobs, primed TNT, every player in reach; then doExplosionB: the blocks.
   // b81 blast81 (bytecode-read agw.a(), agw.a(Z), wz.a, aob.a(ahb,IIIagw)): the rays draw World.rand before any entity is hurt; the rest of the block half reads the world
@@ -279,7 +289,7 @@ export class ServerMobs {
     const state = { world, mobs: this.mobs, items, xpOrbs: host.serverItems?.xp, arrows: host.dispense?.arrows, projectiles: host.dispense?.balls, falling: host.falling,
       hanging: vehicles?.hanging, minecarts: vehicles?.carts, boats: vehicles?.boats, rockets: host.dispense?.rockets, eyes: host.dispense?._eyes?.system,
       hooks: host.fishing?.hooksIn?.(host.dispense?.dim | 0) ?? [] }; // b87 sptrack87: every hook of the blast's world, its angler here or not
-    const rows = [...mobRows({ world, mobs: this.mobs, position: byPlayer ? byPlayer.position : this.probe, survival: byPlayer?.survival ?? null }, { x, y, z, size, exploder: ev.source ?? null, attacker: byPlayer ? 'player' : placer }),
+    const rows = [...mobRows({ world, mobs: this.mobs, position: byPlayer ? byPlayer.position : this.probe, survival: byPlayer?.survival ?? null }, { x, y, z, size, exploder: ev.source ?? null, attacker: byPlayer ? 'player' : placer, deadAttacker: !!byPlayer?.corpseOf }),
       ...nonLivingRows(state, b, { vehicleDrop: drop, creative: !!byPlayer?.survival.creative }), ...(primed ? tntRows(primed, b) : [])];
     const knock = new Map(); // b78 mpexplosion78: the S27 motion of each player (agw.l), the push before Blast Protection (d10, not agi.a's reduced d27)
     for (const v of this.views.values()) {
@@ -299,7 +309,7 @@ export class ServerMobs {
       } });
     }
     // b87 blast87: kills in this list are the placer's (server-stats.js / achievements read `attacker`), and the mobs' "player" (revenge, reinforcements) is his view.
-    const ach = host.achievements, was = ach?.attacker, placerView = byPlayer && this.views.get(byPlayer.id);
+    const ach = host.achievements, was = ach?.attacker, placerView = byPlayer && (byPlayer.corpseOf ? this.corpseView(byPlayer) : this.views.get(byPlayer.id)); // b90 credit90: a dead body is not the live record's view
     if (byPlayer) { if (placerView) this.use(placerView); if (ach) ach.attacker = byPlayer; }
     if (byPlayer?.corpseOf && ach) ach.attacker = byPlayer.corpseOf; // b89 credit89: a respawned placer's dead body (ServerSurvival.deadBody) shares his StatisticsFile (oi.a(yz) keys it by UUID): the kills go to the record
     try { runBlastRows(rows); } finally { if (byPlayer && ach) ach.attacker = was; }

@@ -4,6 +4,8 @@
 // attacking mob's entity. onEntityUpdate (sv.C) clears it when the target is no longer alive or 100 ticks after the hit (EntityWorld.tick).
 const revengeBy = new WeakMap();
 export const noteRevenge = (e, by) => revengeBy.set(e, by);
+// b90 credit90 (bytecode-read sv.a(ro, F), sv.C 465-505): a dead EntityPlayer as the source entity (a respawned placer's TNT) is still setRevengeTarget'd; sv.C drops it at the mob's next update (isEntityAlive).
+export const DEAD_ATTACKER = Object.freeze({ health: 0, dead: true });
 export const revengeOf = (e) => revengeBy.get(e) ?? null;
 // The living entity of a damage source in this port's source object: the player, the shooter of an arrow, or the attacking mob; null when the
 // source has no living entity (fall, fire, a string-named projectile).
