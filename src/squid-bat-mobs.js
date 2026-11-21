@@ -3,6 +3,7 @@
 // engine's mob record, motion and event queue. entities.js calls squidBatUpdate, squidBatTalk and installSquidBat.
 import { moveEntity, entityRandom, livingSoundRoll } from "./entities.js";
 import { normalCube } from "./world.js";
+import { squidCorpse } from "./corpse-living.js";
 import {
   SQUID, BAT, BAT_SOUNDS, BAT_TAKEOFF_VOLUME, squidStateOf, batStateOf, squidActionState, squidLivingUpdate, squidAir, squidWet, legacyBodyTurn,
   batAIStep, batUpdate, batLivingSound, batSoundPitch, batHurt,
@@ -37,7 +38,8 @@ function squidUpdate(m, e, t) {
   };
   if (squidAir(e, { wet: wetNow() })) {
     m.hazard(e, SQUID.drownDamage, "drown");
-    if (e.health <= 0) return;
+    // b93 mobrec93 (executed b93mr-squid-dry-9505): the drowning kill happens in onEntityUpdate; ws.e() (onLivingUpdate) still runs this tick as a corpse (movement blocked: the move, the push and the tentacle tail, no action state).
+    if (e.health <= 0) { squidCorpse(m, e, t); return; }
   }
   // EntityLivingBase.onLivingUpdate: motion below 0.005 snaps to 0, then updateEntityActionState (ws.bq) with its despawnEntity.
   if (Math.abs(e.vx) < 0.005) e.vx = 0;
@@ -48,6 +50,7 @@ function squidUpdate(m, e, t) {
   squidActionState(s, { rand, inWater: !!e.inWater });
   e.idle = s.age;
   m.ai.brain(e).despawnEntity();
+  e.rotationYawHead = e.rotationYaw; // EntityLivingBase.onLivingUpdate (sv.e) sets rotationYawHead = rotationYaw after the action state, before ws.e's own yaw turn (b93 mobrec93, executed b93mr-squid-swim: the head yaw follows the body yaw one tick late)
   if (e.health <= 0) return;
   // ws.e(FF): moveEntity(motion) with no gravity, friction or acceleration.
   const hooks = m.moveHooks(e, t); // b83 rain83: the shared mob hooks (isWet: water or rain, the fizz) in place of wet: false
@@ -77,8 +80,13 @@ function batTick(m, e, t) {
     m.ai.think(e);
     batAIStep(s, e, ctx);
     e.yaw = (-e.rotationYaw * Math.PI) / 180;
+    // b93 mobrec93 (executed b93mr-bat-hit-9513, b93mr-bat-wake-*): we.h's hanging tail assigns posY alone, so the bounding box keeps its old place; Entity.moveEntity then sets
+    // posY = box.minY + yOffset - ySize from that stale box. A bat that wakes moves from the box (5.1), not from the hanging y (5.1 - 2.4e-8 for the float height).
+    if (s.hangY !== undefined && e.y === s.hangY) e.y = s.boxY;
   });
+  s.boxY = e.y; // the box's place after the move (the walk's moveEntity just set posY from it)
   batUpdate(e);
+  s.hangY = e.y;
   m.push(e, t);
   m.turnBody(e);
   m.swingLimbs(e);
@@ -96,9 +104,9 @@ export function installSquidBat(EntityWorld) {
       const out = base.call(this, e, ...rest);
       const fix = (list, from) => {
         if (!list) return;
-        const added = list.splice(from).filter((x) => x.sound);
-        for (const x of added) if (e.type === "bat" && x.sound.startsWith("mob.bat.")) x.pitch = f(x.pitch * f(0.95));
-        list.push(...added);
+        for (let i = list.length - 1; i >= from; i--) if ("sound" in list[i] && !list[i].sound) list.splice(i, 1); // the squid's null hurt and death sounds
+        // b93 mobrec93 (executed b93mr-squid-hit): only the sounds are adjusted; the loot and experience events a kill queued (no `sound`) stay in the queue (the filter dropped them, so a squid or bat killed through attackEntityFrom left no ink sacs).
+        for (const x of list.slice(from)) if (x.sound && e.type === "bat" && x.sound.startsWith("mob.bat.")) x.pitch = f(x.pitch * f(0.95));
       };
       fix(this.events, events);
       fix(this.clientSounds, client);

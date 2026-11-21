@@ -39,7 +39,7 @@ export function chase(e, target, armored) {
       e.vz += (dz / s * 0.5 - e.vz) * f(0.6);
     }
   }
-  if (e.vx * e.vx + e.vz * e.vz > 0.05) e.rotationYaw = f(f(Math.atan2(e.vz, e.vx) * f(57.295776)) - 90);
+  if (e.vx * e.vx + e.vz * e.vz > 0.05) e.rotationYaw = f(f(f(Math.atan2(e.vz, e.vx)) * f(57.295776)) - 90); // xc.e: (float)Math.atan2 * 57.295776F - 90F (bytecode d2f before the fmul; b93 mobrec93: a target due west gave 89.99998)
 }
 // xc.e after super.e: a side head turns towards its target (pitch 40, yaw 10 degrees a tick) or back to the body.
 export function trackHead(e, head, target, bodyYaw) {

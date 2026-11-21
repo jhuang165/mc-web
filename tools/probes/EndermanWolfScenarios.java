@@ -319,6 +319,48 @@ public class EndermanWolfScenarios {
     sc88("b92mr-snow-cave-9427", 9427, 150, "NJ", sn, 0);
     sc88("b92mr-golem-blaze-9431", 9431, 150, "Ga", sn, 15);
   }
+  // Batch 93 (mobrec93, b93mr): the b92mr harness with squid (s) and bat (b). Squids swim in a water cube (blocks of id 9 over y 0 to 12 and the probe's water flag) or lie on the floor; bats hang from a
+  // stone ceiling plane at y 6 (the mob at y 5.1). Both are ticked by the real Entity.onUpdate, pushed by the player and hit by its real melee.
+  static void sc93(String name, long seed, int ticks, String types, double[][] pos, boolean water, int[][] blocks, String... script) throws Exception { EndermanWolfProbe.scenario(name, seed, ticks, types, pos, script, new int[0][0], blocks, water, 15); }
+  static void run93() throws Exception {
+    int[][] pool = {{40, 0, 40, 90, 12, 90, 9, 0}};
+    int[][] ceil = {{40, 6, 40, 90, 6, 90, 1, 0}};
+    for (int sd : new int[] {9501, 9502}) sc93("b93mr-squid-swim-" + sd, sd, 300, "s", new double[][] {{70.5, 64.5, 5.5}, {64.5, 64.5, 0}}, true, pool);
+    sc93("b93mr-squid-push-9503", 9503, 160, "s", new double[][] {{65.0, 64.5, 0.5}, {64.5, 64.5, 0}}, true, pool);
+    sc93("b93mr-squid-hit-9504", 9504, 200, "s", new double[][] {{66.5, 64.5, 1.5}, {64.5, 64.5, 0}}, true, pool, "20 melee 0", "21 melee 0", "60 health 0 0.5", "61 melee 0");
+    sc93("b93mr-squid-dry-9505", 9505, 470, "s", new double[][] {{70.5, 64.5, 0}, {64.5, 64.5, 0}}, false, new int[0][0]);
+    sc93("b93mr-squid-dry-hit-9506", 9506, 140, "s", new double[][] {{66.5, 64.5, 0}, {64.5, 64.5, 0}}, false, new int[0][0], "30 melee 0");
+    int[][] room = {{40, 6, 40, 90, 6, 90, 1, 0}, {60, 0, 40, 60, 6, 90, 1, 0}, {80, 0, 40, 80, 6, 90, 1, 0}};
+    sc93("b93mr-bat-hang-9511", 9511, 300, "b", new double[][] {{80.5, 64.5, 5.1}, {64.5, 64.5, 0}}, false, ceil);
+    sc93("b93mr-bat-wake-9512", 9512, 400, "b", new double[][] {{70.5, 64.5, 5.1}, {67.5, 64.5, 4.0}}, false, ceil);
+    sc93("b93mr-bat-wake-room-9516", 9516, 400, "b", new double[][] {{70.5, 64.5, 5.1}, {67.5, 64.5, 4.0}}, false, room);
+    sc93("b93mr-bat-hit-9513", 9513, 300, "b", new double[][] {{70.5, 64.5, 5.1}, {64.5, 64.5, 0}}, false, room, "10 move 1 67.5 64.5 4.0", "20 melee 0", "21 melee 0");
+    sc93("b93mr-bat-kill-9517", 9517, 200, "b", new double[][] {{70.5, 64.5, 5.1}, {67.5, 64.5, 4.0}}, false, room, "30 health 0 0.5", "31 melee 0");
+    sc93("b93mr-bat-two-9514", 9514, 400, "bb", new double[][] {{70.5, 64.5, 5.1}, {72.5, 64.5, 5.1}, {67.5, 64.5, 4.0}}, false, room);
+    sc93("b93mr-bat-open-9515", 9515, 300, "b", new double[][] {{70.5, 64.5, 5.1}, {64.5, 64.5, 0}}, false, new int[0][0]);
+    sc93("b93mr-bat-squid-9518", 9518, 200, "bs", new double[][] {{70.5, 64.5, 5.1}, {70.5, 64.5, 3.5}, {64.5, 64.5, 0}}, true, new int[][] {{40, 0, 40, 90, 12, 90, 9, 0}, {40, 6, 40, 90, 6, 90, 1, 0}});
+    // wither skeletons (EntitySkeleton type 1: melee task, wither effect, fire immunity, no sun burn)
+    double[][] ws2 = {{71.5, 64.5}, {64.5, 64.5}};
+    for (int sd : new int[] {9521, 9522}) sc88("b93mr-wskel-fight-" + sd, sd, 260, "k", ws2, 15, "0 look 90 0", "150 melee 0");
+    sc88("b93mr-wskel-kill-9523", 9523, 200, "k", ws2, 15, "0 look 90 0", "40 health 0 0.5", "41 melee 0");
+    sc88("b93mr-wskel-golem-9524", 9524, 200, "kG", new double[][] {{120.5, 64.5}, {126.5, 64.5}, {64.5, 64.5}}, 15);
+    sc88("b93mr-wskel-day-9525", 9525, 150, "k", new double[][] {{90.5, 64.5}, {64.5, 64.5}}, 15, "0 day on");
+    sc88("b93mr-wskel-two-9526", 9526, 260, "kk", new double[][] {{71.5, 64.5}, {73.5, 64.5}, {64.5, 64.5}}, 15, "0 look 90 0");
+    sc88("b93mr-wskel-dark-9527", 9527, 200, "k", new double[][] {{80.5, 64.5}, {64.5, 64.5}}, 0, "0 look 90 0", "100 creative 1 on", "150 creative 1 off");
+    sc88("b93mr-wskel-fire-9528", 9528, 120, "k", new double[][] {{75.5, 64.5}, {64.5, 64.5}}, 15, "5 fire 0 5");
+    // the wither: spawn invulnerability (220 ticks, regeneration, the explosion and event 1013), then its first head pass
+    sc88("b93mr-wither-spawn-9531", 9531, 235, "w", new double[][] {{78.5, 64.5}, {64.5, 64.5}}, 15);
+    sc88("b93mr-wither-far-9532", 9532, 260, "w", new double[][] {{100.5, 64.5}, {64.5, 64.5}}, 15);
+    sc88("b93mr-wither-fight-9533", 9533, 300, "w", new double[][] {{78.5, 64.5}, {64.5, 64.5}}, 15, "0 look 90 0");
+    sc88("b93mr-wither-cow-9534", 9534, 306, "wC", new double[][] {{78.5, 64.5}, {60.5, 64.5}, {30.5, 64.5}}, 15); // stops before the cow's corpse leaves the port's list (the probe world never removes it)
+    sc88("b93mr-wither-corpse-9536", 9536, 238, "wC", new double[][] {{78.5, 64.5}, {70.5, 70.5}, {40.5, 64.5}}, 15); // the blast kills the cow: a corpse is still a head candidate until the death animation ends (the probe never removes it, so the record stops before)
+    sc88("b93mr-wither-wskel-9535", 9535, 320, "wk", new double[][] {{78.5, 64.5}, {70.5, 70.5}, {40.5, 64.5}}, 15);
+    // pigman and giant fights (b93mr-pigman-*, b93mr-giant-*)
+    sc88("b93mr-pigman-hit-9541", 9541, 260, "z", new double[][] {{70.5, 64.5}, {64.5, 64.5}}, 15, "0 look 90 0", "20 melee 0", "21 melee 0");
+    sc88("b93mr-pigman-two-9543", 9543, 260, "zz", new double[][] {{70.5, 64.5}, {72.5, 66.5}, {64.5, 64.5}}, 15, "0 look 90 0", "20 melee 0");
+    sc88("b93mr-giant-golem-9542", 9542, 260, "gN", new double[][] {{80.5, 64.5}, {70.5, 64.5}, {20.5, 64.5}}, 15);
+    sc88("b93mr-giant-fight-9544", 9544, 260, "g", new double[][] {{70.5, 64.5}, {64.5, 64.5}}, 15, "0 look 90 0");
+  }
   static void runCW() throws Exception {
     double[][] six = {{70.5, 64.5}, {64.5, 64.5}};
     sc("b45cw-swell-approach-7001", 7001, 160, "X", six, "0 look 90 0");
