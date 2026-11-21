@@ -41,6 +41,7 @@ import { pinOverworldVehicles } from './server-nether-vehicles.js'; // b63: vehi
 import { NETHER_CONTEXT, buildNetherSystems, buildNetherInside, saveNether, tickNether, applyPopulation } from './server-nether.js';
 import { swapTiles } from './server-tile-swaps.js'; // b88 tiles88
 import { ServerPortalShots } from './server-portal-shots.js'; // b91 entnbt91: arrows and rockets through portals
+import { ServerPortalTravel } from './server-portal-travel.js'; // b92 portals92: mobs, items, orbs, carts and boats through portals
 
 const OVERWORLD = 0, END = 1, MIDDLE = 64, MARGIN = 24, SIZE = 128;
 const noop = () => {};
@@ -56,7 +57,7 @@ const ENTRY_POINTS = ['pickup', 'invClick', 'invAck', 'invClose', 'closeWindow',
 export class ServerDimensions {
   constructor(sim, saved = {}) {
     this.sim = sim; this.saved = saved ?? {}; this.nether = null; this.depth = 0; this.alt = {}; this.clearWeather = new Weather().save();
-    this.teleporters = new Map(); this.overworld = sim.world; this.shots = new ServerPortalShots(this); this.end = new ServerEnd(this); // b63 mpend: the End (server-end.js)
+    this.teleporters = new Map(); this.overworld = sim.world; this.shots = new ServerPortalShots(this); this.travel = new ServerPortalTravel(this); this.end = new ServerEnd(this); // b63 mpend: the End (server-end.js)
     // sim.world is swapped while a Nether player's action runs
     pinOverworldVehicles(sim, this); // b63: the Overworld's vehicles see Overworld players only; the Nether has its own (server-nether-vehicles.js)
     // Overworld: a fire block lights a complete frame and a portal block without its frame goes (nether-portal-live.js, chained after Fire).
@@ -174,6 +175,7 @@ export class ServerDimensions {
     const sim = this.sim;
     for (const p of [...sim.players.values()]) if (!p.dead) this.checkPortal(p);
     this.shots.step(); // b91 entnbt91: the arrows and rockets of every dimension in portals
+    this.travel.step(OVERWORLD); // b92 portals92: the Overworld's mobs, items, orbs, carts and boats (the Nether's and the End's are walked after their own tick, netherMessage)
     for (const t of this.teleporters.values()) if (sim.ticks % 100 === 0) t.removeStale(sim.ticks);
     this.alt = {};
     if (this.nether) this.alt[NETHER] = this.netherMessage(base);
@@ -242,7 +244,8 @@ export class ServerDimensions {
   // The Nether's items tick and its cell changes become a tick message (the same fields the Overworld's carries, without weather, redstone or XP).
   netherMessage(base, n = this.nether, dim = NETHER) {
     const sim = this.sim, w = n.world, here = [...sim.players.values()].filter(p => p.dimension === dim);
-    if (here.length && sim.rules?.allowNether !== false) this.swap(n, () => tickNether(sim, n, here)); /* b70 serverprops2: MinecraftServer.v (bytecode-read) ticks world i only if i == 0 || getAllowNether(): allow-nether false stops the Nether and the End ticking */ // b62: the world systems of the Nether (nobody there: nothing is loaded, so nothing runs)
+    const ticked = here.length > 0 && sim.rules?.allowNether !== false;
+    if (ticked) this.swap(n, () => tickNether(sim, n, here)); /* b70 serverprops2: MinecraftServer.v (bytecode-read) ticks world i only if i == 0 || getAllowNether(): allow-nether false stops the Nether and the End ticking */ // b62: the world systems of the Nether (nobody there: nothing is loaded, so nothing runs)
     else { n.changes.clear(); n.dirtyTiles.clear(); }
     const final = [...n.changes.values()].map(([x, y, z]) => [x, y, z, w.get(x, y, z), w.getMeta(x, y, z)]);
     n.changes.clear();
@@ -264,6 +267,7 @@ export class ServerDimensions {
       n.itemsSent = list.length;
       out = { type: 'tick', tick: base.tick, time: base.time, changes, ...(chunks.length ? { chunks } : {}), ...(tiles.length ? { tiles } : {}), players: sim.presence(dim), weather: this.clearWeather, redstone: { lit: [...n.redstone.lit] }, ...items, ...sim.serverItems.xpField(), ...(n.taken.length ? { taken: n.taken.splice(0) } : {}), ...n.containers.actionsField() }; // b63: this dimension's orbs and pickups (Nether or End)
     });
+    if (ticked) this.travel.step(dim); // b92 portals92: this dimension's travellers leave after its tick and its message (the destroy and the spawn go out with the next one, as a native S13 follows the update that moved the entity)
     return out;
   }
 }
