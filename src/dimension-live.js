@@ -6,6 +6,7 @@
 // fields of the root, and the coordinate-keyed runtime fields (DIM_KEYS) and tile entities (TILE_KEYS) of that dimension only.
 // save() stores `stored(view, root)` on the shelf instead: the root with the view's global fields, `dimension` (where the player
 // is) and `dimensions[d] = { state, tiles }`. The Overworld's own fields stay at the top level of the root untouched.
+import { TRANSIENT_MOB } from "./mob-transient.js";
 import { DimensionWorld, TerrainPeek } from "./dimension-world.js";
 import { World } from "./world.js";
 import { javaSeed } from "./java-world.js";
@@ -358,6 +359,7 @@ export class DimensionLive {
     const y = e.y - POS_Y[kind];
     if (kind === "mob") {
       delete rec.id;
+      for (const k of TRANSIENT_MOB) delete rec[k]; // b94 lead: copyDataFrom moves NBT only, as the server's arrive does (portals93)
       Object.assign(rec, { x: e.x, y, z: e.z, yaw: mcToMobYaw(e.yaw), portalMotion: { vx: e.vx, vy: e.vy, vz: e.vz } });
       if (leashed && !same) { delete rec.leash; inbox.drops.push({ stack: { id: LEAD_ITEM, count: 1, damage: 0 }, x: e.x, y, z: e.z, mx: Math.random() * 0.2 - 0.1, my: 0.2, mz: Math.random() * 0.2 - 0.1, age: 0, delay: 10, hover: 0 }); } // b94 portals94: a holder in another world cannot be found by sw.bP (UUID lookup in the destination), so the lead drops; when the player IS in the destination the record keeps { holder: 'player' } and the copy's first leashed tick (leashRestore = sw.bP) keeps or drops it by the 10-block box. EntityItem's constructor motion
       inbox.entities.push(rec);

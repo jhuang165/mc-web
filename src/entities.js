@@ -1009,8 +1009,10 @@ export class EntityWorld {
   set nextId(v) { this.ids.next = v; }
   // A saved mob record (a browser save, java-mobs.js import or /summon's data tag) back to a live mob, or null when it
   // is unusable. The caller adds it and advances nextId.
-  restore(e, { summoned = false } = {}) {
-    e = withoutTransient(e); // b94 portals94: the in-memory state EntityLiving.writeToNBT does not write starts over, as natively
+  restore(e, { summoned = false, resetTransient = summoned } = {}) {
+    // b94 portals94 + lead: a mob natively built from NBT (/summon, a portal copy) starts the in-memory state EntityLiving.writeToNBT does not write over. Browser-save
+    // restores keep it: the port rebuilds a dimension from its save in-session (away runs, dimension switches) where native chunks stay loaded (awaytracker-b60).
+    if (resetTransient) e = withoutTransient(e);
     const world = this.world;
     const t = ENTITY_TYPES[e.type];
     if (

@@ -47,7 +47,7 @@ test("single player: a holder in another dimension cannot be found: the lead dro
 test("restore starts the port-only mob state over (a reload builds a mob from NBT only), while the saved fields stay", () => {
   const mobs = new EntityWorld(air, [], () => 0.5);
   const rec = { id: "mob-1", type: "zombie", x: 5.5, y: 0, z: 5.5, health: 12, hurt: 6, age: 900, idle: 40, revenge: 12, burn: 1, lastDamage: 4, livingSoundTime: 33, home: [1, 1, 1], homeRadius: 9, attack: 7, flee: 5 };
-  const m = mobs.restore(rec);
+  const m = mobs.restore(rec, { resetTransient: true }); // b94 lead: opt-in; browser-save restores keep the in-session state (awaytracker-b60)
   for (const k of ["age", "idle", "revenge", "burn", "lastDamage", "livingSoundTime", "attack", "flee"]) assert.ok(!m[k], `${k} starts over, got ${m[k]}`);
   assert.equal(m.home, undefined);
   assert.equal(m.health, 12);
