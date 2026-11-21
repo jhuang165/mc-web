@@ -194,14 +194,14 @@ export class ServerDispense {
   // A snowball or egg that struck: a mob takes the 0-damage thrown hit (3 on a blaze); a player takes none (EntityPlayer.attackEntityFrom returns false for 0).
   // b68 mppaintings: the dimension's paintings and item frames (server-hanging.js)
   hangingOf(dim) { return (dim ? this.dimState(dim)?.vehicles : this.sim.vehicles)?.hanging; }
-  ballHit(mobs, e, ball) { for (const d of [0, -1, 1]) if (this.hangingOf(d)?.thrown(e, this.ownerOf(ball))) return true; return e?.survival ? false : thrownHit(mobs, e, this.ownerOf(ball)?.position ?? ball, ball); }
+  ballHit(mobs, e, ball) { for (const d of [0, -1, 1]) if (this.hangingOf(d)?.thrown(e, this.ownerOf(ball))) return true; return e?.survival ? false : thrownHit(mobs, e, this.ownerOf(ball)?.position ?? null, ball); } // b89 credit89: no thrower (a dispensed ball) is null, not the ball
   // EntityEnderPearl.onImpact for a thrown pearl: the thrower (if online, alive and in this dimension) moves to the pearl, loses nothing but 5 fall damage and the fall distance.
   pearlImpact(lane, { pearl, hit }) {
     const p = this.ownerOf(pearl), mobs = lane.mobs, world = lane.world;
     const ok = p && !p.dead && (p.dimension | 0) === lane.dim;
     const owner = ok ? { kind: 'playerMP', connected: true, world, riding: !!p.mount, get fallDistance() { return p.fallDistance ?? 0; }, set fallDistance(v) { p.fallDistance = v; p.landedFall = 0; } } : null;
     impactEnderPearl(pearl, { world, owner, hit: hit?.survival ? null : hit }, {
-      hit: (e) => { if (this.hangingOf(lane.dim)?.thrown(e, p)) return; if (e?.type) thrownHit(mobs, e, p?.position ?? pearl, pearl); },
+      hit: (e) => { if (this.hangingOf(lane.dim)?.thrown(e, p)) return; if (e?.type) thrownHit(mobs, e, p?.position ?? null, pearl); }, // b89 credit89: an ownerless pearl's causeThrownDamage(this, null) has no entity
       dismount: () => this.sim.vehicles?.dismount?.(p),
       teleport: (_o, x, y, z) => { p.position.copy({ x, y, z }); p.previous.copy(p.position); Object.assign(p.velocity, { x: 0, y: 0, z: 0 }); },
       damage: (_o, { amount }) => this.sim.damagePlayer(p, amount, { name: 'a fall', from: undefined, call: () => p.survival.damage(amount, 'a fall', false) }),
@@ -393,7 +393,7 @@ export class ServerDispense {
       const arrows = lane.arrows.list.filter(a => !a.dead), balls = lane.balls.balls, potions = lane.potions?.projectiles.balls.filter(b => !b.dead) ?? [], more = lane.extrasOut ? lane.extrasOut() : lane.pending ? ((({ tnt, rockets, fireballs }) => Object.fromEntries(Object.entries({ tnt, rockets, fireballs }).filter(([, v]) => v)))(lane.pending)) : null; // a stand-in lane re-saves what it holds
       if (!arrows.length && !balls.length && !potions.length && !(more && Object.keys(more).length)) continue;
       const names = list => list.map(e => this.ownerOf(e)?.name ?? e.ownerName ?? null), tag = (rows, list) => rows.map((r, i) => { const n = names(list)[i]; return n ? { ...r, by: n } : r; });
-      lanes[lane.dim] = { arrows: tag(lane.arrows.serialize(), arrows), balls: tag(lane.balls.serialize(), balls), potions: tag(lane.potions?.serialize() ?? [], potions), ...more };
+      lanes[lane.dim] = { arrows: lane.arrows.serialize() /* b89 credit89: EntityArrow.writeEntityToNBT (zc.b(dh), bytecode-read) writes no shooter, so a reloaded arrow is nobody's */, balls: tag(lane.balls.serialize(), balls), potions: tag(lane.potions?.serialize() ?? [], potions), ...more };
     }
     return Object.keys(lanes).length ? { version: 1, lanes } : null;
   }
@@ -445,7 +445,7 @@ export class ServerDispense {
       else this.potionsOf(lane).load(potions);
       if (lane.restoreExtras) lane.restoreExtras(d); else lane.pending = d; // b63: a stand-in lane keeps them for the dimension's instance (adopt)
       const name = (row) => (typeof row?.by === 'string' && row.by.length <= 16 ? row.by : undefined);
-      lane.arrows.list.forEach((a, i) => { a.ownerName = name(rows[i]); if (a.ownerName) a.shooter = 'player'; });
+      // b89 credit89: an arrow's `by` (written before batch 89) is ignored; native arrow NBT has no shooter (zc.a(dh) reads none), so it keeps make()'s null shooter
       lane.balls.balls.forEach((b, i) => { b.ownerName = name(balls[i]); });
       if (lane.potions) lane.potions.projectiles.balls.forEach((b, i) => { b.ownerName = name(potions[i]); });
     }

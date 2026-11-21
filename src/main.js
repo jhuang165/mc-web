@@ -1847,6 +1847,7 @@ async function launch(record, prepared, { slice = false } = {}) {
         arrow: (e) => { const a = arrows.make(e, e.rand, { shooter: null, pickup: 1 }); arrows.list.push(a); arrows.joined(a); },
         thrown: (kind, e) => {
           const ball = { x: e.x, y: e.y, z: e.z, mx: e.mx, my: e.my, mz: e.mz, yaw: e.yaw, pitch: e.pitch, kind, px: e.x, py: e.y, pz: e.z, prevYaw: e.yaw, prevPitch: e.pitch, ticks: 0, rand: e.rand, random: e.rand, dead: false };
+          ball.dispensed = true; // b89 credit89: no thrower, so its hit is causeThrownDamage(ball, null) (projectiles.js thrownHit)
           if (kind === "potion" || kind === "expBottle") { const b = { ...ball, damage: e.damage ?? 0, ...(Array.isArray(e.custom) ? { custom: e.custom.map((x) => ({ ...x })) } : {}), owner: null }; (mobs.potions?.projectiles ?? projectiles).balls.push(b); mobs.joined?.(b, "potion"); } // potions and bottles walk as "potion"
           else { projectiles.balls.push(ball); projectiles.joined?.(ball); }
         },
@@ -3302,7 +3303,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
     orbSound: (s) => sounds.play(s.name, { volume: s.volume, pitch: s.pitch }),
     // EntityThrowable's ray takes every collidable entity: the paintings and item frames too (hanging.js).
     projectileTargets: () => [...mobTargets(liveOrder(mobs, mobs?.entities || []), position, PHYSICS.width, PHYSICS.height), ...vehicleTargets(entityTick.state)], // and the carts and boats too (entity-simulation.js)
-    projectileHit: (e, ball) => e === "player" ? false : thrownAtStruck(e) || thrownHit(mobs, e, position, ball), // a snowball does 3 to a blaze (projectiles.js)
+    projectileHit: (e, ball) => e === "player" ? false : thrownAtStruck(e, ball) || thrownHit(mobs, e, position, ball), // a snowball does 3 to a blaze (projectiles.js)
     projectilePearlImpact: ({pearl,hit}) => {
       const state={world,position,previous,survival,rider,minecarts,fallDistance,landedFall};
       impactPlayerPearl(state,pearl,hit,{
@@ -3871,7 +3872,7 @@ const cartHost = {
 };
 // EntitySnowball/EntityEgg/EntityEnderPearl.onImpact on a cart, boat, painting or item frame: attackEntityFrom(thrown by the player, 0) wobbles a vehicle (a Creative thrower breaks it)
 // and breaks a painting (a frame with an item loses the item), entity-simulation.js. False for anything else (a mob).
-function thrownAtStruck(e) { if (!thrownAtVehicleOrHanging(entityTick.state, e, entityTick.hooks, { player: true, creative: survival.creative })) return false; saved = false; return true; }
+function thrownAtStruck(e, ball) { if (!thrownAtVehicleOrHanging(entityTick.state, e, entityTick.hooks, ball?.dispensed ? null : { player: true, creative: survival.creative })) return false; /* b89 credit89: a dispensed ball has no thrower */ saved = false; return true; }
 function explodeAt(x, y, z, size, { exploder = null, attacker = null, smoking = true, flaming = false, blue = false } = {}) {
   applyExplosion({ world, weather, mobs, items, xpOrbs, arrows, projectiles, falling, primed, hanging, minecarts, boats,
     rockets, eyes, hooks: fishing.active && fishing.hook ? [fishing.hook] : [], // b82 spblast82: doExplosionA pushes these too (explosion-extras.js)

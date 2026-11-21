@@ -122,6 +122,10 @@ export function cleanHotbar(slots) {
   return out;
 }
 
+// b89 credit89: the look a click arrives with. NetHandlerPlayServer handles a client's packets in order, so a C02 sees the rotation of the C03 sent before it (nh.a(jd)
+// offsets 625-678 set it), not one that arrives after it in the same tick; the actions run at the end of the network phase, so each keeps the look of its arrival.
+const clickLook = p => (p && Number.isFinite(p.yaw) && Number.isFinite(p.pitch) ? { yaw: p.yaw, pitch: p.pitch } : undefined);
+
 // One dedicated world, independent of all connected tabs. Finite terrain is an
 // explicit first-milestone residency policy, not a host player's moving window.
 export class DedicatedSimulation {
@@ -306,7 +310,7 @@ export class DedicatedSimulation {
   }
   queueEdit(id, message) {
     if (!this.players.has(id) || this.actions.filter(a => a.id === id).length >= 4 || typeof message.place !== 'boolean') return false;
-    this.actions.push({ id, place: message.place, ...(message.place && message.air === true ? { air: true } : {}) }); return true; // b83 attack83: `air`, the C08 with direction 255
+    this.actions.push({ id, place: message.place, ...(message.place && message.air === true ? { air: true } : {}), look: clickLook(this.players.get(id)) }); return true; // b83 attack83: `air`, the C08 with direction 255
   }
   // `pickup`: the eids of items the client sees in reach and has room for. EntityItem.onCollideWithPlayer's own test (ItemEntities.collect: pickup delay over, the
   // player's box grown by 1 / 0.5 / 1) is repeated here with the server's position; each item that passes goes to the player as a `collect` stack. Survival only.
@@ -316,7 +320,7 @@ export class DedicatedSimulation {
   // C07 status 0 / 1 / 2 (`dig`) and the item-in-use start / stop (`use`): queued like an edit and handled in the network tick, after the player's own update.
   queueDig(id, status) {
     if (!this.players.has(id) || ![0, 1, 2].includes(status) || this.actions.filter(a => a.id === id).length >= 4) return false;
-    this.actions.push({ id, dig: status }); return true;
+    this.actions.push({ id, dig: status, look: clickLook(this.players.get(id)) }); return true;
   }
   // C02 UseEntity, attack: the wire id of a mob (the server repeats the reach test and damages with the held weapon, server-mobs.js).
   queueAttack(id, mob) {
@@ -645,14 +649,14 @@ export class DedicatedSimulation {
     }
     this.serverItems.tickOrbs();
     this.achievements.tick(); // b60: biomes and beacons
-    for (const { id, place, dig, use, attack, animUse, claim, veh, pvp, air } of this.actions.splice(0)) {
+    for (const { id, place, dig, use, attack, animUse, claim, veh, pvp, air, look } of this.actions.splice(0)) {
       const p = this.players.get(id);
       if (!p || p.dead) continue;
       if (veh) { this.dimensions.within(p, () => this.vehicles.act(p, veh)); continue; } // b61 (b63: a Nether rider uses the Nether's vehicles)
       if (animUse !== undefined) { this.dimensions.within(p, () => this.mobs.interact(p, animUse, claim)); continue; } // b63: the Nether's animals (sim.mobs is that dimension's) // b61: C02 interact
       if (p.animHandled && this.ticks <= p.animHandled + 1 && (place === true || use === true)) { p.animHandled = 0; continue; } // the click the animal took is not also an item use
       this.dimensions.within(p, () => { // b61 mpnether: a Nether player's action runs in the Nether (server-dimensions.js)
-        if (p.dimension && (dig === 0 || place === false) && this.mobs.punchBall(p)) return; // b62: a punch deflects a fireball first (EntityPlayer.attackEntityFrom path: Nether mobs only)
+        if (p.dimension && (dig === 0 || place === false) && this.mobs.punchBall(p, look)) return; // b62: a punch deflects a fireball first (EntityPlayer.attackEntityFrom path: Nether mobs only)
         // b63 mppvp: pvp = C02 attack on a player
         if (pvp !== undefined) { p.swing = 6; this.pvpRules.attack(p, pvp); } else if (attack !== undefined) { p.swing = 6; this.mobs.attack(p, attack); } else if (dig !== undefined) this.handleDig(p, dig); else if (use !== undefined) this.handleUse(p, use); else this.edit(p, place, air);
       });

@@ -399,6 +399,9 @@ export function thrownHit(mobs, e, from, ball = from) {
   // EntitySnowball.onImpact (zj.a, bytecode-read): 3 damage to an EntityBlaze, 0 to anything else; the source is causeThrownDamage(ball, thrower), so a mob thrower
   // (the snow golem: `from` is its owner, not the ball) is the source entity a blaze then targets.
   const thrower = ball !== from && from !== e && from?.type ? from : null, amount = e.type === "blaze" && ball?.kind === "snowball" ? 3 : 0;
+  // b89 credit89: a dispensed ball has no thrower (BehaviorProjectileDispense builds it with no shooter), so causeThrownDamage(ball, null) is an rq whose getEntity (rq.j) is
+  // null: no recentlyHit, no revenge, and attackedAtYaw from Math.random instead of knockBack (sv.a(ro,F) 208-322, bytecode-read). `from == null` is the server's ownerless ball.
+  if (from == null || ball?.dispensed) return mobs.attackEntityFrom(e, amount, { name: "thrown", projectile: true });
   return mobs.damage(e, amount, from.x, from.z, !thrower, null, thrower ? { projectile: true, shooter: thrower } : { projectile: true });
 }
 
@@ -712,7 +715,7 @@ export class Projectiles {
       if (b.kind === "enderPearl" && b.owner != null && b.owner !== "player") throw new Error("Cannot save ender pearl without local owner token");
       return { x: b.x, y: b.y, z: b.z, mx: b.mx, my: b.my, mz: b.mz, yaw: b.yaw, pitch: b.pitch,
         ...(b.kind === "egg" ? { kind: "egg" } : b.kind === "enderPearl" ? { kind: "enderPearl", ...(b.owner === "player" ? { owner: b.owner } : {}) } : {}),
-        ...(b.fire ? { fire: b.fire } : {}), ...keptBaseSave(b) }; /* b88 entnbt88: Air, UUID, PortalCooldown, Dimension */ // b84 cmdfix84: any nonzero short; b80 fluids80: Entity.writeToNBT's Fire
+        ...(b.fire ? { fire: b.fire } : {}), ...(b.dispensed ? { dispensed: true } : {}), ...keptBaseSave(b) }; /* b88 entnbt88: Air, UUID, PortalCooldown, Dimension */ // b84 cmdfix84: any nonzero short; b80 fluids80: Entity.writeToNBT's Fire
     });
   }
   load(list) {
@@ -723,7 +726,7 @@ export class Projectiles {
       if (d && kindKnown && [d.x, d.y, d.z, d.mx, d.my, d.mz].every(ok) && (d.kind !== "enderPearl" || d.owner === "player" || d.owner === undefined)) {
         const yaw = ok(d.yaw) ? f(d.yaw) : 0, pitch = ok(d.pitch) ? f(d.pitch) : 0;
         const kind = d.kind === "egg" ? "egg" : d.kind === "enderPearl" ? "enderPearl" : "snowball", rand = this.rng();
-        this.balls.push({ kind, ...(kind === "enderPearl" ? { ...(d.owner === "player" ? { owner: "player" } : {}), random: rand } : {}), x: d.x, y: d.y, z: d.z, px: d.x, py: d.y, pz: d.z, mx: d.mx, my: d.my, mz: d.mz, yaw, pitch, prevYaw: yaw, prevPitch: pitch, ticks: 0, rand, dead: false, ...(Number.isInteger(d.fire) && d.fire !== 0 ? { fire: Math.max(-32768, Math.min(32767, d.fire)) } : {}), ...keptBaseRestore(d) }); // b88 entnbt88: kept Entity keys // b84 cmdfix84: a negative counter too
+        this.balls.push({ kind, ...(kind === "enderPearl" ? { ...(d.owner === "player" ? { owner: "player" } : {}), random: rand } : {}), x: d.x, y: d.y, z: d.z, px: d.x, py: d.y, pz: d.z, mx: d.mx, my: d.my, mz: d.mz, yaw, pitch, prevYaw: yaw, prevPitch: pitch, ticks: 0, rand, dead: false, ...(Number.isInteger(d.fire) && d.fire !== 0 ? { fire: Math.max(-32768, Math.min(32767, d.fire)) } : {}), ...(d.dispensed === true ? { dispensed: true } : {}), ...keptBaseRestore(d) }); // b89 credit89: a dispensed ball stays ownerless // b88 entnbt88: kept Entity keys // b84 cmdfix84: a negative counter too
       }
     }
   }
