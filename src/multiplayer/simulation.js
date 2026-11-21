@@ -250,7 +250,10 @@ export class DedicatedSimulation {
   // A mob's hit (server-mobs.js): the player's own Survival.scaledDamage / damage with the mob's arguments (difficulty scaling, armour, the CombatTracker entry);
   // the death is seen by ServerSurvival.tick. Lead fix at the b59 merge: the mpmobs no-op is replaced by the mpstate health.
   damagePlayer(player, amount, source) { if (!player?.survival || player.dead) return false; if (!this.pvpRules.allows(source?.from, player)) return false; /* b63 mppvp: EntityPlayerMP.canAttackPlayer (pvp=false) */ return source?.call ? source.call() : player.survival.damage(amount, source?.name ?? 'an accident', true, undefined, source?.from ?? undefined); }
-  get darkness() { return skylightSubtracted(celestialAngle(this.time, 1), this.weather.rainStrength(), this.weather.weightedThunder()); }
+  // b89 tiles89: World.skylightSubtracted (ahb.j) as WorldServer.tick (mt.b, bytecode-read) sets it: calculateSkylightSubtracted(1.0F) runs after the weather
+  // update and before the clock's step (ays.b / ays.c), so farming, mobs, spawners and sleep read the angle of the world time before this tick's +1
+  // (`clockStep`, 0 when doDaylightCycle held it and before the first tick, as World's calculateInitialSkylight at load).
+  get darkness() { return skylightSubtracted(celestialAngle(this.time - (this.clockStep ?? 0), 1), this.weather.rainStrength(), this.weather.weightedThunder()); }
   addPlayer(id, name, resumeKey, { skin = null, cape = null } = {}) {
     if (!validName(name) || [...this.players.values()].some(p => p.name.toLowerCase() === name.toLowerCase())) throw new Error('Choose an unused name (1–16 letters, numbers or underscores).');
     if ([...this.players.values()].some(p => p.resumeKey === resumeKey)) throw new Error('That player is already connected.');
@@ -612,7 +615,9 @@ export class DedicatedSimulation {
     setGameRuleSource((name) => ruleOn(this, name)); // b80 mpcmd80: entities.js / fire.js / ... read gameRule() (mobGriefing, doMobLoot, doFireTick); without a source they saw the defaults, so /gamerule did not reach them on the server
     const beforeLit = new Set(this.redstone.lit);
     hardcoreTick(this); // b69 serverprops: a hardcore world is Hard
+    const clockBefore = this.time; // b89 tiles89
     this.ticks++; if (String(this.gameRules.doDaylightCycle ?? 'true').toLowerCase() === 'true') this.time++; // gamerule doDaylightCycle
+    this.clockStep = this.time - clockBefore; // b89 tiles89: the darkness getter's pre-step clock
     this.containers.tick();
     for (const p of this.players.values()) {
       const controls = this.ticks - p.lastInput > 10 ? IDLE_INPUT : p.input;

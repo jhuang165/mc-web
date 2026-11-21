@@ -26,3 +26,4 @@ Evidence: `tools/probes/ChestsProbe.java` run by `tools/verify-chests.mjs` again
 - No `EnderChest` tile entity is written on export (Java creates it on load).
 - Inventory icons use the chest and obsidian atlas tiles, not the entity textures.
 - Ender chest per-player data is single-player only; `chestopen` sound on the ender lid is played from `tickChests` only for loaded chests.
+- 2026-11-20 (b89 tiles89, bytecode-read): any World.setBlock that swaps a chest for a trapped chest (or back) spills the slots and starts an empty tile in all three hosts: single player, the away run and the server (`container-tiles.js` `swapTiles`). `/setblock chest <meta>` compares the record's facing as the native metadata, so another facing spills. The facing still lives in the record, not the cell metadata; see `.shared-memory/notes/tiles89-b89-track.md`.

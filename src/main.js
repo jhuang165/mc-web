@@ -277,6 +277,7 @@ import { collectBases, basesFromJson } from "./whole-save-json.js";
 import { tickWorldSystems } from "./world-tick.js";
 import { sensorSky } from "./daylight-sensor-time.js"; // b88 tiles88
 import { heldTiles, tilesReplaced } from "./container-tiles.js"; // b88 tiles88
+import { installTileSwaps, swapChestRecord } from "./container-tiles.js"; // b89 tiles89
 import { captureMovementInput } from "./player-input.js";
 import { movePlayer } from "./player-physics.js";
 import { UseHold } from "./use-hold.js";
@@ -1558,6 +1559,7 @@ const itemRand = new JavaRandom(Math.floor(Math.random() * 2 ** 48));
 let deathTime = 0;
 function watchFlowers() {
   installSkullBreak(world, () => SKULLS, (stacks, x, y, z) => items.dropBlock(stacks.map((d) => makeStack(d.id, d.count, d.damage || 0, undefined, d.tags)), x, y, z)); // b84 drops84: BlockSkull.breakBlock on any setBlock (explosions, /setblock, the dragon); items.dropBlock honours doTileDrops
+  { const w = world; installTileSwaps(w, { get signs() { return signs; }, containers: { swapChest: (x, y, z) => swapChestRecord(w, survival.chests, x, y, z, (stacks) => items.spill(stacks.map(copyStack), x, y, z)) }, own: () => !active?.remote }); } // b89 tiles89: World.setBlock's breakBlock for a meta-only sign rewrite and a chest <-> trapped chest swap on any edit, as the server (container-tiles.js swapTiles); a multiplayer replica takes the server's tiles
   const next = world.onChange;
   world.onChange = (x, y, z, old, now) => {
     next?.(x, y, z, old, now);
