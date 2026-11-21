@@ -31,6 +31,7 @@ Branch `batch89-horse89`. Owns `src/vehicle-simulation.js` and `src/horse-live.j
 - `node --test --test-timeout=600000 src/horse89-b89.test.js`: 6/6 pass. On the old code, the first 5 tests failed 0/5 (checked before the cart/boat test was added).
 - 48 targeted neighbour files (`--test-concurrency=2`): 771/772 on the first run. The one failure was `vehicle-simulation.test.js` SIM-01, which encoded the immediate cart sneak dismount (the gap). I updated it to run the cart update and then `finishVehicleTick`. Rerun: `vehicle-simulation.test.js` 45/45.
 - `src/horse88-b88.test.js` sneak test updated (it encoded the gap: no C0B, immediate dismount). It now expects 1 C0B and the dismount in the mob tick. It passes in the neighbour run.
+- Last rerun after the final edit (the stale path no longer traces twice): `horse89-b89`, `horse88-b88`, `vehicle-simulation`, `player-riding`: 64/64.
 - `npm run build`: OK. The full `npm test` was not run (track rules).
 
 ## Follow-ups
