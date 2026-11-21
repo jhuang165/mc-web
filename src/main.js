@@ -185,6 +185,7 @@ import { SHADOWS, vehicleShadowCasters } from "./shadows.js";
 import { isSlimeLike, slimeHeight } from "./slime.js";
 import { MobRenderer } from "./mob-renderer.js";
 import { ChestRenderer } from "./chest-renderer.js";
+import { awayTimeShift } from "./away-time-shift.js";
 import { CHEST, settleFacing, adoptChest, migrateChestFacing, chestPair, tickLid } from "./chest.js";
 import { isChestBlock, ENDER_CHEST, newEnderTile, enderDisplayParticles } from "./chest-blocks.js";
 import { DISPENSER, DROPPER, PISTON_HEAD, isDispenserPiston, itemForBlock, headBaseId } from "./dispenser-piston.js";
@@ -3186,7 +3187,7 @@ const dims = new DimensionLive({
   // Command blocks that ran while away (away-commands.js): /time shifts the clock, /weather the Overworld's timers, rules, and the chat lines they printed.
   // The player as he returns: the away run's shadow player starts from it (the queued commands then advance it in firing order).
   awayPlayer: () => { const sp = JSON.parse(JSON.stringify(survival.serialize())); for (const k of TILE_KEYS) delete sp[k]; return { state: sp, experience: experience.serialize(), mode: survival.mode === "creative" ? 1 : survival.mode === "adventure" ? 2 : 0, level: experience.level }; },
-  awayResult: (r, root) => { if (r.difficulty !== undefined) commandHost.setDifficulty(r.difficulty); if (r.timeShift && !survival.timeFrozen) survival.time += r.timeShift; if (r.weather) weather.overworld?.restore(r.weather); if (r.world) Object.assign(active, r.world); for (const l of r.chat ?? []) printChat(l);
+  awayResult: (r, root) => { if (r.difficulty !== undefined) commandHost.setDifficulty(r.difficulty); survival.time += awayTimeShift(r); /* b94 tiles94: applied whatever the live rule at return */ if (r.weather) weather.overworld?.restore(r.weather); if (r.world) Object.assign(active, r.world); for (const l of r.chat ?? []) printChat(l);
     // Batch 34: the commands that act on the player, queued by the run in firing order, through the live command host (/give goes straight into the inventory).
     if (r.playerCommands?.length) r.stats.commands.replayed = replayPlayerCommands(r.playerCommands, { host: commandHost, records: root?.commandBlocks, carts: root?.minecarts?.carts, delta: r.inventoryDelta, inventory: survival.inventory, playerDelta: r.playerDelta, xpOps: r.xpOps, survival, death: !!r.playerDeath, giveStack: (s) => { survival.inventory.add(s); if (s.count > 0) items.dropPlayer(s, position, yaw, pitch); renderHotbar(); renderVitals(); saved = false; } });
     // Batch 43 (away-death.js): the shadow died. Its drops went to the dimension he died in (finishAway); here the live player loses the inventory and experience they stood for and dies
