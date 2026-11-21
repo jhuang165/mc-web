@@ -9,6 +9,7 @@ import { addMobEffect, isUndeadMob, isPotionApplicable } from "./mob-effects.js"
 import { expBottleOrbs } from "./spawn-eggs.js";
 import { JavaRandom } from "./java-random.js";
 import { chooseThrownPotion, throwSpawn, splashImpact, WITCH } from "./witch.js";
+import { keptBaseSave, keptBaseRestore } from "./entity-base-nbt.js"; // b88 entnbt88
 const f = Math.fround;
 
 export class WitchPotions {
@@ -49,7 +50,7 @@ export class WitchPotions {
   // Browser snapshot of the potions in flight (like Projectiles.serialize): Pos, Motion, Rotation, the potion damage value, the flight age and
   // whether the local player threw it (a thrown-by-witch potion loses its owner, as an EntityPotion whose thrower did not load).
   serialize() {
-    return this.projectiles.balls.filter((b) => !b.dead).map((b) => ({ x: b.x, y: b.y, z: b.z, mx: b.mx, my: b.my, mz: b.mz, yaw: b.yaw, pitch: b.pitch, damage: b.damage, ...(Array.isArray(b.custom) ? { custom: b.custom.map((e) => ({ ...e })) } : {}), ticks: b.ticks | 0, ...(b.kind === "expBottle" ? { kind: "expBottle" } : {}), ...(b.owner === "player" ? { owner: "player" } : {}), ...(b.fire ? { fire: b.fire } : {}) })); // b81 throwfire81: Entity.writeToNBT's Fire (as Projectiles.serialize)
+    return this.projectiles.balls.filter((b) => !b.dead).map((b) => ({ x: b.x, y: b.y, z: b.z, mx: b.mx, my: b.my, mz: b.mz, yaw: b.yaw, pitch: b.pitch, damage: b.damage, ...(Array.isArray(b.custom) ? { custom: b.custom.map((e) => ({ ...e })) } : {}), ticks: b.ticks | 0, ...(b.kind === "expBottle" ? { kind: "expBottle" } : {}), ...(b.owner === "player" ? { owner: "player" } : {}), ...(b.fire ? { fire: b.fire } : {}), ...keptBaseSave(b) })); /* b88 entnbt88: Air, UUID, PortalCooldown, Dimension */ // b81 throwfire81: Entity.writeToNBT's Fire (as Projectiles.serialize)
   }
   load(list) {
     this.projectiles.balls.length = 0;
@@ -58,7 +59,7 @@ export class WitchPotions {
       if (!d || ![d.x, d.y, d.z, d.mx, d.my, d.mz].every(ok) || !Number.isInteger(d.damage) || d.damage < 0) continue;
       const yaw = ok(d.yaw) ? f(d.yaw) : 0, pitch = ok(d.pitch) ? f(d.pitch) : 0, rng = this.projectiles.rng();
       this.projectiles.balls.push({ kind: d.kind === "expBottle" ? "expBottle" : "potion", damage: d.damage, ...(Array.isArray(d.custom) ? { custom: readItemTags({ customPotionEffects: d.custom }).customPotionEffects } : {}), owner: d.owner === "player" ? "player" : null, x: d.x, y: d.y, z: d.z, px: d.x, py: d.y, pz: d.z, mx: d.mx, my: d.my, mz: d.mz,
-        yaw, pitch, prevYaw: yaw, prevPitch: pitch, ticks: Math.max(0, d.ticks | 0), rand: rng, random: rng, dead: false, ...(Number.isInteger(d.fire) && d.fire !== 0 ? { fire: Math.max(-32768, Math.min(32767, d.fire)) } : {}) }); // b81: Entity.readFromNBT's Fire short; the counter burns on in Projectiles.step
+        yaw, pitch, prevYaw: yaw, prevPitch: pitch, ticks: Math.max(0, d.ticks | 0), rand: rng, random: rng, dead: false, ...(Number.isInteger(d.fire) && d.fire !== 0 ? { fire: Math.max(-32768, Math.min(32767, d.fire)) } : {}), ...keptBaseRestore(d) }); /* b88 entnbt88 */ // b81: Entity.readFromNBT's Fire short; the counter burns on in Projectiles.step
     }
   }
   tick(player, survival) {

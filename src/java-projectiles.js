@@ -8,6 +8,7 @@ import { NBT } from './nbt.js';
 import { nbtGet } from './nbt-get.js';
 import { fromOriginal, toOriginal } from './block-registry.js';
 import { ITEM_FIREWORK_ROCKET, normalizeFireworks } from './fireworks.js';
+import { keptBaseImport } from './entity-base-nbt.js'; // b88 entnbt88
 
 // EntityList id -> the browser list that holds the record ('projectiles' = Projectiles.serialize, 'arrows' = Arrows.serialize,
 // 'thrownPotions' = WitchPotions.serialize, which also holds the player's potions and bottles o' enchanting; 'fireballs' = the blaze/ghast
@@ -35,7 +36,14 @@ const potionStack = (damage) => tag(NBT.COMPOUND, new Map([['id', short(ITEM_POT
 // Entity NBT -> { list, record } for the browser save, or { lost } with the reason (the caller tallies `${id} (reason)`).
 // `convertItem` turns an item compound into a browser stack (the importer's own, which tallies lost items); `dimension` tags a fireball with
 // the dimension it flies in (the browser keeps one `fireballs` list for the active world).
-export function javaProjectileFromNbt(entity, { shiftX = 0, shiftZ = 0, convertItem = null, dimension = 0 } = {}) {
+// b88 entnbt88: every record also takes the Entity keys no projectile update changes but the cooldown (entity-base-nbt.js keptBaseImport: Air, UUID, PortalCooldown,
+// Dimension; executed, entnbt88-reference.json Arrow and Snowball rows).
+export function javaProjectileFromNbt(entity, options) {
+  const made = projectileRecordOf(entity, options);
+  if (made.record) Object.assign(made.record, keptBaseImport(entity));
+  return made;
+}
+function projectileRecordOf(entity, { shiftX = 0, shiftZ = 0, convertItem = null, dimension = 0 } = {}) {
   const id = nbtGet(entity, 'id', NBT.STRING, ''), list = JAVA_PROJECTILES[id], pos = numbers(entity, 'Pos', NBT.DOUBLE, 3);
   if (!list || !pos) return { lost: 'unusable' };
   // Entity.readFromNBT zeroes a motion component beyond 10.

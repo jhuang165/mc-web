@@ -262,7 +262,7 @@ test('a browser world exported to Java and imported with its level.dat continues
   assert.deepEqual(new Experience(back.experience).serialize().level, 5);
   assert.deepEqual(back.stats, record.stats); assert.deepEqual(back.achievements, record.achievements);
   // Paintings, item frames and every cart type come back.
-  assert.deepEqual(back.hanging, hanging);
+  assert.deepEqual(back.hanging, hanging.map((h) => ({ ...h, nbtDimension: 0 }))); // b88 entnbt88: the import keeps Entity.readFromNBT's Dimension
   assert.equal(Hanging.fromJSON(back.hanging).entities.length, 2);
   const cartsBack = back.minecarts.carts.sort((a, b) => a.type - b.type);
   assert.deepEqual(cartsBack.map((c) => c.type), [1, 2, 4, 6]);

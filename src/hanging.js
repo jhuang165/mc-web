@@ -19,6 +19,7 @@ import { bindIds } from "./entity-ids.js";
 import { JavaRandom } from "./java-random.js";
 import { collisionBoxes } from "./world.js";
 import { materialSolid } from "./plants.js";
+import { keptBaseSave, keptBaseRestore } from "./entity-base-nbt.js"; // b88 entnbt88
 
 const f = Math.fround;
 // Browser item ids (the original ids are 321 and 389).
@@ -257,10 +258,11 @@ export class Hanging {
       item: e.item ? structuredClone(e.item) : undefined, rotation: e.kind === "frame" ? e.rotation : undefined,
       dropChance: e.kind === "frame" && e.dropChance !== 1 ? e.dropChance : undefined,
       fire: Number.isInteger(e.fire) && e.fire !== 0 ? e.fire : undefined, // b84 cmdfix84
+      ...keptBaseSave(e), // b88 entnbt88: Air, UUID, PortalCooldown and Dimension as read; EntityHanging.onUpdate never calls onEntityUpdate, so the cooldown stays
       invulnerable: e.invulnerable || undefined, // b86 summon86: Entity.writeToNBT writes Invulnerable for paintings and frames too (sa.e; ss, the painting tb and the frame st never override it, bytecode-read)
     }));
   }
-  withFire(e, r) { if (Number.isInteger(r.fire)) e.fire = Math.max(-32768, Math.min(32767, r.fire)); if (r.invulnerable === true) e.invulnerable = true; return e; } // b84 cmdfix84: Entity's Fire, kept as saved
+  withFire(e, r) { if (Number.isInteger(r.fire)) e.fire = Math.max(-32768, Math.min(32767, r.fire)); if (r.invulnerable === true) e.invulnerable = true; Object.assign(e, keptBaseRestore(r)); return e; } // b84 cmdfix84: Entity's Fire, kept as saved
   // Rebuild entities from saved records (old saves have none). Unknown arts become Kebab (readEntityFromNBT).
   load(records) {
     this.entities = [];

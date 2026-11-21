@@ -235,6 +235,7 @@ export function createCommandHost(env) {
             mobs.entities.push(born);
           } else born = mobs.spawnNatural(type, x, y, z);
           if (born && typeof born === "object") { born.air = 0; facing(born, null); }
+          if (born && typeof born === "object") born.nbtDimension = 0; // b88 entnbt88 (executed, entnbt88-reference.json): readFromNBT's Dimension, 0 for the empty compound, in the Nether too
           return { other: true };
         }
         const parsed = summonedMobRecord(type, nbt, { convertItem });

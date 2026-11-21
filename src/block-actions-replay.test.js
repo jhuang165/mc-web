@@ -141,6 +141,7 @@ function explodeBindings(s, trace) {
   };
 }
 
+const noUuid = (v) => JSON.parse(JSON.stringify(v), (k, x) => (k === "uuid" ? undefined : x)); // b88 entnbt88: each run draws its own random UUIDs (Entity's UUID.randomUUID), so they are left out of the comparison
 function snapshot(s) {
   return clone({
     edits: [...s.world.edits].filter(([key, value]) => s.baseEdits.get(key) !== value).sort(([a], [b]) => a.localeCompare(b)),
@@ -179,7 +180,7 @@ test("compound break and explosion actions match pinned main.js ordering with re
     }), true);
   }
   assert.deepEqual(helperTrace, oldTrace.slice(0, helperTrace.length), "block observers preserve the pinned callback sequence");
-  assert.deepEqual(snapshot(helperState), snapshot(sourceState), "stone wear, chest spill/metadata and ice water match");
+  assert.deepEqual(noUuid(snapshot(helperState)), noUuid(snapshot(sourceState)), "stone wear, chest spill/metadata and ice water match");
   assert.equal(helperState.survival.exhaustion, 0.07500000298023224);
   assert.equal(helperState.survival.inventory.main[helperState.survival.inventory.current].damage, 6);
   assert.ok(helperState.items.items.some(e => e.stack.id === 12), "stone produced its real cobblestone item drop");
@@ -210,7 +211,7 @@ test("compound break and explosion actions match pinned main.js ordering with re
       markDirty: () => {},
     }));
 
-  assert.deepEqual(snapshot(helperState), snapshot(sourceState), "blast block edits, drops, entity impacts and chain TNT match");
+  assert.deepEqual(noUuid(snapshot(helperState)), noUuid(snapshot(sourceState)), "blast block edits, drops, entity impacts and chain TNT match");
   assert.ok(sourceState.blastWriteGate && helperState.blastWriteGate, "both explosions reached a block mutation");
   assert.ok(sourceState.blastWriteGate.mobHealth < 10 && helperState.blastWriteGate.mobHealth < 10,
     "the real pig took blast damage before the first block edit");

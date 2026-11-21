@@ -11,8 +11,7 @@ import { newOrb } from "./experience.js";
 import { spawnFalling, FALLING_Y_OFFSET } from "./falling.js";
 import { fallingCellOf, fallingMetaOf, fallingDataExtra, fallingTileDataOf } from "./java-objects.js";
 import { ARTS } from "./hanging.js";
-import { entityBaseOf } from "./entity-base-nbt.js";
-import { uuidFields } from "./entity-uuid.js";
+import { entityBaseOf, keptBaseOf } from "./entity-base-nbt.js";
 
 export const ENTITY_SUMMON = Object.freeze({
   Item: "entity:Item", XPOrb: "entity:XPOrb", PrimedTnt: "entity:PrimedTnt", FallingSand: "entity:FallingSand", Boat: "entity:Boat",
@@ -84,6 +83,7 @@ export function summonEntity(hosts, id, x, y, z, tag, { convertItem = () => null
       const e = hosts.items.spawn(stack, x, y, z, { motion, empty: true, delay: Math.max(0, Math.min(40, nbtGet(t, "PickupDelay", NBT.SHORT, 0))) });
       e.age = nbtGet(t, "Age", NBT.SHORT, 0); // b87 summon87 (executed, summon87-reference.json ticks): xk.a(dh) keeps any short; 1.7.10's onUpdate ages a negative one too (no -32768 sentinel, that is 1.8)
       e.fire = e.loadedFire = base.fire; e.onGround = base.onGround; if (base.invulnerable) e.invulnerable = true; // b83 cmdexec83: Fire (the item's burn counter, saved back unticked) and OnGround
+      Object.assign(e, keptBaseOf(t)); // b88 entnbt88 (executed, entnbt88-reference.json): Air (0 when absent), UUID (random when absent), raw PortalCooldown, Dimension (0 when absent, also in the Nether)
       e.health = nbtGet(t, "Health", NBT.SHORT, 0) & 255; // b85 fire85 (executed, cmd-exec-reference.json invulnerable rows): EntityItem.readEntityFromNBT reads Health & 255, 0 when absent, so a summoned item dies from the first hit
       // b86 summon86: xk.a(dh) also reads Owner and Thrower (hasKey, then getString; the region import keeps them since b77), which the live item saves and uses.
       for (const [key, field] of [["Owner", "owner"], ["Thrower", "thrower"]]) { const s = nbtGet(t, key, NBT.STRING, ""); if (s) e[field] = s.slice(0, 64); }
@@ -92,6 +92,7 @@ export function summonEntity(hosts, id, x, y, z, tag, { convertItem = () => null
     const value = nbtGet(t, "Value", NBT.SHORT, 0);
     // EntityXPOrb.readEntityFromNBT keeps any Value, 0 and above 2477 too (Executed, object-nbt-reference.json); b76: a Value 0 orb is kept.
     const o = newOrb(value, x, y, z); [o.vx, o.vy, o.vz] = motion; o.fire = base.fire; o.onGround = base.onGround; if (base.invulnerable) o.invulnerable = true; o.health = nbtGet(t, "Health", NBT.SHORT, 0) & 255; /* b85 fire85: EntityXPOrb.readEntityFromNBT, same */ o.age = nbtGet(t, "Age", NBT.SHORT, 0); /* b86 summon86: sq.a(dh) reads xpOrbAge = getShort("Age") too (bytecode-read); 6000 or more dies on the first update */ hosts.xpOrbs.orbs.push(o); // b83 cmdexec83: Fire, OnGround
+    Object.assign(o, keptBaseOf(t)); // b88 entnbt88: the same kept Entity keys
   } else if (id === "PrimedTnt") {
     const e = primeTnt(x, y, z, { fuse: nbtGet(t, "Fuse", NBT.BYTE, 0) });
     [e.vx, e.vy, e.vz] = motion;
@@ -117,7 +118,7 @@ export function summonEntity(hosts, id, x, y, z, tag, { convertItem = () => null
   } else if (id === "Boat") {
     const rotation = list(t, "Rotation", NBT.FLOAT, 2), boat = hosts.boats.spawnBoat({ x, y, z, yaw: Math.fround((rotation?.[0] ?? 0) % 360), /* b87 summon87: setRotation's yaw % 360 */ vx: motion[0], vy: motion[1], vz: motion[2] });
     boat.pitch = boat.prevPitch = Math.fround((rotation?.[1] ?? 0) % 360);
-    Object.assign(boat, base, uuidFields(t)); // b83 cmdexec83: Fire, OnGround, FallDistance, Invulnerable; b87 summon87: UUIDMost/Least
+    Object.assign(boat, base, keptBaseOf(t)); // b83 cmdexec83: Fire, OnGround, FallDistance, Invulnerable; b87 summon87: UUIDMost/Least; b88 entnbt88: Air, raw PortalCooldown, Dimension
     vehicle = boat;
   } else if (id === "Painting" || id === "ItemFrame") {
     // EntityHanging.readEntityFromNBT: a numeric "Direction" wins over the pre-1.2 "Dir" (0 to 3 mapped 2, 1, 0, 3; anything else leaves 0); then
@@ -130,7 +131,8 @@ export function summonEntity(hosts, id, x, y, z, tag, { convertItem = () => null
     else if (id === "Painting") {
       const motive = nbtGet(t, "Motive", NBT.STRING, ""), art = ARTS.findIndex((a) => a[0] === motive);
       const h = hosts.hanging.summon("painting", dir, tx, ty, tz, x, y, z, { art: art < 0 ? 0 : art });
-      if (h) { h.fire = base.fire; if (base.invulnerable) h.invulnerable = true; } // b84 cmdfix84: EntityHanging.onUpdate never calls sa.h: Fire is only kept
+      if (h) { h.fire = base.fire; if (base.invulnerable) h.invulnerable = true; } // b84 cmdfix84
+      if (h) Object.assign(h, keptBaseOf(t)); // b88 entnbt88: Air, UUID, PortalCooldown (never counted down: no sa.C), Dimension: EntityHanging.onUpdate never calls sa.h: Fire is only kept
     } else {
       const itemTag = nbtGet(t, "Item", NBT.COMPOUND), stack = itemTag && itemTag.size ? convertItem(itemTag) : null;
       const extra = {};
@@ -141,6 +143,7 @@ export function summonEntity(hosts, id, x, y, z, tag, { convertItem = () => null
       }
       const h = hosts.hanging.summon("frame", dir, tx, ty, tz, x, y, z, extra);
       if (h) { h.fire = base.fire; if (base.invulnerable) h.invulnerable = true; }
+      if (h) Object.assign(h, keptBaseOf(t)); // b88 entnbt88
     }
   } else if (id === "LeashKnot") {
     // su: readEntityFromNBT is empty, so only the base keys are read and the knot's tile stays 0, 0, 0.

@@ -5,7 +5,7 @@ import { NBT } from "./nbt.js";
 import { getStringAny } from "./nbt-string.js";
 import { isContainerType, slotCount } from "./cart-variants.js";
 import { Y_OFFSET } from "./minecarts.js";
-import { entityBaseOf } from "./entity-base-nbt.js";
+import { entityBaseOf, keptBaseRestore } from "./entity-base-nbt.js";
 
 // SUMMONABLE values for the carts; command-host.js routes them here.
 export const CART_SUMMON = Object.freeze({ MinecartRideable: "cart:0", MinecartChest: "cart:1", MinecartFurnace: "cart:2", MinecartTNT: "cart:3", MinecartSpawner: "cart:4", MinecartHopper: "cart:5", MinecartCommandBlock: "cart:6" });
@@ -47,7 +47,7 @@ export function summonCart(minecarts, type, x, y, z, tag) {
     // UUIDMost/Least and PortalCooldown are written back too; the cart's own update then turns and moves it as usual.
     const b = entityBaseOf(tag);
     Object.assign(cart, { onGround: b.onGround, fallDistance: b.fallDistance, yaw: b.rotation[0], pitch: b.rotation[1], prevYaw: b.rotation[0], prevPitch: b.rotation[1], ...(b.uuid ? { uuid: b.uuid } : {}) });
-    if (b.portalCooldown > 0) cart.portalCooldown = b.portalCooldown;
+    Object.assign(cart, keptBaseRestore(b)); // b88 entnbt88: Air (0 without the tag), the tag's or a random UUID, Dimension (0 without the tag) and the raw PortalCooldown
   }
   if (tag instanceof Map) { cart.fire = nbtGet(tag, "Fire", NBT.SHORT, 0); if (nbtGet(tag, "Invulnerable", NBT.BYTE, 0) !== 0) cart.invulnerable = true; } // b84 cmdfix84: Entity.readFromNBT's Fire; EntityMinecart.onUpdate never runs the fire part of sa.C, so it is kept and saved back as read
   const motion = tag instanceof Map ? nbtGet(tag, "Motion", NBT.LIST) : null;

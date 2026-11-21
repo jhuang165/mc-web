@@ -118,7 +118,7 @@ function payloadIn(state,ox,oz,report,blockAt) {
    n.CanPickUpLoot=byte(g?.canPickUpLoot?1:0);
    n.Equipment=list(NBT.COMPOUND,[0,1,2,3,4].map(i=>(g?stackNbt(g.equipment[i],undefined,report,true):i===0?witchHeld:null)??new Map()));
    n.DropChances=list(NBT.FLOAT,[0,1,2,3,4].map(i=>Math.fround(g?.dropChances?.[i]??0.085)));
-   n.PortalCooldown=int(Number.isInteger(e.portalCooldown)&&e.portalCooldown>0?e.portalCooldown:0);}
+   n.PortalCooldown=int(Number.isInteger(e.portalCooldown)?e.portalCooldown:0);} // b88 entnbt88: raw, as read (a negative one too)
   if(e.type==='skeleton'||e.type==='wither_skeleton'){n.SkeletonType=byte(e.type==='wither_skeleton'?1:0);delete n.Age;delete n.InLove;} // EntitySkeleton.writeEntityToNBT always writes SkeletonType
   // EntityCreeper.writeEntityToNBT: powered (only when charged), Fuse, ExplosionRadius and ignited (mob-nbt-reference.json: 30 and 3 by default).
   if(e.type==='creeper'){delete n.Age;delete n.InLove;if(e.powered)n.powered=byte(1);n.Fuse=short(Number.isInteger(e.maxFuse)?e.maxFuse:30);n.ExplosionRadius=byte(Number.isInteger(e.explosionRadius)?e.explosionRadius:3);n.ignited=byte(e.ignited?1:0);}
@@ -176,7 +176,7 @@ function payloadIn(state,ox,oz,report,blockAt) {
   const nest=(b,seen)=>{const m=mountOf(b);if(m&&!seen.has(m)){seen.add(m);ridden.add(m);b.n.Riding=tag(NBT.COMPOUND,nest(m,seen));}return new Map(Object.entries(b.n));};
   const roots=built.map(b=>[b,nest(b,new Set([b]))]);
   for(const [b,m] of roots)if(!ridden.has(b))entities.push(m);}
- for(const {value:e} of state.drops??[]) {const item=stackNbt(e.stack,undefined,report);if(!item)continue;entities.push(new Map(Object.entries({...entity({...e,posY:e.y+.125,fire:Number.isInteger(e.fire)?e.fire:(e.age??0)>0?-1:0},'Item',ox,oz),Item:tag(NBT.COMPOUND,item),Age:short(e.age??0),PickupDelay:short(e.delay??0),Health:short(((e.health??5)<<24)>>24),...(e.thrower?{Thrower:str(e.thrower)}:{}),...(e.owner?{Owner:str(e.owner)}:{}),PortalCooldown:int(Number.isInteger(e.portalCooldown)&&e.portalCooldown>0?e.portalCooldown:0)})));}
+ for(const {value:e} of state.drops??[]) {const item=stackNbt(e.stack,undefined,report);if(!item)continue;entities.push(new Map(Object.entries({...entity({...e,posY:e.y+.125,fire:Number.isInteger(e.fire)?e.fire:(e.age??0)>0?-1:0},'Item',ox,oz),Item:tag(NBT.COMPOUND,item),Age:short(e.age??0),PickupDelay:short(e.delay??0),Health:short(((e.health??5)<<24)>>24),...(e.thrower?{Thrower:str(e.thrower)}:{}),...(e.owner?{Owner:str(e.owner)}:{}),PortalCooldown:int(Number.isInteger(e.portalCooldown)?e.portalCooldown:0)})));} // b88 entnbt88: the raw cooldown (entnbt88-reference.json ticks: 5000 and -7 load and save unchanged)
  for(const {value:e} of state.tnt??[])entities.push(new Map(Object.entries({...entity({...e,posY:e.y+TNT_Y_OFFSET,fire:Number.isInteger(e.fire)?e.fire:0},'PrimedTnt',ox,oz),Fuse:byte(e.fuse)}))); // Fire starts at 0 for an object entity (object-nbt-reference.json); b82 fireext82: then moveEntity's counter (-1 at rest, 160 and up once lit)
  for(const {value:e} of state.xpOrbs??[])entities.push(new Map(Object.entries({...entity({...e,posY:e.y+.25},'XPOrb',ox,oz),Health:short(((e.health??5)<<24)>>24),Age:short(e.age??0),Value:short(e.value??1)})));
  for(const {value:e} of state.falling??[]) {const o=toOriginal(e.block,e.meta&15,e.flowing?{flowing:true}:{});entities.push(new Map(Object.entries({...entity({...e,posY:e.y+FALLING_Y_OFFSET,fire:Number.isInteger(e.fire)?e.fire:0},'FallingSand',ox,oz),
@@ -185,7 +185,7 @@ function payloadIn(state,ox,oz,report,blockAt) {
   Tile:byte(o[0]),TileID:int(o[0]),Data:byte(Number.isInteger(e.data)?e.data:((e.meta&240)|(o[1]&15))&255),Time:byte(e.ticks&255),DropItem:byte(e.dropItem===false?0:1),HurtEntities:byte((e.hurtEntities??e.block===ANVIL)?1:0),FallHurtAmount:float(e.fallHurtAmount??2),FallHurtMax:int(e.fallHurtMax??40),...(e.tileData?{TileEntityData:tag(NBT.COMPOUND,compoundFromJson(e.tileData))}:{})})));}
  // EntityHanging.writeEntityToNBT: Direction (0 south, 1 west, 2 north, 3 east) and the legacy Dir byte (2, 1, 0, 3), the wall block
  // as TileX/Y/Z, then EntityPainting's Motive or EntityItemFrame's Item (original id), ItemRotation and ItemDropChance (src/hanging.js).
- for(const {value:e} of state.hanging??[]) {const base=entity({x:e.x,y:e.y,z:e.z,rotationYaw:e.yaw,rotationPitch:0,invulnerable:e.invulnerable,...(Number.isInteger(e.fire)?{fire:e.fire}:{})},e.kind==='painting'?'Painting':'ItemFrame',ox,oz);
+ for(const {value:e} of state.hanging??[]) {const base=entity({x:e.x,y:e.y,z:e.z,rotationYaw:e.yaw,rotationPitch:0,invulnerable:e.invulnerable,...(Number.isInteger(e.fire)?{fire:e.fire}:{}),air:e.air,uuid:e.uuid,portalCooldown:e.portalCooldown,nbtDimension:e.nbtDimension},e.kind==='painting'?'Painting':'ItemFrame',ox,oz);
   const n={...base,Direction:byte(e.dir),...([2,1,0,3][e.dir]===undefined?{}:{Dir:byte([2,1,0,3][e.dir])}),TileX:int(e.tx+ox),TileY:int(e.ty),TileZ:int(e.tz+oz)};
   if(e.kind==='painting')n.Motive=str(e.art);
   else{const item=e.item?stackNbt(e.item,undefined,report):null;if(item)n.Item=tag(NBT.COMPOUND,item);n.ItemRotation=byte(e.rotation??0);n.ItemDropChance=float(e.dropChance??1);}
@@ -194,7 +194,7 @@ function payloadIn(state,ox,oz,report,blockAt) {
  // fireballs, wither skulls, eyes of ender and firework rockets. An egg has no EntityList id (and the bobber class is not registered), so they stay unsupported.
  for(const name of ['projectiles','thrownPotions','arrows','fireballs','eyes','rockets'])for(const {value:e} of state[name]??[]) {const p=javaProjectileToNbt(name,e,{ox,oz,itemNbt:stack=>stackNbt(stack,undefined,report)});if(!p){report.unsupportedEntities++;continue;}
   // b82 fireext82: an eye's motion is vx/vy/vz (it exported as 0); its Fire and a rocket's counter (a rocket rests at -1 like any moveEntity mover) go out too
-  entities.push(new Map(Object.entries({...entity({x:e.x,y:e.y,z:e.z,mx:e.mx??e.vx,my:e.my??e.vy,mz:e.mz??e.vz,rotation:[e.yaw??0,e.pitch??0],fire:name==='rockets'?(Number.isInteger(e.fire)?e.fire:0):(name==='arrows'||name==='projectiles'||name==='thrownPotions'||name==='eyes'||name==='fireballs')&&Number.isInteger(e.fire)?e.fire:0},p.id,ox,oz),...p.fields})));}
+  entities.push(new Map(Object.entries({...entity({x:e.x,y:e.y,z:e.z,mx:e.mx??e.vx,my:e.my??e.vy,mz:e.mz??e.vz,rotation:[e.yaw??0,e.pitch??0],fire:name==='rockets'?(Number.isInteger(e.fire)?e.fire:0):(name==='arrows'||name==='projectiles'||name==='thrownPotions'||name==='eyes'||name==='fireballs')&&Number.isInteger(e.fire)?e.fire:0,air:e.air,uuid:e.uuid,portalCooldown:e.portalCooldown,nbtDimension:e.nbtDimension},p.id,ox,oz),...p.fields})));} // b88 entnbt88: Air, UUID, PortalCooldown, Dimension as kept
  for(const name of ['chests','furnaces','dispensers','hoppers','brewing'])for(const [k,e] of Object.entries(state[name]??{})) {
   const [x,y,z]=k.split(',').map(Number);tiles.push(writeContainerTile(name,e,x+ox,y,z+oz,{report,dropper:blockAt(x,y,z)===158}));
  }

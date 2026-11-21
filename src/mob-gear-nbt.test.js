@@ -40,16 +40,16 @@ for (const m of reference.gear) {
       assert.deepEqual(r.dropChances, m.dropChances.map(f));
       assert.equal(r.canPickUpLoot, m.canPickUpLoot);
       assert.equal(!!r.persistent, m.persistent);
-      assert.equal(r.portalCooldown ?? 0, Math.max(0, m.portalCooldown));
+      assert.equal(r.portalCooldown ?? 0, m.portalCooldown); // b88 entnbt88: raw, a negative one too (was kept only above 0)
     }
-    // EntityWorld keeps the same state (its readGear clamps damage to the item's maximum, its portal cooldown to 300).
+    // EntityWorld keeps the same state (its readGear clamps damage to the item's maximum; b88 entnbt88: the portal cooldown is raw, it was clamped to 300).
     const e = live(javaMobFromNbt(tagOf(m.nbt), { convertItem: itemStackFromNbt }));
     assert.equal(e.type, type);
     assert.equal(e.canPickUpLoot, m.canPickUpLoot);
     assert.deepEqual(e.dropChances, m.dropChances.map(f));
     assert.deepEqual(e.equipment.map((s, i) => s && [s.id, s.count, (s.enchantments ?? []).map((x) => [x.id, x.lvl])]),
       m.equipment.map((row) => (row && mapped(row) ? [row[0], row[1], row[3]] : null)));
-    assert.equal(e.portalCooldown ?? 0, Math.max(0, Math.min(300, m.portalCooldown)));
+    assert.equal(e.portalCooldown ?? 0, m.portalCooldown);
   });
 }
 

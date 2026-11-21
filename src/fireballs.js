@@ -15,6 +15,7 @@ import { mhSin, mhCos } from "./lighting.js";
 import { gameRule } from "./game-rules.js";
 import { setMobFire } from "./armor-enchantments.js";
 import { orderTargets, stampEntity } from "./candidate-order.js"; // b72
+import { keptBaseSave, keptBaseRestore } from "./entity-base-nbt.js"; // b88 entnbt88
 const isServerPlayer = (e) => !!e && typeof e === "object" && !!e.survival && !!e.position && Number.isFinite(e.yaw); // b87 blast87: a dedicated server player record
 
 const f = Math.fround;
@@ -251,6 +252,7 @@ export class Fireballs {
       ...(b.large ? { power: b.power } : {}), ...(b.blue ? { blue: true } : {}),
       ...(b.owner === "player" ? { owner: "player" } : b.owner?.id ? { owner: b.owner.id } : {}),
       ...(Number.isInteger(b.fire) && b.fire !== 0 ? { fire: b.fire } : {}), // b84 cmdfix84: Entity.writeToNBT's Fire (20 after the first update: ze.h setFire(1))
+      ...keptBaseSave(b), // b88 entnbt88: Air, UUID, PortalCooldown, Dimension as read (nbtDimension; `dimension` is the list it flies in)
       rotation: [b.yaw ?? 0, b.pitch ?? 0], // b82 fireext82: Entity.writeToNBT's Rotation, which every entity writes (render81 had it for the skulls only)
     }));
   }
@@ -275,6 +277,7 @@ export class Fireballs {
       if (ok(r.ticks)) ball.ticks = Math.max(0, r.ticks | 0);
       if (r.blue === true) ball.blue = true;
       if (Number.isInteger(r.fire) && r.fire !== 0) ball.fire = Math.max(-32768, Math.min(32767, r.fire)); // b84 cmdfix84
+      Object.assign(ball, keptBaseRestore(r)); // b88 entnbt88
       ball.owner = r.owner === "player" ? "player" : typeof r.owner === "string" ? this.mobs.entities.find((e) => e.id === r.owner) ?? null : null;
       this.list.push(ball);
     }

@@ -31,6 +31,7 @@ import { PISTON_MOVING } from './redstone-blocks-2.js';
 import { DISPENSER_SLOTS } from './dispenser-container.js';
 import { ORIGINAL_ITEMS } from './original-items.js';
 import { uuidFields, invulnerableFields } from './entity-uuid.js';
+import { keptBaseImport } from './entity-base-nbt.js'; // b88 entnbt88
 import { playerMountable } from './entities.js';
 import { importedMobType, IMPORT_MOB_LIMIT, javaMobFromNbt } from './java-mobs.js';
 import { relinkMobs } from './owner-links.js';
@@ -205,7 +206,7 @@ export function hangingFromNbt(tag, id, { shiftX = 0, shiftZ = 0, convertItem = 
   const tile = ['TileX', 'TileY', 'TileZ'].map((k) => get(tag, k, NBT.INT));
   if (!tile.every(Number.isInteger)) return null;
   const dir = hasNumber(tag, 'Direction') ? get(tag, 'Direction', NBT.BYTE, 0) : [2, 1, 0, 3][get(tag, 'Dir', NBT.BYTE, 0)] ?? 0;
-  const record = { kind: id === 'Painting' ? 'painting' : 'frame', dir, tx: tile[0] + shiftX, ty: tile[1], tz: tile[2] + shiftZ, ...invulnerableFields(tag) };
+  const record = { kind: id === 'Painting' ? 'painting' : 'frame', dir, tx: tile[0] + shiftX, ty: tile[1], tz: tile[2] + shiftZ, ...invulnerableFields(tag), ...keptBaseImport(tag) }; // b88 entnbt88: Air, UUID, PortalCooldown, Dimension
   if (id === 'Painting') {
     const motive = get(tag, 'Motive', NBT.STRING, '');
     record.art = ARTS.some((a) => a[0] === motive) ? motive : ARTS[0][0];
@@ -224,7 +225,7 @@ export function cartFromNbt(tag, type, { shiftX = 0, shiftZ = 0, lost = () => {}
   const cart = { type, x: pos[0] + shiftX, y: pos[1], z: pos[2] + shiftZ,
     motion: motion?.elementType === NBT.DOUBLE && motion.items.length === 3 && motion.items.every(Number.isFinite) ? [...motion.items] : [0, 0, 0],
     rotation: rotation?.elementType === NBT.FLOAT && rotation.items.length === 2 && rotation.items.every(Number.isFinite) ? [...rotation.items] : [0, 0],
-    fallDistance: get(tag, 'FallDistance', NBT.FLOAT, 0), fire: get(tag, 'Fire', NBT.SHORT, 0), onGround: get(tag, 'OnGround', NBT.BYTE, 0) !== 0, items: [], ...uuidFields(tag), ...invulnerableFields(tag) };
+    fallDistance: get(tag, 'FallDistance', NBT.FLOAT, 0), fire: get(tag, 'Fire', NBT.SHORT, 0), onGround: get(tag, 'OnGround', NBT.BYTE, 0) !== 0, items: [], ...uuidFields(tag), ...invulnerableFields(tag), ...keptBaseImport(tag) }; // b88 entnbt88
   const name = get(tag, 'CustomName', NBT.STRING, '');
   if (name) cart.customName = name;
   if (type === 2) { cart.fuel = Math.max(0, get(tag, 'Fuel', NBT.SHORT, 0)); cart.pushX = get(tag, 'PushX', NBT.DOUBLE, 0); cart.pushZ = get(tag, 'PushZ', NBT.DOUBLE, 0); }
@@ -255,7 +256,7 @@ export function boatFromNbt(tag, { shiftX = 0, shiftZ = 0 } = {}) {
   return { x: pos[0] + shiftX, y: pos[1], z: pos[2] + shiftZ,
     motion: motion?.elementType === NBT.DOUBLE && motion.items.length === 3 && motion.items.every(Number.isFinite) ? [...motion.items] : [0, 0, 0],
     rotation: rotation?.elementType === NBT.FLOAT && rotation.items.length === 2 && rotation.items.every(Number.isFinite) ? [...rotation.items] : [0, 0],
-    fallDistance: get(tag, 'FallDistance', NBT.FLOAT, 0), fire: get(tag, 'Fire', NBT.SHORT, 0), onGround: get(tag, 'OnGround', NBT.BYTE, 0) !== 0, ...uuidFields(tag), ...invulnerableFields(tag) };
+    fallDistance: get(tag, 'FallDistance', NBT.FLOAT, 0), fire: get(tag, 'Fire', NBT.SHORT, 0), onGround: get(tag, 'OnGround', NBT.BYTE, 0) !== 0, ...uuidFields(tag), ...invulnerableFields(tag), ...keptBaseImport(tag) }; // b88 entnbt88
 }
 
 // The level.dat half of a level import: the streamed generator, WorldInfo's flags and the player (level-dat.md).
@@ -708,7 +709,7 @@ export async function importJavaRegionArea(regions, options = {}) {
       // EntityItem.readEntityFromNBT: Owner and Thrower strings (Bytecode-read xk.a(dh): hasKey, then getString) and Entity.readFromNBT's PortalCooldown; the live item
       // already keeps and saves all three (item-entities.js), the import dropped them before b77.
       for (const [key, field] of [['Owner', 'owner'], ['Thrower', 'thrower']]) { const text = get(entity, key, NBT.STRING, ''); if (text) drops[drops.length - 1][field] = text; }
-      const portal = get(entity, 'PortalCooldown', NBT.INT, 0); if (portal > 0) drops[drops.length - 1].portalCooldown = portal;
+      Object.assign(drops[drops.length - 1], keptBaseImport(entity)); // b88 entnbt88: Air, UUID, Dimension and the raw PortalCooldown (a negative one too; it was kept only above 0)
       tally(entityConverted, id);
     }
     report.scheduledTicks += tileTicks?.length ?? 0;

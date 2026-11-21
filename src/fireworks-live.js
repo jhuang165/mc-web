@@ -5,6 +5,7 @@ import { JavaRandom } from './java-random.js';
 import { createRocket, tickRocket } from './firework-rocket.js';
 import { worldBoatBoxes } from './entity-collision.js';
 import { ITEM_FIREWORK_ROCKET, normalizeFireworks } from './fireworks.js';
+import { keptBaseRestore } from './entity-base-nbt.js'; // b88 entnbt88
 const f = Math.fround;
 
 // World.getCollidingBoundingBoxes' entity part for a rocket: the single-player game installs its boat provider (main.js, next to setEntityBoxes); the dedicated server's boats are found by world.
@@ -56,7 +57,7 @@ export class FireworkRockets {
     for (const e of Array.isArray(record.rockets) ? record.rockets : []) {
       if (!e || !keys.every((k) => Number.isFinite(e[k]))) continue;
       const r = createRocket(e.x, e.y, e.z, e.stack ? { id: ITEM_FIREWORK_ROCKET, fireworks: normalizeFireworks(e.stack.fireworks) ?? undefined } : null, new JavaRandom(0));
-      Object.assign(r, Object.fromEntries(keys.map((k) => [k, e[k]])), { fire: Number.isInteger(e.fire) ? e.fire : 0 }); // b82 fireext82: Entity's Fire short
+      Object.assign(r, Object.fromEntries(keys.map((k) => [k, e[k]])), { fire: Number.isInteger(e.fire) ? e.fire : 0 }, keptBaseRestore(e)); // b82 fireext82: Entity's Fire short; b88 entnbt88: Air, UUID, PortalCooldown, Dimension (serialize keeps the whole record)
       this.rockets.push(r);
     }
   }
