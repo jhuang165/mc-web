@@ -17,6 +17,19 @@ export function boatBoxProvider(boats) {
   };
 }
 
+// b88 boatray88: the single-player client player (movePlayer's body, `clientPlayer`) collides with the boats of its own client world: the copies the tracker last moved
+// (object-tracker.js, executed against EntityTrackerEntry and the client EntityBoat in batch 47), not the live boats. A floating boat's bob (about 0.04) never reaches
+// the tracker's 4/32 move threshold, so natively the client stands on a still boat while the server copy is checked against the live one under processPlayer's 1/16
+// shrink (spcopy88, executed). Every other mover (mobs, the server's copy of the player) keeps the live boxes. `copies()`: the client boat boxes.
+export function clientBoatBoxProvider(copies, live) {
+  return (box, e) => {
+    if (!e?.clientPlayer) return live(box, e);
+    const out = [];
+    for (const b of copies() ?? []) if (intersects(box, b)) out.push(b);
+    return out;
+  };
+}
+
 // b67 boatstand: the dedicated server's boats, found by the world the mover walks in (the Overworld, the Nether and the End each have their own Boats).
 // `registerBoatWorld(world, boats)` is called by ServerVehicles; `worldBoatBoxes` is installed once through entities.js setWorldEntityBoxes.
 const boatWorlds = new WeakMap();

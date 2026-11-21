@@ -31,19 +31,17 @@ import { LILY_PAD, WATER } from './world.js';
 import { traceBucket } from './buckets.js';
 import { lilyPadCell } from './lily-use.js';
 import { dryBucketUse, tracedBucket, heldPlan } from './client-prediction.js';
-import { Boats, BOAT_ITEM } from './boats.js';
+import { Boats, BOAT_ITEM, boatRay } from './boats.js';
 import { ITEM_GLASS_BOTTLE, ITEM_POTION, isSplashDamage } from './potions.js';
 import { isThrowable } from './player-throw-simulation.js';
 import { ITEM_EXP_BOTTLE } from './spawn-eggs.js';
 import { ITEM_EMPTY_MAP, ITEM_FILLED_MAP, createEmptyMapData } from './maps.js';
-import { mhSin, mhCos } from './fishing-line.js';
 import { mobBox } from './mob-spawner.js';
 import { TNT_SIZE } from './explosion.js';
 import { remotePlayerBox } from './multiplayer/client-placement-entities.js';
 import { crystalBox, BOAT_ENTITY_SIZES } from './boat-place-entities.js'; // b87 boatcheck87
 import { dragonListed } from './dragon-part-query.js';
 
-const f = Math.fround, RAD = f(0.017453292), PI = f(3.1415927), Y_OFFSET = f(1.62);
 
 // { cells: [{ x, y, z, block, meta }], plan: heldPlan-style change or null }. `state`: { world, survival, held, eye, dir, yaw, playerBox, blocked(box) }.
 export function clientUseItem(state) {
@@ -76,12 +74,8 @@ export function clientUseItem(state) {
   return { cells: [], plan: throws && !creative ? { dCount: -1 } : null };
 }
 
-// ItemBoat's own ray (abj.a): start (posX, posY + 1.62 - yOffset, posZ), direction from MathHelper.sin / cos of the tick rotation (partial 1.0). `position` is the box bottom,
-// `ySize` the step smoothing (posY = minY + yOffset - ySize), `mcYaw` / `mcPitch` Minecraft degrees.
-export function boatRay(position, ySize, mcYaw, mcPitch) {
-  const yawA = f(f(f(-mcYaw) * RAD) - PI), pitchA = f(f(-mcPitch) * RAD), cy = mhCos(yawA), sy = mhSin(yawA), cp = f(-mhCos(pitchA)), sp = mhSin(pitchA);
-  return { eye: [position.x, position.y + Y_OFFSET - (ySize ?? 0) + 1.62 - Y_OFFSET, position.z], dir: [f(sy * cp), sp, f(cy * cp)] };
-}
+// ItemBoat's own ray: boats.js boatRay (b88 boatray88 moved it there so the server uses the same tables; the client's yOffset 1.62 is its default).
+export { boatRay };
 
 // Whether ItemBoat.onItemRightClick reaches its decrement on the client world. `state`: { world, position, ySize, mcYaw, mcPitch, yaw (boat yaw: Minecraft degrees), playerBox,
 // entities: clientEntityBoxes(...) }. Without position / mcYaw the caller's eye / dir are used.

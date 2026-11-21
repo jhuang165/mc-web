@@ -99,6 +99,7 @@ export class WitchPotions {
     const mobs = this.mobs, victims = [];
     for (const e of mobs.entities) {
       if (e.health <= 0) continue;
+      if (e.type === "ender_crystal") continue; // b88 boatray88: EntityPotion.onImpact (zo) lists EntityLivingBase (sv.class) only; the crystal is not one (bytecode-read)
       const t = ENTITY_TYPES[e.type], s = e.growingAge < 0 ? 0.5 : 1;
       victims.push({ x: e.x, y: e.y, z: e.z, width: t.width * s, height: t.height * s, undead: isUndeadMob(e), applicable: (id) => isPotionApplicable(e, id), ref: e, direct: hit === e });
     }

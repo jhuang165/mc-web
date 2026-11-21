@@ -54,6 +54,7 @@ export class ServerSurvival {
   /** EntityPlayerMP.onDeath: the CombatTracker message goes to every player (ServerSocial.drain). */
   die(p) {
     p.dead = true; p.itemInUse = null; p.dig?.abort?.();
+    p.deathTime = 0; // b88 boatray88: EntityLivingBase.deathTime (sv.aA) of this EntityPlayerMP, counted by tickDeath
     this.sim.stats?.death(p); // b63 mpstats: stat.deaths and the killed-by stat
     this.dropOnDeath(p);
     applyDeathThrow(p); // b75 mpplayerfx75: EntityPlayer.onDeath's motion (the S12 of the owner and the viewers is the position stream)
@@ -79,6 +80,7 @@ export class ServerSurvival {
     p.deathXp = { ticks: 0, value: p.experience?.death() ?? 0 };
   }
   tickDeath(p) {
+    p.deathTime = (p.deathTime ?? 0) + 1; // b88 boatray88: sv.aF's ++deathTime (processPlayer's onUpdateEntity); setDead at 20 (boat-place-entities.js playerListed)
     const d = p.deathXp;
     if (!d || ++d.ticks < DEATH_XP_TICKS) return;
     p.deathXp = null;

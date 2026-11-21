@@ -10,6 +10,7 @@
 //                                    and minecarts / boats, each through its own move
 // `game` is the runtime hook object of redstone-runtime.js (items(), itemSystem(), primed(), orbs(), orbSystem(), falling(),
 // minecarts(), boatSystem(), boats(), player(), mobs()).
+import { crystalBox } from "./ender-crystal.js"; // b88 boatray88: EntityEnderCrystal's box [y - 1, y + 1] (bytecode-read wz.<init>)
 import { moveEntity } from "./entities.js";
 
 const ITEM = { half: 0.125, size: 0.25 }, TNT = { half: 0.49, size: 0.98 }, FALLING = { half: 0.49, size: 0.98 };
@@ -103,6 +104,7 @@ function vehicleBlockers(game) {
   const mobs = game.mobs?.();
   for (const e of mobs?.entities ?? []) {
     if (!(e.health > 0 || (e.death ?? 0) < 20) || !mobs.size) continue;
+    if (e.type === "ender_crystal") continue; // b88 boatray88: a cart's getCollisionBox needs canBePushed; a pushed boat meets crystals through crystalBoxes below
     const [w, h] = mobs.size(e).map(Math.fround);
     out.push({ bb: [e.x - w / 2, e.y, e.z - w / 2, e.x + w / 2, e.y + h, e.z + w / 2], ref: e });
   }
@@ -148,7 +150,8 @@ export function pistonPushExtras(world, game) {
     }
     return boxes;
   };
-  const others = (boat) => [...(cartList ?? []), ...(boatList ?? []), ...vehicleBlockers(game), ...(boat ? [...looseBoxes(), ...hangBoxes()] : [])];
+  const crystalBoxes = () => (game.mobs?.()?.entities ?? []).filter((e) => e.type === "ender_crystal" && (e.health > 0 || (e.death ?? 0) < 20)).map((e) => ({ bb: crystalBox(e.x, e.y, e.z), ref: e })); // b88 boatray88: xi.h takes any box
+  const others = (boat) => [...(cartList ?? []), ...(boatList ?? []), ...vehicleBlockers(game), ...(boat ? [...looseBoxes(), ...hangBoxes(), ...crystalBoxes()] : [])];
   const vehicles = (system, list, w, h, boat) => {
     if (!system?.move || !world) return add(list, (e) => e.bb, w, h);
     for (const e of list ?? []) if (!e.dead && e.bb) out.push({ box: e.bb, entity: e, move: (dx, dy, dz) => { if (!e.dead) system.move(world, e, dx, dy, dz, others(boat)); } });

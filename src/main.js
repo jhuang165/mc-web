@@ -246,6 +246,7 @@ import { BrewingContainer } from "./brewing-container.js";
 import { wireInvClicks, applyInv, wireCreative, creativePick } from "./multiplayer/client-inventory.js"; // b60: window 0; b61: C10 from the Creative screen
 import { bookOpensOnUse, bookMessage } from "./multiplayer/client-books.js"; // b66 mpbooks
 import { boatPlaceEntities, mobBallLists } from "./boat-place-entities.js"; // b87 boatcheck87
+import { crystalBox } from "./ender-crystal.js"; // b88 boatray88: EntityEnderCrystal's box [y - 1, y + 1]
 import { clientUseItem, clientEntityBoxes } from "./client-item-use.js"; // b85 mppredict85; b86 predict86: the boat checks' entity copies
 import { rightClickSwings, clientWithholdsPlace } from "./right-click-swing.js"; // b80 spswing80 (b83 attack83: the C08 255)
 import { clientPlacementBlocker } from "./multiplayer/client-placement-entities.js"; // b82 mpplace82
@@ -331,7 +332,7 @@ import { MinecartRenderer } from "./minecart-renderer.js";
 import { CartSounds } from "./cart-sounds.js";
 import { BoatRenderer } from "./boat-renderer.js";
 import { Boats, BOAT_ITEM, boatClearCell } from "./boats.js";
-import { boatBoxProvider } from "./entity-collision.js";
+import { boatBoxProvider, clientBoatBoxProvider } from "./entity-collision.js";
 import { placementEntityBlocker } from "./placement-entities.js";
 import { linkVehicleRiders } from "./vehicle-riders.js";
 import { Hanging, pickHanging, hangingArrowTargets } from "./hanging.js";
@@ -524,6 +525,7 @@ function bindObjectTracker() {
       if (!c.present || !(live.health > 0)) continue;
       // The ender dragon is not collidable (EntityDragon.canBeCollidedWith is false): its seven client parts are, while the world lists them (reachesDragon)
       if (c.dragon?.parts) { for (const p of c.dragon.parts) out.push({ ref: c, kind: "dragonPart", box: p.box, answers: true, reach: (area) => reachesDragon(c, area) }); continue; }
+      if (live.type === "ender_crystal") { out.push({ ref: c, box: crystalBox(c.x, c.y, c.z) }); continue; } // b88 boatray88: the crystal's box is centred on posY
       const [w, h] = mobs.size(live);
       out.push({ ref: c, box: [c.x - w / 2, c.y, c.z - w / 2, c.x + w / 2, c.y + h, c.z + w / 2] });
     }
@@ -563,7 +565,7 @@ let cartSounds = null, spawners = null, minecarts = null, minecartRenderer = nul
 let boats = new Boats({ ids: entityIds }), boatRenderer = null;
 const placementEntities = placementEntityBlocker(() => ({ mobs, vehicles: [minecarts?.carts, boats?.carts], falling: falling?.entities, primed })); // b81 collide81 (block placement)
 // World.getCollidingBoundingBoxes adds EntityBoat's box: the player and mobs stand on and bump into boats (entity-collision.js).
-setEntityBoxes(boatBoxProvider({ get carts() { return boats?.carts; } }));
+setEntityBoxes(clientBoatBoxProvider(() => objectTracker.vehicleTargets().filter((t) => t.kind === "boat").map((t) => t.box), boatBoxProvider({ get carts() { return boats?.carts; } }))); // b88 boatray88: the client player on the boat copies
 setRocketEntityBoxes(boatBoxProvider({ get carts() { return boats?.carts; } })); // b69: a firework rocket stops against boats (fireworks-live.js)
 // Paintings and item frames (hanging.js): live entities, their renderer and the one under the crosshair.
 let hanging = new Hanging({ ids: entityIds }), hangingRenderer = null, aimedHanging = null;
@@ -780,6 +782,7 @@ function mpCopyTargets() {
   for (const { client: c, mob } of remoteMobs?.copies.values() ?? []) {
     if (!c.present || !(mob.health > 0)) continue;
     if (c.dragon?.parts) { for (const p of c.dragon.parts) out.push({ ref: c, kind: "dragonPart", box: p.box, answers: true, reach: (area) => reachesDragon(c, area) }); continue; }
+    if (mob.type === "ender_crystal") { out.push({ ref: c, box: crystalBox(c.x, c.y, c.z) }); continue; } // b88 boatray88: the crystal's box
     const [w, h] = remoteMobs.factory.size(mob);
     out.push({ ref: c, box: [c.x - w / 2, c.y, c.z - w / 2, c.x + w / 2, c.y + h, c.z + w / 2] });
   }
@@ -1737,7 +1740,7 @@ async function launch(record, prepared, { slice = false } = {}) {
       hurt:(box,amount,kind='anvil')=>{
         const intersects=b=>box[3]>b[0]&&box[0]<b[3]&&box[4]>b[1]&&box[1]<b[4]&&box[5]>b[2]&&box[2]<b[5];
         if(intersects(pushBox(position,PHYSICS.width,PHYSICS.height)))survival.anvilDamage(amount,kind);
-        for(const e of mobs.entities){const size=ENTITY_TYPES[e.type];if(intersects(pushBox(e,size.width,size.height)))mobs.attackEntityFrom(e,amount,{name:kind});}
+        for(const e of mobs.entities){const size=ENTITY_TYPES[e.type];if(intersects(e.type==="ender_crystal"?crystalBox(e.x,e.y,e.z):pushBox(e,size.width,size.height)))mobs.attackEntityFrom(e,amount,{name:kind});}
         hurtNonLiving(box,amount,kind,{items,xpOrbs,minecarts,boats,hanging},d=>{if(d.stack)items.spawn(copyStack(d.stack),d.x,d.posY,d.z,{delay:d.delay,motion:d.motion});});spawnHangingDrops(); // b74: items, orbs, carts, boats, frames and paintings in the box too (falling-hurt.js)
         saved=false;
       },
