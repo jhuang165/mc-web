@@ -1,0 +1,920 @@
+{
+ "target": "Minecraft Java 1.7.10",
+ "clientSha1": "e80d9b3bf5085002218d4be59e668bac718abbc6",
+ "classes": {
+  "sv": {
+   "name": "EntityLivingBase",
+   "sha256": "b6805bda2f7e2430bf0a90e34393c2621135bc50efe1fe28832a44a37d6e103d"
+  },
+  "sw": {
+   "name": "EntityLiving",
+   "sha256": "7b17d78a018b3cba009e4723ce8604d5ec7aa064d59d6683147fc12bc0ccfba3"
+  },
+  "tq": {
+   "name": "ServersideAttributeMap",
+   "sha256": "030057c0120d06b5676314512105254f71a28ad66b05415e148859b9ec6b4c2b"
+  },
+  "tl": {
+   "name": "BaseAttributeMap",
+   "sha256": "01b75f575288896f4e4b0374a109732d7ae53f0bcc4de7551b995e4ce0e1504f"
+  },
+  "tn": {
+   "name": "ModifiableAttributeInstance",
+   "sha256": "d4445a7b63db1778ae95e25e384399e4c18487d3ca177f2129721a9146afa63b"
+  },
+  "yj": {
+   "name": "SharedMonsterAttributes",
+   "sha256": "6d6c2517434d54f8ed9625c2936333c30552ee3cb490cf28587709deaa28e01b"
+  },
+  "rv": {
+   "name": "Potion",
+   "sha256": "89e286d6e1691083c89c48cb43af8d5f4302ad9bb0e07aeacccc7a1331b76e50"
+  },
+  "rw": {
+   "name": "PotionEffect",
+   "sha256": "cf9cb06ffcab99c4bc769d3e8775260e2b647e406a22f97f6e4ff4a1d039fec7"
+  },
+  "my": {
+   "name": "EntityTrackerEntry",
+   "sha256": "6d412d8d6bc168b6fc6c47c9b04705c4e443b72aba5ceba6b2bb44745dc83a4d"
+  }
+ },
+ "method": "Unchanged classes (tools/probes/MobPackets89Probe.java), Attributes3Probe's world double. dirty: every registered living class built by EntityList.createEntityByName (Entity.rand Random(1)); `made` is ServersideAttributeMap.getAttributeInstanceSet (tq.b(), the set EntityTrackerEntry.func_111190_b sends as S20 then clears) after the constructor, `egg` after onSpawnWithEgg(null) (the set cleared first), `read` after readFromNBT of the written tag into a fresh instance (cleared first), `watched` tq.c() (the S20 of tryStartWachingThis) after the egg call. effect: addPotionEffect on a pig, a horse and a zombie, the dirty set read and cleared after each call; `cleared` after clearActivePotions (sv.aP).",
+ "counts": {
+  "dirty": 29,
+  "effect": 3
+ },
+ "records": [
+  {
+   "case": "dirty",
+   "id": "Bat",
+   "made": [
+    "generic.maxHealth"
+   ],
+   "egg": [],
+   "read": [],
+   "watched": [
+    {
+     "name": "generic.maxHealth",
+     "base": 6,
+     "value": 6,
+     "mods": 0
+    },
+    {
+     "name": "generic.movementSpeed",
+     "base": 0.699999988079071,
+     "value": 0.699999988079071,
+     "mods": 0
+    }
+   ]
+  },
+  {
+   "case": "dirty",
+   "id": "Blaze",
+   "made": [
+    "generic.movementSpeed"
+   ],
+   "egg": [],
+   "read": [],
+   "watched": [
+    {
+     "name": "generic.maxHealth",
+     "base": 20,
+     "value": 20,
+     "mods": 0
+    },
+    {
+     "name": "generic.movementSpeed",
+     "base": 0.10000000149011612,
+     "value": 0.10000000149011612,
+     "mods": 0
+    }
+   ]
+  },
+  {
+   "case": "dirty",
+   "id": "CaveSpider",
+   "made": [
+    "generic.maxHealth",
+    "generic.movementSpeed"
+   ],
+   "egg": [],
+   "read": [],
+   "watched": [
+    {
+     "name": "generic.maxHealth",
+     "base": 12,
+     "value": 12,
+     "mods": 0
+    },
+    {
+     "name": "generic.movementSpeed",
+     "base": 0.800000011920929,
+     "value": 0.800000011920929,
+     "mods": 0
+    }
+   ]
+  },
+  {
+   "case": "dirty",
+   "id": "Chicken",
+   "made": [
+    "generic.maxHealth",
+    "generic.movementSpeed"
+   ],
+   "egg": [],
+   "read": [],
+   "watched": [
+    {
+     "name": "generic.maxHealth",
+     "base": 4,
+     "value": 4,
+     "mods": 0
+    },
+    {
+     "name": "generic.movementSpeed",
+     "base": 0.25,
+     "value": 0.25,
+     "mods": 0
+    }
+   ]
+  },
+  {
+   "case": "dirty",
+   "id": "Cow",
+   "made": [
+    "generic.maxHealth",
+    "generic.movementSpeed"
+   ],
+   "egg": [],
+   "read": [],
+   "watched": [
+    {
+     "name": "generic.maxHealth",
+     "base": 10,
+     "value": 10,
+     "mods": 0
+    },
+    {
+     "name": "generic.movementSpeed",
+     "base": 0.20000000298023224,
+     "value": 0.20000000298023224,
+     "mods": 0
+    }
+   ]
+  },
+  {
+   "case": "dirty",
+   "id": "Creeper",
+   "made": [
+    "generic.movementSpeed"
+   ],
+   "egg": [],
+   "read": [],
+   "watched": [
+    {
+     "name": "generic.maxHealth",
+     "base": 20,
+     "value": 20,
+     "mods": 0
+    },
+    {
+     "name": "generic.movementSpeed",
+     "base": 0.25,
+     "value": 0.25,
+     "mods": 0
+    }
+   ]
+  },
+  {
+   "case": "dirty",
+   "id": "EnderDragon",
+   "made": [
+    "generic.maxHealth",
+    "generic.movementSpeed"
+   ],
+   "egg": [],
+   "read": [],
+   "watched": [
+    {
+     "name": "generic.maxHealth",
+     "base": 200,
+     "value": 200,
+     "mods": 0
+    },
+    {
+     "name": "generic.movementSpeed",
+     "base": 0.10000000149011612,
+     "value": 0.10000000149011612,
+     "mods": 0
+    }
+   ]
+  },
+  {
+   "case": "dirty",
+   "id": "Enderman",
+   "made": [
+    "generic.maxHealth",
+    "generic.movementSpeed"
+   ],
+   "egg": [],
+   "read": [],
+   "watched": [
+    {
+     "name": "generic.maxHealth",
+     "base": 40,
+     "value": 40,
+     "mods": 0
+    },
+    {
+     "name": "generic.movementSpeed",
+     "base": 0.30000001192092896,
+     "value": 0.30000001192092896,
+     "mods": 0
+    }
+   ]
+  },
+  {
+   "case": "dirty",
+   "id": "EntityHorse",
+   "made": [
+    "generic.maxHealth",
+    "generic.movementSpeed"
+   ],
+   "egg": [
+    "generic.maxHealth",
+    "generic.movementSpeed",
+    "horse.jumpStrength"
+   ],
+   "read": [],
+   "watched": [
+    {
+     "name": "generic.maxHealth",
+     "base": 23,
+     "value": 23,
+     "mods": 0
+    },
+    {
+     "name": "generic.movementSpeed",
+     "base": 0.2557265496250837,
+     "value": 0.2557265496250837,
+     "mods": 0
+    },
+    {
+     "name": "horse.jumpStrength",
+     "base": 0.8562902877092383,
+     "value": 0.8562902877092383,
+     "mods": 0
+    }
+   ]
+  },
+  {
+   "case": "dirty",
+   "id": "Ghast",
+   "made": [
+    "generic.maxHealth",
+    "generic.movementSpeed"
+   ],
+   "egg": [],
+   "read": [],
+   "watched": [
+    {
+     "name": "generic.maxHealth",
+     "base": 10,
+     "value": 10,
+     "mods": 0
+    },
+    {
+     "name": "generic.movementSpeed",
+     "base": 0.10000000149011612,
+     "value": 0.10000000149011612,
+     "mods": 0
+    }
+   ]
+  },
+  {
+   "case": "dirty",
+   "id": "Giant",
+   "made": [
+    "generic.maxHealth",
+    "generic.movementSpeed"
+   ],
+   "egg": [],
+   "read": [],
+   "watched": [
+    {
+     "name": "generic.maxHealth",
+     "base": 100,
+     "value": 100,
+     "mods": 0
+    },
+    {
+     "name": "generic.movementSpeed",
+     "base": 0.5,
+     "value": 0.5,
+     "mods": 0
+    }
+   ]
+  },
+  {
+   "case": "dirty",
+   "id": "LavaSlime",
+   "made": [
+    "generic.maxHealth",
+    "generic.movementSpeed"
+   ],
+   "egg": [],
+   "read": [],
+   "watched": [
+    {
+     "name": "generic.maxHealth",
+     "base": 4,
+     "value": 4,
+     "mods": 0
+    },
+    {
+     "name": "generic.movementSpeed",
+     "base": 0.20000000298023224,
+     "value": 0.20000000298023224,
+     "mods": 0
+    }
+   ]
+  },
+  {
+   "case": "dirty",
+   "id": "MushroomCow",
+   "made": [
+    "generic.maxHealth",
+    "generic.movementSpeed"
+   ],
+   "egg": [],
+   "read": [],
+   "watched": [
+    {
+     "name": "generic.maxHealth",
+     "base": 10,
+     "value": 10,
+     "mods": 0
+    },
+    {
+     "name": "generic.movementSpeed",
+     "base": 0.20000000298023224,
+     "value": 0.20000000298023224,
+     "mods": 0
+    }
+   ]
+  },
+  {
+   "case": "dirty",
+   "id": "Ozelot",
+   "made": [
+    "generic.maxHealth",
+    "generic.movementSpeed"
+   ],
+   "egg": [],
+   "read": [],
+   "watched": [
+    {
+     "name": "generic.maxHealth",
+     "base": 10,
+     "value": 10,
+     "mods": 0
+    },
+    {
+     "name": "generic.movementSpeed",
+     "base": 0.30000001192092896,
+     "value": 0.30000001192092896,
+     "mods": 0
+    }
+   ]
+  },
+  {
+   "case": "dirty",
+   "id": "Pig",
+   "made": [
+    "generic.maxHealth",
+    "generic.movementSpeed"
+   ],
+   "egg": [],
+   "read": [],
+   "watched": [
+    {
+     "name": "generic.maxHealth",
+     "base": 10,
+     "value": 10,
+     "mods": 0
+    },
+    {
+     "name": "generic.movementSpeed",
+     "base": 0.25,
+     "value": 0.25,
+     "mods": 0
+    }
+   ]
+  },
+  {
+   "case": "dirty",
+   "id": "PigZombie",
+   "made": [
+    "generic.movementSpeed"
+   ],
+   "egg": [],
+   "read": [],
+   "watched": [
+    {
+     "name": "generic.maxHealth",
+     "base": 20,
+     "value": 20,
+     "mods": 0
+    },
+    {
+     "name": "generic.movementSpeed",
+     "base": 0.5,
+     "value": 0.5,
+     "mods": 0
+    }
+   ]
+  },
+  {
+   "case": "dirty",
+   "id": "Sheep",
+   "made": [
+    "generic.maxHealth",
+    "generic.movementSpeed"
+   ],
+   "egg": [],
+   "read": [],
+   "watched": [
+    {
+     "name": "generic.maxHealth",
+     "base": 8,
+     "value": 8,
+     "mods": 0
+    },
+    {
+     "name": "generic.movementSpeed",
+     "base": 0.23000000417232513,
+     "value": 0.23000000417232513,
+     "mods": 0
+    }
+   ]
+  },
+  {
+   "case": "dirty",
+   "id": "Silverfish",
+   "made": [
+    "generic.maxHealth",
+    "generic.movementSpeed"
+   ],
+   "egg": [],
+   "read": [],
+   "watched": [
+    {
+     "name": "generic.maxHealth",
+     "base": 8,
+     "value": 8,
+     "mods": 0
+    },
+    {
+     "name": "generic.movementSpeed",
+     "base": 0.6000000238418579,
+     "value": 0.6000000238418579,
+     "mods": 0
+    }
+   ]
+  },
+  {
+   "case": "dirty",
+   "id": "Skeleton",
+   "made": [
+    "generic.movementSpeed"
+   ],
+   "egg": [],
+   "read": [],
+   "watched": [
+    {
+     "name": "generic.maxHealth",
+     "base": 20,
+     "value": 20,
+     "mods": 0
+    },
+    {
+     "name": "generic.movementSpeed",
+     "base": 0.25,
+     "value": 0.25,
+     "mods": 0
+    }
+   ]
+  },
+  {
+   "case": "dirty",
+   "id": "Slime",
+   "made": [
+    "generic.maxHealth",
+    "generic.movementSpeed"
+   ],
+   "egg": [],
+   "read": [],
+   "watched": [
+    {
+     "name": "generic.maxHealth",
+     "base": 1,
+     "value": 1,
+     "mods": 0
+    },
+    {
+     "name": "generic.movementSpeed",
+     "base": 0.10000000149011612,
+     "value": 0.10000000149011612,
+     "mods": 0
+    }
+   ]
+  },
+  {
+   "case": "dirty",
+   "id": "SnowMan",
+   "made": [
+    "generic.maxHealth",
+    "generic.movementSpeed"
+   ],
+   "egg": [],
+   "read": [],
+   "watched": [
+    {
+     "name": "generic.maxHealth",
+     "base": 4,
+     "value": 4,
+     "mods": 0
+    },
+    {
+     "name": "generic.movementSpeed",
+     "base": 0.20000000298023224,
+     "value": 0.20000000298023224,
+     "mods": 0
+    }
+   ]
+  },
+  {
+   "case": "dirty",
+   "id": "Spider",
+   "made": [
+    "generic.maxHealth",
+    "generic.movementSpeed"
+   ],
+   "egg": [],
+   "read": [],
+   "watched": [
+    {
+     "name": "generic.maxHealth",
+     "base": 16,
+     "value": 16,
+     "mods": 0
+    },
+    {
+     "name": "generic.movementSpeed",
+     "base": 0.800000011920929,
+     "value": 0.800000011920929,
+     "mods": 0
+    }
+   ]
+  },
+  {
+   "case": "dirty",
+   "id": "Squid",
+   "made": [
+    "generic.maxHealth",
+    "generic.movementSpeed"
+   ],
+   "egg": [],
+   "read": [],
+   "watched": [
+    {
+     "name": "generic.maxHealth",
+     "base": 10,
+     "value": 10,
+     "mods": 0
+    },
+    {
+     "name": "generic.movementSpeed",
+     "base": 0.10000000149011612,
+     "value": 0.10000000149011612,
+     "mods": 0
+    }
+   ]
+  },
+  {
+   "case": "dirty",
+   "id": "Villager",
+   "made": [
+    "generic.movementSpeed"
+   ],
+   "egg": [],
+   "read": [],
+   "watched": [
+    {
+     "name": "generic.maxHealth",
+     "base": 20,
+     "value": 20,
+     "mods": 0
+    },
+    {
+     "name": "generic.movementSpeed",
+     "base": 0.5,
+     "value": 0.5,
+     "mods": 0
+    }
+   ]
+  },
+  {
+   "case": "dirty",
+   "id": "VillagerGolem",
+   "made": [
+    "generic.maxHealth",
+    "generic.movementSpeed"
+   ],
+   "egg": [],
+   "read": [],
+   "watched": [
+    {
+     "name": "generic.maxHealth",
+     "base": 100,
+     "value": 100,
+     "mods": 0
+    },
+    {
+     "name": "generic.movementSpeed",
+     "base": 0.25,
+     "value": 0.25,
+     "mods": 0
+    }
+   ]
+  },
+  {
+   "case": "dirty",
+   "id": "Witch",
+   "made": [
+    "generic.maxHealth",
+    "generic.movementSpeed"
+   ],
+   "egg": [],
+   "read": [],
+   "watched": [
+    {
+     "name": "generic.maxHealth",
+     "base": 26,
+     "value": 26,
+     "mods": 0
+    },
+    {
+     "name": "generic.movementSpeed",
+     "base": 0.25,
+     "value": 0.25,
+     "mods": 0
+    }
+   ]
+  },
+  {
+   "case": "dirty",
+   "id": "WitherBoss",
+   "made": [
+    "generic.maxHealth",
+    "generic.movementSpeed"
+   ],
+   "egg": [],
+   "read": [],
+   "watched": [
+    {
+     "name": "generic.maxHealth",
+     "base": 300,
+     "value": 300,
+     "mods": 0
+    },
+    {
+     "name": "generic.movementSpeed",
+     "base": 0.6000000238418579,
+     "value": 0.6000000238418579,
+     "mods": 0
+    }
+   ]
+  },
+  {
+   "case": "dirty",
+   "id": "Wolf",
+   "made": [
+    "generic.maxHealth",
+    "generic.movementSpeed"
+   ],
+   "egg": [],
+   "read": [],
+   "watched": [
+    {
+     "name": "generic.maxHealth",
+     "base": 8,
+     "value": 8,
+     "mods": 0
+    },
+    {
+     "name": "generic.movementSpeed",
+     "base": 0.30000001192092896,
+     "value": 0.30000001192092896,
+     "mods": 0
+    }
+   ]
+  },
+  {
+   "case": "dirty",
+   "id": "Zombie",
+   "made": [
+    "generic.movementSpeed"
+   ],
+   "egg": [
+    "generic.movementSpeed"
+   ],
+   "read": [
+    "generic.movementSpeed"
+   ],
+   "watched": [
+    {
+     "name": "generic.maxHealth",
+     "base": 20,
+     "value": 20,
+     "mods": 0
+    },
+    {
+     "name": "generic.movementSpeed",
+     "base": 0.23000000417232513,
+     "value": 0.3450000062584877,
+     "mods": 1
+    }
+   ]
+  },
+  {
+   "case": "effect",
+   "id": "Pig",
+   "speed": [
+    "generic.movementSpeed"
+   ],
+   "again": [
+    "generic.movementSpeed"
+   ],
+   "stronger": [
+    "generic.movementSpeed"
+   ],
+   "slow": [
+    "generic.movementSpeed"
+   ],
+   "boost": [
+    "generic.maxHealth"
+   ],
+   "regen": [],
+   "withEffects": [
+    {
+     "name": "generic.maxHealth",
+     "base": 10,
+     "value": 14,
+     "mods": 1
+    },
+    {
+     "name": "generic.movementSpeed",
+     "base": 0.25,
+     "value": 0.2974999991804361,
+     "mods": 2
+    }
+   ],
+   "cleared": [
+    "generic.maxHealth",
+    "generic.movementSpeed"
+   ],
+   "after": [
+    {
+     "name": "generic.maxHealth",
+     "base": 10,
+     "value": 10,
+     "mods": 0
+    },
+    {
+     "name": "generic.movementSpeed",
+     "base": 0.25,
+     "value": 0.25,
+     "mods": 0
+    }
+   ]
+  },
+  {
+   "case": "effect",
+   "id": "EntityHorse",
+   "speed": [
+    "generic.movementSpeed"
+   ],
+   "again": [
+    "generic.movementSpeed"
+   ],
+   "stronger": [
+    "generic.movementSpeed"
+   ],
+   "slow": [
+    "generic.movementSpeed"
+   ],
+   "boost": [
+    "generic.maxHealth"
+   ],
+   "regen": [],
+   "withEffects": [
+    {
+     "name": "generic.maxHealth",
+     "base": 53,
+     "value": 57,
+     "mods": 1
+    },
+    {
+     "name": "generic.movementSpeed",
+     "base": 0.22499999403953552,
+     "value": 0.2677499921694398,
+     "mods": 2
+    },
+    {
+     "name": "horse.jumpStrength",
+     "base": 0.7,
+     "value": 0.7,
+     "mods": 0
+    }
+   ],
+   "cleared": [
+    "generic.maxHealth",
+    "generic.movementSpeed"
+   ],
+   "after": [
+    {
+     "name": "generic.maxHealth",
+     "base": 53,
+     "value": 53,
+     "mods": 0
+    },
+    {
+     "name": "generic.movementSpeed",
+     "base": 0.22499999403953552,
+     "value": 0.22499999403953552,
+     "mods": 0
+    },
+    {
+     "name": "horse.jumpStrength",
+     "base": 0.7,
+     "value": 0.7,
+     "mods": 0
+    }
+   ]
+  },
+  {
+   "case": "effect",
+   "id": "Zombie",
+   "speed": [
+    "generic.movementSpeed"
+   ],
+   "again": [
+    "generic.movementSpeed"
+   ],
+   "stronger": [
+    "generic.movementSpeed"
+   ],
+   "slow": [
+    "generic.movementSpeed"
+   ],
+   "boost": [
+    "generic.maxHealth"
+   ],
+   "regen": [],
+   "withEffects": [
+    {
+     "name": "generic.maxHealth",
+     "base": 20,
+     "value": 24,
+     "mods": 1
+    },
+    {
+     "name": "generic.movementSpeed",
+     "base": 0.23000000417232513,
+     "value": 0.2737000042110681,
+     "mods": 2
+    }
+   ],
+   "cleared": [
+    "generic.maxHealth",
+    "generic.movementSpeed"
+   ],
+   "after": [
+    {
+     "name": "generic.maxHealth",
+     "base": 20,
+     "value": 20,
+     "mods": 0
+    },
+    {
+     "name": "generic.movementSpeed",
+     "base": 0.23000000417232513,
+     "value": 0.23000000417232513,
+     "mods": 0
+    }
+   ]
+  }
+ ]
+}

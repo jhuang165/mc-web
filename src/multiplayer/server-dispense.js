@@ -241,18 +241,24 @@ export class ServerDispense {
     }
     if (lane.potions?.projectiles.balls.length) this.tickPotions(lane);
     if (lane.arrows.list.length) {
-      const arrows = lane.arrows, targets = arrowTargets(this.targets(lane), false);
-      const ctx = { targets, mobs: lane === this ? mobs : undefined, survival: null, player: null, igniteTnt: lane === this ? (x, y, z, shooter) => this.igniteBlockTnt(x, y, z, ctx.tntPlacer ?? (shooter && typeof shooter === 'object' ? shooter : null)) : undefined, /* b87 blast87: aob.a(ahb,III,sa) takes zc.c when it is an EntityLivingBase: a skeleton's burning arrow makes it the placer */ hitPlayer: (a, ref, dmg) => this.hitPlayer(a, ref, dmg, mobs) };
-      for (const a of [...arrows.list]) {
-        if (a.ownerName && !a.owner) { a.owner = this.playerByName(a.ownerName) ?? undefined; if (a.owner) a.shooter = 'player'; } // a saved arrow finds its shooter again
-        ctx.hanging = this.hangingOf(dim)?.arrowHost(this.ownerOf(a)?.survival?.creative); // b68 mppaintings
-        ctx.tntPlacer = this.ownerOf(a); // b86 blastcover86: BlockTNT.onEntityCollidedWithBlock (aob.a(ahb,III,sa), bytecode-read): a burning arrow's TNT has the shooter as placer
-        this.credit(this.ownerOf(a), () => arrows.tickOne(world, a, ctx));
-      }
+      const arrows = lane.arrows, ctx = this.arrowCtx(lane);
+      for (const a of [...arrows.list]) this.tickArrow(lane, a, ctx);
       arrows.reap();
       this.collectArrows(lane);
     }
     this.drainArrows(lane);
+  }
+  // b89 mobpackets89: the arrow pass of tickLane split in two, so ServerProjectiles.tickJoined can update the arrows a skeleton shot during the mobs' pass
+  arrowCtx(lane) {
+    const mobs = lane.mobs, targets = arrowTargets(this.targets(lane), false);
+    const ctx = { targets, mobs: lane === this ? mobs : undefined, survival: null, player: null, igniteTnt: lane === this ? (x, y, z, shooter) => this.igniteBlockTnt(x, y, z, ctx.tntPlacer ?? (shooter && typeof shooter === 'object' ? shooter : null)) : undefined, /* b87 blast87: aob.a(ahb,III,sa) takes zc.c when it is an EntityLivingBase: a skeleton's burning arrow makes it the placer */ hitPlayer: (a, ref, dmg) => this.hitPlayer(a, ref, dmg, mobs) };
+    return ctx;
+  }
+  tickArrow(lane, a, ctx) {
+    if (a.ownerName && !a.owner) { a.owner = this.playerByName(a.ownerName) ?? undefined; if (a.owner) a.shooter = 'player'; } // a saved arrow finds its shooter again
+    ctx.hanging = this.hangingOf(lane.dim)?.arrowHost(this.ownerOf(a)?.survival?.creative); // b68 mppaintings
+    ctx.tntPlacer = this.ownerOf(a); // b86 blastcover86: BlockTNT.onEntityCollidedWithBlock (aob.a(ahb,III,sa), bytecode-read): a burning arrow's TNT has the shooter as placer
+    this.credit(this.ownerOf(a), () => lane.arrows.tickOne(lane.world, a, ctx));
   }
   drainArrows(lane) { for (const ev of lane.arrows.drain()) if (ev.sound && ev.position) this.fx.push({ k: 'sound', name: ev.sound, x: ev.position.x, y: ev.position.y, z: ev.position.z, volume: ev.volume ?? 1, pitch: ev.pitch ?? 1, dim: lane.dim }); }
   // EntityArrow.onCollideWithPlayer: a stuck, still arrow (pickup 1, or 2 for a Creative player) goes into the inventory of a player touching it, with the pop sound (queued by

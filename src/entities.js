@@ -321,6 +321,11 @@ export function aiMoveSpeed(e, multiplier) {
 }
 const MOVE_SPEED_MAX = ATTRIBUTE_RANGE["generic.movementSpeed"][1];
 function aiMoveSpeedReference(e, multiplier) {
+  // Saved movementSpeed base and modifiers (an imported Attributes list) apply as well (liveAttribute).
+  return f(multiplier * liveAttribute(e, "generic.movementSpeed", e.horse?.speed ?? ENTITY_TYPES[e.type].movement, moveSpeedModifiers(e)));
+}
+// b89 mobpackets89: the live movementSpeed modifiers ([amount, operation]) beside the stored ones; also the S20 rows of mob-tracked-attributes.js.
+export function moveSpeedModifiers(e) {
   // The baby boost counts once, from the child flag or a saved copy (an imported adult keeps it: mob-attributes.js hasStoredBabyBoost).
   // EntityPigZombie inherits EntityZombie.setChild, so a baby pigman carries the boost too (probed interchange `babyBoost`).
   const baby = ((e.type === "zombie" || e.type === "pigman") && e.growingAge < 0) || hasStoredBabyBoost(e) ? [[0.5, 1]] : [];
@@ -329,8 +334,7 @@ function aiMoveSpeedReference(e, multiplier) {
   const drink = e.type === "witch" && e.drinking ? [[-0.25, 0]] : [];
   // EntityOcelot.updateAITick (wn.bp) calls setSprinting(true) at move speed 1.33; EntityLivingBase.setSprinting adds "Sprinting speed boost" 0.3, operation 2.
   const sprint = e.type === "ocelot" && e.sprinting ? [[0.3, 2]] : [];
-  // Saved movementSpeed base and modifiers (an imported Attributes list) apply as well (liveAttribute).
-  return f(multiplier * liveAttribute(e, "generic.movementSpeed", e.horse?.speed ?? ENTITY_TYPES[e.type].movement, [...drink, ...baby, ...boost, ...sprint, ...speedModifiers(e)]));
+  return [...drink, ...baby, ...boost, ...sprint, ...speedModifiers(e)];
 }
 // Wheat (ade.O) breeds and tempts cows and sheep; chickens take wheat seeds (309, any
 // ItemSeeds in the original) through EntityAITempt / isBreedingItem.

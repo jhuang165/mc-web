@@ -22,12 +22,36 @@ export class ServerProjectiles extends ServerDispense {
     const mobs = this.sim.mobs?.mobs;
     if (this.hooked || !mobs) return;
     this.hooked = true;
-    mobs.shoot = (e, target, scale) => this.arrows.skeletonShoot(e, target, scale, this.sim.difficulty ?? mobs.difficulty);
+    mobs.shoot = (e, target, scale) => this.shot(this.arrows.skeletonShoot(e, target, scale, this.sim.difficulty ?? mobs.difficulty));
     const witch = this.potionsOf(this);
     witch.tick = () => {}; // EntityWorld.tick would advance them against a single player; tickPotions (every lane, every player) does it
     mobs.potions = witch;
   }
   tick() { this.hook(); super.tick(); }
+
+  // b89 mobpackets89: EntitySkeleton.attackEntityWithRangedAttack (yl.a(sv, F), bytecode-read) ends in World.spawnEntityInWorld: the arrow is appended to loadedEntityList, and
+  // World.updateEntities walks that list by index, so the arrow has its first update in the same pass, after the entities before it (the precedent: primed TNT, tickJoined). The
+  // port's arrows tick before the mobs (tickLane), so a skeleton's arrow waited for the next tick. Its join state is copied for the tracker (ThrownTracks.birth: the entry is made at
+  // the spawn, mn.a(sa) from onEntityAdded, so the S0E carries the state before this update), then tickJoined gives it its update.
+  shot(arrow) {
+    if (!arrow) return arrow;
+    this.tracksOf(this).birth([{ e: arrow }]);
+    (this.shotNow ??= []).push(arrow);
+    return arrow;
+  }
+  tickJoined() {
+    super.tickJoined();
+    const shot = this.shotNow;
+    if (!shot?.length) return;
+    this.shotNow = null;
+    const arrows = this.arrows, fresh = shot.filter(a => !a.dead && arrows.list.includes(a));
+    if (!fresh.length) return;
+    const ctx = this.arrowCtx(this);
+    for (const a of fresh) this.tickArrow(this, a, ctx);
+    arrows.reap();
+    this.collectArrows(this);
+    this.drainArrows(this);
+  }
 
   // ItemBow.onPlayerStoppedUsing for the C07 release: `ticks` of draw. Needs the bow still held; releaseBow decides power, damage, the arrow used up, the bow's wear and the sound.
   shootBow(p, ticks) {

@@ -170,6 +170,7 @@ export class ServerMobs {
     installServerWither(this); // b63: wither skulls aim at the nearest player, killWither for the players near a dying wither
     this.fireballWatch(); // b62: a ball sweeps the player nearest to it, and a punched ball credits its puncher
     const rules = host.rules; this.tracker = new SharedMobTracker(rules?.chunkRadius ?? 10); if (rules) this.tracker.limit = rules.trackerLimit; // b69 serverprops: view-distance (chunk radius clamped 3..20, tracker limit from the raw value) // b61: the world's one EntityTracker (server half)
+    this.tracker.birthList = () => this.mobs.entities; // b89 mobpackets89: the spawn state of mobs without an entry (server-mob-entries.js beforePass)
     this.views = new Map(); // player id -> { player, view (the AI's PlayerView), survival (the AI's adapter), tracker, known }
     this.probe = { x: 0, y: 0, z: 0 };
   }

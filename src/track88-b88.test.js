@@ -127,7 +127,8 @@ test("a late viewer gets S0F (the head byte), the full S1C, then S04 for each he
   assert.equal(types[0], "spawn");
   assert.equal(types[1], "meta", "S1C right after the S0F");
   const eq = rows.filter((x) => x.type === "equipment");
-  assert.deepEqual(eq.map((x) => [x.slot, x.item.id]), [[0, m.equipment[0].id], [4, 298]], "S04 for the held slots, in slot order");
+  // b89 mobpackets89: the entry is made at the spawn now, so the mob's first update's equipment check (EntityLivingBase.g starts empty) sends the held slots again after the spawn try
+  assert.deepEqual(eq.map((x) => [x.slot, x.item.id]), [[0, m.equipment[0].id], [4, 298], [0, m.equipment[0].id], [4, 298]], "S04 for the held slots, in slot order, then the first update's check");
   assert.ok(types.indexOf("equipment") > types.lastIndexOf("attach") && types.indexOf("equipment") > 1, "after the S1C and S1B");
   const copy = remote.copies.get(id).mob;
   assert.deepEqual(copy.equipment.map((x) => x?.id ?? null), [m.equipment[0].id, null, null, null, 298]);
@@ -144,8 +145,8 @@ test("the S0F head byte and the angle bytes: (byte)(int)(v * 256 / 360) as fz(sv
   const s = server(), p = join(s, "p", 1, 64.5, 64.5), q = join(s, "q", 2, 66.5, 64.5);
   const m = s.mobs.mobs.create("pig", 66.5, 10, 70.5); s.mobs.mobs.entities.push(m);
   let sp = null, read = null;
-  const step = s.mobs.tracker.serverStep.bind(s.mobs.tracker);
-  s.mobs.tracker.serverStep = (mobs, size) => { m.rotationYawHead = 200.7; m.rotationYaw = -33.3; const r = step(mobs, size); read = s.mobs.tracker.entries.get(m)?.entry.e ?? null; return r; };
+  // b89 mobpackets89: the S0F carries the spawn state (the entry is made at the spawn), so the angles are set before the mob's first tick
+  m.rotationYawHead = 200.7; m.rotationYaw = -33.3; read = { rotationYawHead: m.rotationYawHead, rotationYaw: m.rotationYaw };
   for (let i = 0; i < 10 && !sp; i++) { s.tick(); take(p); sp = take(q).find((x) => x.type === "spawn") ?? null; }
   assert.ok(sp && read);
   const f = Math.fround, b = (deg) => (Math.trunc(f(f(f(deg) * 256) / 360)) << 24) >> 24;
