@@ -1,0 +1,119 @@
+{
+ "target": "Minecraft Java 1.7.10",
+ "clientSha1": "e80d9b3bf5085002218d4be59e668bac718abbc6",
+ "classes": {
+  "gb": {
+   "name": "S0CPacketSpawnPlayer",
+   "sha256": "86a04098514c61585d9cbe8e39d9334c76d62c6fa32f9e9e484740f5418c27ad"
+  },
+  "hw": {
+   "name": "S1CPacketEntityMetadata",
+   "sha256": "be7813a6c38c61533cee670d87accc6110117d611ab1f71a7b41ffab1609f9b6"
+  },
+  "il": {
+   "name": "S20PacketEntityProperties",
+   "sha256": "c1e8d38a8c3e15dc971077016f227e511cd5970cb03aefe180c6f3e8070942b7"
+  },
+  "hz": {
+   "name": "S04PacketEntityEquipment",
+   "sha256": "bf8f39f50445f02853c034d4b2c2c4e7520e05686197419b8bfb877606740147"
+  },
+  "in": {
+   "name": "S1DPacketEntityEffect",
+   "sha256": "3db56789438420e49be4a610bb982a54297e4672d68cda599f396da1340f5143"
+  },
+  "hx": {
+   "name": "S1BPacketEntityAttach",
+   "sha256": "ca523565753db7b88bf85b5b50a3b375736a4f94ae398223e3dcbbdc5a4b27bf"
+  }
+ },
+ "method": "Unchanged classes (tools/probes/Console96Probe.java), MobPackets89Probe's world double. A real EntityPlayer (DifficultyProbe.player: EntityPlayer.entityInit watcher entries, applyEntityAttributes) with a GameProfile and an InventoryPlayer set by reflection; `bytes` = id VarInt + payload as the encoder fa counts it (S0C: name length, held or empty hand, with and without one profile property).",
+ "s0c": [
+  {
+   "case": "s0c",
+   "name": "A",
+   "held": 0,
+   "entityId": 0,
+   "bytes": 90
+  },
+  {
+   "case": "s0c",
+   "name": "A",
+   "held": 267,
+   "entityId": 0,
+   "bytes": 90
+  },
+  {
+   "case": "s0c",
+   "name": "Steve",
+   "held": 0,
+   "entityId": 0,
+   "bytes": 94
+  },
+  {
+   "case": "s0c",
+   "name": "Steve",
+   "held": 267,
+   "entityId": 0,
+   "bytes": 94
+  },
+  {
+   "case": "s0c",
+   "name": "Notch_The_Great",
+   "held": 0,
+   "entityId": 0,
+   "bytes": 104
+  },
+  {
+   "case": "s0c",
+   "name": "Notch_The_Great",
+   "held": 267,
+   "entityId": 0,
+   "bytes": 104
+  },
+  {
+   "case": "s0c",
+   "name": "Sixteen_Chars_16",
+   "held": 0,
+   "entityId": 0,
+   "bytes": 105
+  },
+  {
+   "case": "s0c",
+   "name": "Sixteen_Chars_16",
+   "held": 267,
+   "entityId": 0,
+   "bytes": 105
+  }
+ ],
+ "s0cProp": [
+  {
+   "case": "s0cProp",
+   "valueLen": 400,
+   "signatureLen": 684,
+   "bytes": 1191
+  }
+ ],
+ "follow": [
+  {
+   "case": "follow",
+   "s1cWhole": 37,
+   "s20": 69,
+   "s20Sprint": 94,
+   "attributes": 2,
+   "s04Sword": 14,
+   "s1d": 9,
+   "s1bAttach": 10
+  },
+  {
+   "case": "follow",
+   "s1cWhole": 37,
+   "s20": 69,
+   "s20Sprint": 94,
+   "attributes": 2,
+   "s04Sword": 14,
+   "s1d": 9,
+   "s1bAttach": 10
+  }
+ ]
+}

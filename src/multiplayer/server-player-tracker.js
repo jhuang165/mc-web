@@ -68,6 +68,7 @@ export class ServerPlayerTracker {
         if (q.type === 'look' || q.type === 'moveLook' || q.type === 'teleport') { st.yaw = q.yaw; st.pitch = q.pitch; }
         if (q.type === 'head') st.head = q.head;
       }
+      st.kinds = st.entry.packets.map(q => q.type); // b96 console96: the kinds the entry sent this tick, carried by the viewers' rows (`pk`) for /netstat
       st.entry.packets.length = 0;
     }
     return m;
@@ -119,7 +120,8 @@ export class ServerPlayerTracker {
       if (!tracked?.has(r.id)) return { id: r.id, name: r.name, far: true };
       if (r.vel) { const { vel, ...rest } = r; r = rest; } // b77 mpvelocity77: S12 of another player moves nothing on the copy; only the owner's row keeps `vel`
       const rel = r.riding ? null : this.released(dim, r.id);
-      return rel ? { ...r, ...rel } : r;
+      const pk = this.masters.get(dim)?.byId.get(r.id)?.kinds; // b96 console96
+      return rel || pk ? { ...r, ...rel, ...(pk ? { pk } : {}) } : r;
     });
   }
   messageFor(pid, message, dim = 0, key = message) {
