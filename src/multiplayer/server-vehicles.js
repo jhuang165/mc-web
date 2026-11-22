@@ -51,6 +51,7 @@ export function vehicleState(v) {
     s.t = v.type; if (v.type === 6) s.cmd = v.command?.command ?? ''; s.rl = v.rolling; s.rd = v.rollingDir; s.dm = r4(v.damage);
     if (v.type === 2 && v.lit) s.lit = 1;
     if (v.type === 3 && v.fuse >= 0) s.fuse = v.fuse;
+    if (v.dispOn) Object.assign(s, { dr: v.dispRaw | 0, dof: v.dispOffset ?? 6 }); // b96 portals96: watchers 20-22 (CustomDisplayTile from a save, /summon or a portal copy)
   }
   return s;
 }
