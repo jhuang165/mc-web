@@ -73,6 +73,7 @@ export class ServerPvp {
         slowServerAttacker(s); // b83 attack83: the server's EntityPlayerMP copy (yz.r inside `if (attackEntityFrom)`)
       }
       vs.thorns?.({ // EnchantmentHelper.func_151384_a(victim, attacker): the victim's Thorns hurt the attacker
+        byPlayer: true, // b95 credit95 (afv.a): a player attacker also visits the victim's held item (be())
         hurt: n => sim.damagePlayer(p, n, { name: 'thorns', from: this.fromOf(v), call: () => s.damage(n, 'thorns', true, 'thorns', this.fromOf(v)) }),
         sound: () => sim.soundsOut?.push({ name: 'damage.thorns', x: p.position.x, y: p.position.y, z: p.position.z, volume: 0.5, pitch: 1, dim: p.dimension | 0 }),
       });
