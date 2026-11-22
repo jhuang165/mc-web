@@ -262,6 +262,19 @@ const dispEntRecords = (m, ctx) => {
   return out;
 };
 /**
+ * b95 console95: another player's entity is the one removal that is NOT queued. EntityPlayerMP.func_152339_d (mw.d) sends `new S13(id)` through the connection at once for a
+ * player entity (instanceof EntityPlayer) and only adds other ids to destroyedItemsNetCache (executed, console95-reference.json: one packet of 6 bytes, nothing queued; the same
+ * call for a pig queues the id and sends nothing). So a tracked player who leaves the viewer's tracked set (out of range, another dimension, disconnect) costs one 6 byte S13 each,
+ * counted in the tick message that stops carrying his full row, never through `ctx.destroyed`. `ctx.peers` is the connection's set of tracked player ids; without it nothing is counted.
+ */
+const peerRemovals = (m, ctx) => {
+  const mem = ctx?.peers; if (!mem || !Array.isArray(m.players)) return [];
+  const now = new Set(m.players.filter((p) => p && p.id !== ctx.self && !p.far).map((p) => p.id)), out = [];
+  for (const id of [...mem]) if (!now.has(id)) { mem.delete(id); out.push([19, s13(1)]); }
+  for (const id of now) mem.add(id);
+  return out;
+};
+/**
  * b93 console93: the S13s a connection queued (`ctx.destroyed = { n }`, the player's destroyedItemsNetCache) go out in the player's next onUpdate (mw.h): the ids in packets of at most 127
  * (`Math.min(size, 127)`, the loop repeats until the list is empty), bytecode-read. Returns the records and empties the queue.
  */
@@ -316,7 +329,7 @@ const CLIENT_PACKETS = {
   dimRespawn: (m, ctx) => [[7, C[7]], ...bulks(m.world?.columns, ctx)],
   // S03 every 20 ticks (MinecraftServer.v: tickCounter % 20; `ctx.tick` is the server's counter, from 0 at launch, else the world's tick count); an S18 per pose of another
   // player (the tracker sends nobody their own); the cells; the S21 resends (partial, the changed sections)
-  tick: (m, ctx) => { const t = ctx?.tick ?? m.tick; return [...(Number.isInteger(t) && t % 20 === 0 ? [[3, C[3]]] : []), ...list(m.players).filter((p) => ctx?.self === undefined || p?.id !== ctx.self).map(() => [24, C[24]]),
+  tick: (m, ctx) => { const t = ctx?.tick ?? m.tick; return [...(Number.isInteger(t) && t % 20 === 0 ? [[3, C[3]]] : []), ...peerRemovals(m, ctx), ...list(m.players).filter((p) => ctx?.self === undefined || p?.id !== ctx.self).map(() => [24, C[24]]),
     ...cellRecords(m.changes), ...objectRecords(m.itrack, ctx), ...list(m.chunks).map((c) => [33, s21(c, ctx, false, Number.isInteger(c?.mask) ? c.mask : 0xffff)])]; },
   blocks: (m) => cellRecords(m.changes),
   chunkUnload: (m, ctx) => list(m.columns).map((c) => [33, unload(c, ctx)]),

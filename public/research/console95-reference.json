@@ -1,0 +1,42 @@
+{
+ "target": "Minecraft Java 1.7.10",
+ "clientSha1": "e80d9b3bf5085002218d4be59e668bac718abbc6",
+ "classes": {
+  "mw": {
+   "name": "EntityPlayerMP",
+   "sha256": "839ce9817bb732ef2942f56003811a9a8ec8ac3d88c05093386312941117123e"
+  },
+  "nh": {
+   "name": "NetHandlerPlayServer",
+   "sha256": "0dd86843814a5ff0b83716cc1a772bbc916667d2eabed098fdf2fb10cb706f7d"
+  },
+  "hq": {
+   "name": "S13PacketDestroyEntities",
+   "sha256": "9e2dd146c1fde6cb491482b2b2d0a5e2f96362488228f40bbfbedab1b7a569b3"
+  }
+ },
+ "method": "Unchanged classes (tools/probes/Console95Probe.java), MobPackets89Probe's world double. `removed`: EntityPlayerMP.func_152339_d (mw.d) called on an Unsafe-allocated viewer whose NetHandlerPlayServer sits on a recording stand-in for NetworkManager (tools/probes/stub95/ej.java; the real one cannot initialise on the probe libraries' netty): `queued` = ids added to destroyedItemsNetCache, `packets` = packets sent at once, `sent` = their class and size after the id VarInt.",
+ "removed": [
+  {
+   "case": "removed",
+   "entity": "pig",
+   "queued": 1,
+   "packets": 0,
+   "sent": ""
+  },
+  {
+   "case": "removed",
+   "entity": "player",
+   "queued": 0,
+   "packets": 1,
+   "sent": "hq:6"
+  }
+ ],
+ "s13": [
+  {
+   "case": "s13",
+   "ids": 1,
+   "bytes": 6
+  }
+ ]
+}
