@@ -208,7 +208,7 @@ public class EndermanWolfScenarios {
   static void run87() throws Exception {
     sc("b87wf-witch-fight-8801", 8801, 200, "K", new double[][] {{74.5, 64.5}, {64.5, 64.5}}, "0 look 270 0");
     sc("b87wf-witch-fight-near-8803", 8803, 200, "K", new double[][] {{71.5, 64.5}, {64.5, 64.5}}, "0 look 270 0");
-    for (int sd : new int[] {8811, 8812}) sc("b87wf-witch-melee-" + sd, sd, 165, "K", new double[][] {{68.5, 64.5}, {64.5, 64.5}}, "0 look 270 0", "0 hold 268", "30 melee 0", "90 melee 0", "140 health 0 1", "141 melee 0");
+    for (int sd : new int[] {8811, 8812}) sc("b87wf-witch-melee-" + sd, sd, 165, "K", new double[][] {{68.5, 64.5}, {64.5, 64.5}}, "30 melee 0", "90 melee 0", "140 health 0 1", "141 melee 0");
   }
   // Batch 88 (mobrec88, b88mr): the b47 serverplayer harness (the probe player a ticked EntityPlayerMP: its potion effects and hurt window run) with snowballs flying (every EntityThrowable after the mobs)
   // and spiders' entityToAttack as their target. Cave spiders (J) bite the player at night (bright 0) on Normal, Hard and Easy; the player kills the spider (health 1, then a blow) so the poison runs out with
@@ -374,6 +374,62 @@ public class EndermanWolfScenarios {
     for (int k = 3; k < mats.length; k++) out.add(new int[] {x - r + (k - 3) * 2, 0, z + r, x - r + (k - 3) * 2 + 1, 5, z + r, mats[k], 0});
     return out.toArray(new int[0][0]);
   }
+  // Batch 95 (mobrec95, b95mr): the b94mr harness. Part 1: long pigman and giant melee fights (600 ticks). Part 2 (sheep, squid) follows below.
+  static String[] repeat95(String op, int from, int to, int step) { java.util.ArrayList<String> o = new java.util.ArrayList<>(); for (int t = from; t < to; t += step) o.add(t + " " + op); return o.toArray(new String[0]); }
+  static String[] cat95(String[]... parts) { java.util.ArrayList<String> o = new java.util.ArrayList<>(); for (String[] p : parts) o.addAll(java.util.Arrays.asList(p)); return o.toArray(new String[0]); }
+  static void run95() throws Exception {
+    int[][] none = new int[0][0];
+    // pigman vs giant: the giant strikes the pigman every 40 ticks (pigman turns on it, its group joins), then the pigman is left alone
+    sc94("b95mr-pigman-giant-9801", 9801, 600, "zg", new double[][] {{80.5, 64.5}, {84.5, 64.5}, {64.5, 64.5}}, none, cat95(new String[] {"10 hit 0 1 5"}, repeat95("hit 1 0 5", 30, 600, 90)));
+    // the pigman strikes the giant (the legacy mob target switches on revenge), and a second pigman joins from far away
+    sc94("b95mr-giant-pigmen-9802", 9802, 600, "gzz", new double[][] {{80.5, 64.5}, {84.5, 64.5}, {90.5, 70.5}, {64.5, 64.5}}, none, cat95(new String[] {"10 hit 0 1 5"}, repeat95("hit 0 2 5", 120, 600, 120)));
+    // a pigman group against the player: the player strikes every 30 ticks for 600 ticks (anger timers, the group, the sounds, the hurt window)
+    sc94("b95mr-pigman-group-player-9803", 9803, 600, "zzz", new double[][] {{70.5, 64.5}, {73.5, 66.5}, {78.5, 62.5}, {64.5, 64.5}}, none, cat95(new String[] {"0 look 90 0"}, repeat95("melee 0", 20, 600, 30)));
+    // the same group, the player standing still after one blow (the anger runs out: becomeAngryAt sets 400 + nextInt(400))
+    sc94("b95mr-pigman-calm-9804", 9804, 700, "zzz", new double[][] {{70.5, 64.5}, {73.5, 66.5}, {78.5, 62.5}, {64.5, 64.5}}, none, "0 look 90 0", "20 melee 0");
+    // the player kills one pigman, the others stay angry and keep coming
+    sc94("b95mr-pigman-kill-9805", 9805, 600, "zzz", new double[][] {{68.5, 64.5}, {73.5, 66.5}, {78.5, 62.5}, {64.5, 64.5}}, none, "0 look 90 0", "0 health 0 6", "20 melee 0", "21 melee 0", "22 melee 0", "40 melee 1");
+    // giant against zombies: a zombie hits the giant every 60 ticks, a second zombie after 200
+    sc94("b95mr-giant-zombie-9806", 9806, 600, "gZZ", new double[][] {{80.5, 64.5}, {83.5, 64.5}, {90.5, 68.5}, {64.5, 64.5}}, none, cat95(new String[] {"10 hit 0 1 5"}, repeat95("hit 0 1 5", 60, 600, 60), repeat95("hit 0 2 5", 200, 600, 100)));
+    // zombie against giant: the giant hit by the zombie, and the zombie killed by the giant's blows (the giant's attack 50)
+    sc94("b95mr-zombie-giant-9807", 9807, 600, "Zg", new double[][] {{80.5, 64.5}, {83.5, 64.5}, {64.5, 64.5}}, none, cat95(new String[] {"5 hit 1 0 5"}, repeat95("hit 0 1 5", 40, 600, 80)));
+    // the player against a giant and a pigman together
+    sc94("b95mr-giant-player-9808", 9808, 600, "gz", new double[][] {{70.5, 64.5}, {73.5, 64.5}, {64.5, 64.5}}, none, cat95(new String[] {"0 look 90 0"}, repeat95("melee 0", 20, 600, 50)));
+    run95b();
+  }
+  static void run95b() throws Exception {
+    int[][] none = new int[0][0];
+    // Part 2: the two weakest families by executed records (sheep: 6, all as a wolf's prey; squid: 7). Sheep on a grass floor (y -1) with tall grass patches, the player 6 blocks away.
+    double[][] sp = {{70.5, 64.5}, {64.5, 64.5}};
+    int[][] grass = {{50, -1, 45, 95, -1, 85, 2, 0}};
+    int[][] tall = {{50, -1, 45, 95, -1, 85, 2, 0}, {66, 0, 60, 76, 0, 70, 31, 1}};
+    sc94("b95mr-sheep-idle-9811", 9811, 500, "H", sp, none);
+    sc94("b95mr-sheep-lamb-eat-9812", 9812, 500, "e", sp, grass);
+    sc94("b95mr-sheep-regrow-9813", 9813, 1200, "HH", new double[][] {{70.5, 64.5}, {72.5, 66.5}, {64.5, 64.5}}, tall, "0 shear 0 on", "0 shear 1 on");
+    sc94("b95mr-sheep-wheat-9814", 9814, 300, "H", sp, none, "0 look 270 0", "0 holdn 296 64", "20 walk 1 -0.1 0", "80 walk 1 0 0", "120 walk 1 0 0.1", "180 walk 1 0 0");
+    sc94("b95mr-sheep-breed-9815", 9815, 500, "HH", new double[][] {{70.5, 64.5}, {72.5, 64.5}, {64.5, 64.5}}, none, "0 color 0 4", "0 color 1 15", "0 holdn 296 64", "5 use 0", "6 use 1");
+    sc94("b95mr-sheep-lamb-follow-9816", 9816, 300, "He", new double[][] {{70.5, 64.5}, {75.5, 64.5}, {64.5, 64.5}}, none, "0 color 0 6");
+    sc94("b95mr-sheep-shear-9817", 9817, 200, "HHe", new double[][] {{70.5, 64.5}, {72.5, 64.5}, {70.5, 67.5}, {64.5, 64.5}}, none, "0 color 0 5", "0 color 2 5", "0 holdn 359 1", "10 use 0", "20 use 0", "30 use 2", "40 shear 1 on", "50 use 1");
+    sc94("b95mr-sheep-dye-9818", 9818, 160, "HH", new double[][] {{70.5, 64.5}, {72.5, 64.5}, {64.5, 64.5}}, none, "0 holdn 351 5", "10 use 0", "20 use 0", "30 shear 1 on", "40 use 1");
+    sc94("b95mr-sheep-hit-9819", 9819, 300, "H", new double[][] {{67.5, 64.5}, {64.5, 64.5}}, none, "0 look 270 0", "30 melee 0", "150 melee 0");
+    sc94("b95mr-sheep-kill-9820", 9820, 120, "HH", new double[][] {{67.5, 64.5}, {70.5, 64.5}, {64.5, 64.5}}, none, "0 look 270 0", "0 color 0 14", "0 shear 1 on", "0 health 0 2", "0 health 1 2", "10 melee 0", "40 melee 1");
+    sc94("b95mr-sheep-zombie-9821", 9821, 300, "HZ", new double[][] {{70.5, 64.5}, {72.5, 64.5}, {64.5, 64.5}}, none, "10 hit 0 1 3", "60 hit 0 1 3");
+    sc94("b95mr-sheep-fire-9822", 9822, 300, "H", sp, none, "10 fire 0 5");
+    sc94("b95mr-sheep-arrow-9823", 9823, 120, "H", new double[][] {{67.5, 64.5}, {64.5, 64.5}}, none, "0 color 0 3", "10 arrowkill 0 100");
+    // squid: kills in water with a sword, a mob's blow, an arrow, fire; two squids pushing; a squid against the surface and the floor; shallow water
+    int[][] pool = {{40, 0, 40, 90, 12, 90, 9, 0}};
+    int[][] shallow = {{40, 0, 40, 90, 1, 90, 9, 0}};
+    sc93("b95mr-squid-kill-9831", 9831, 120, "s", new double[][] {{66.5, 64.5, 1.5}, {64.5, 64.5, 0}}, true, pool, "0 look 270 0", "0 health 0 3", "10 melee 0");
+    sc93("b95mr-squid-zombie-9832", 9832, 300, "sZ", new double[][] {{70.5, 64.5, 2.5}, {70.5, 66.5, 5.0}, {64.5, 64.5, 0}}, true, pool, "10 hit 0 1 2", "40 hit 0 1 2", "90 hit 0 1 20");
+    sc93("b95mr-squid-arrow-9833", 9833, 160, "s", new double[][] {{70.5, 64.5, 4.5}, {64.5, 64.5, 0}}, true, pool, "10 arrowkill 0 2", "30 arrowkill 0 100");
+    sc93("b95mr-squid-fire-9834", 9834, 200, "s", new double[][] {{70.5, 64.5, 4.5}, {64.5, 64.5, 0}}, true, pool, "10 fire 0 10");
+    sc93("b95mr-squid-two-9835", 9835, 300, "ss", new double[][] {{70.5, 64.5, 5.5}, {70.7, 64.7, 5.5}, {64.5, 64.5, 0}}, true, pool);
+    sc93("b95mr-squid-shallow-9836", 9836, 300, "s", new double[][] {{70.5, 64.5, 0.5}, {64.5, 64.5, 0}}, true, shallow);
+    sc93("b95mr-squid-surface-9837", 9837, 300, "s", new double[][] {{70.5, 64.5, 11.5}, {64.5, 64.5, 0}}, true, pool);
+    sc93("b95mr-squid-wall-9838", 9838, 300, "s", new double[][] {{50.5, 64.5, 5.5}, {64.5, 64.5, 0}}, true, new int[][] {{40, 0, 40, 90, 12, 90, 9, 0}, {49, 0, 40, 49, 12, 90, 1, 0}});
+    sc93("b95mr-squid-far-9839", 9839, 500, "s", new double[][] {{120.5, 64.5, 5.5}, {64.5, 64.5, 0}}, true, new int[][] {{100, 0, 40, 150, 12, 90, 9, 0}});
+    sc93("b95mr-squid-dry-kill-9840", 9840, 200, "s", new double[][] {{67.5, 64.5, 0}, {64.5, 64.5, 0}}, false, new int[0][0], "0 look 270 0", "0 health 0 2", "30 melee 0");
+  }
   static void run94() throws Exception {
     // blue skulls: the random shots at coordinates (the head pass, Normal difficulty, no candidate in range) are dangerous skulls; their blasts cap block resistance at 0.8 (obsidian, ender chest, enchanting table, anvil go; bedrock, frame, command block stay)
     int[][] walls = box94(100.5, 64.5, 5, new int[] {49, 7, 1, 20, 3, 130, 116, 145, 120, 137});
@@ -437,7 +493,7 @@ public class EndermanWolfScenarios {
     sc("b45cw-player-adjacent-easy-7028", 7028, 60, "X", new double[][] {{65.5, 64.5}, {64.5, 64.5}}, "0 look 90 0", "0 difficulty 1", "0 hold 259", "2 use 0");
     sc("b45cw-player-adjacent-powered-7029", 7029, 60, "X", new double[][] {{65.5, 64.5}, {64.5, 64.5}}, "0 look 90 0", "0 power 0", "0 hold 259", "2 use 0");
     // death drops: the player's sword (a player kill: gunpowder, then the record roll is skeleton-only), a skeleton's arrow (record), fire, a charged creeper
-    for (int k = 0; k < 6; k++) sc("b45cw-kill-player-" + (7030 + k), 7030 + k, 40, "X", new double[][] {{67.5, 64.5}, {64.5, 64.5}}, "0 look 270 0", "0 hold 268", "1 health 0 1", "2 melee 0");
+    for (int k = 0; k < 6; k++) sc("b45cw-kill-player-" + (7030 + k), 7030 + k, 40, "X", new double[][] {{67.5, 64.5}, {64.5, 64.5}}, "1 health 0 1", "2 melee 0");
     for (int k = 0; k < 8; k++) sc("b45cw-kill-arrow-" + (7040 + k), 7040 + k, 40, "X", new double[][] {{67.5, 64.5}, {64.5, 64.5}}, "0 look 270 0", "1 arrowkill 0 100");
     sc("b45cw-kill-fire-7050", 7050, 120, "X", new double[][] {{76.5, 64.5}, {64.5, 64.5}}, "0 look 90 0", "1 fire 0 30", "2 health 0 1");
     sc("b45cw-kill-powered-7051", 7051, 40, "X", new double[][] {{67.5, 64.5}, {64.5, 64.5}}, "0 look 270 0", "0 power 0", "0 hold 268", "1 health 0 1", "2 melee 0");
@@ -464,7 +520,7 @@ public class EndermanWolfScenarios {
     EndermanWolfProbe.scenario("b45cw-witch-water-7119", 7119, 800, "K", new double[][] {{84.5, 64.5}, {64.5, 64.5}}, new String[] {"0 look 270 0"}, new int[0][0], new int[][] {{82, 0, 62, 87, 2, 67, 9, 0}}, true, 15);
     EndermanWolfProbe.scenario("b45cw-witch-water-7120", 7120, 800, "K", new double[][] {{84.5, 64.5}, {64.5, 64.5}}, new String[] {"0 look 270 0"}, new int[0][0], new int[][] {{82, 0, 62, 87, 2, 67, 9, 0}}, true, 15);
     sc("b45cw-witch-peaceful-7121", 7121, 60, "K", new double[][] {{74.5, 64.5}, {64.5, 64.5}}, "0 look 270 0", "0 difficulty 0");
-    for (int k = 0; k < 8; k++) sc("b45cw-witch-kill-" + (7130 + k), 7130 + k, 30, "K", new double[][] {{67.5, 64.5}, {64.5, 64.5}}, "0 look 270 0", "0 hold 268", "1 health 0 1", "2 melee 0");
+    for (int k = 0; k < 8; k++) sc("b45cw-witch-kill-" + (7130 + k), 7130 + k, 30, "K", new double[][] {{67.5, 64.5}, {64.5, 64.5}}, "1 health 0 1", "2 melee 0");
     sc("b45cw-witch-kill-arrow-7140", 7140, 30, "K", new double[][] {{67.5, 64.5}, {64.5, 64.5}}, "0 look 270 0", "1 arrowkill 0 100");
     sc("b45cw-witch-drink-kill-7141", 7141, 900, "K", new double[][] {{80.5, 64.5}, {64.5, 64.5}}, "0 look 270 0", "0 health 0 10", "0 hold 268");
   }
