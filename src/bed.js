@@ -252,10 +252,11 @@ export class BedSleep {
     if (setSpawn) this.spawn = [bx, by, bz];
     return feet;
   }
-  save() { return { spawn: this.spawn, bed: this.sleeping ? this.bed : null, timer: this.sleeping ? this.timer : 0 }; }
+  save() { return { spawn: this.spawn, bed: this.sleeping ? this.bed : null, timer: this.timer }; } // EntityPlayer.writeEntityToNBT writes sleepTimer awake too: 100..109 for the ten ticks after a bed wake
   restore(data) {
     this.reset();
     if (Array.isArray(data?.spawn) && data.spawn.length === 3 && data.spawn.every(Number.isInteger)) this.spawn = data.spawn;
+    if (!Array.isArray(data?.bed) && Number.isInteger(data?.timer) && data.timer > 0 && data.timer < 32768) this.timer = data.timer; // an awake player keeps SleepTimer (EntityPlayer.onUpdate counts it up to 110, then 0); a saved sleeper is resumed by launch
     return this;
   }
 }

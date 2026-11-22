@@ -836,7 +836,7 @@ export class Survival {
   // drowning, starvation, suffocation and the void bypass armor. player-damage-reference.json.
   // `source` is an optional DamageSource key (armor-enchantments.js damageSourceKey), else the reason names it.
   // generic.maxHealth: 20 plus Health Boost's 4 per level (the attribute modifier of potions.js).
-  get maxHealth() { return 20 + (this.effects?.get(21) ? 4 * (this.effects.get(21).amplifier + 1) : 0); }
+  get maxHealth() { const boost = this.effects?.get(21); return 20 + (boost && !boost.bare ? 4 * (boost.amplifier + 1) : 0); } // b96: a bare (loaded) Health Boost has no modifier
   // EntityLivingBase.heal: the amount capped at the maximum health.
   heal(n) { if (this.health > 0 && n > 0) this.health = Math.min(this.maxHealth, Math.fround(this.health + n)); }
   // `from` ({ x, z }) is the DamageSource entity (getEntity: a mob, the shooter of an arrow or fireball, the thrower of a potion). A fresh

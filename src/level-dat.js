@@ -13,6 +13,7 @@ import { DEFAULT_RULES } from './game-rules.js';
 import { itemStackFromNbt } from './region-import.js';
 import { parseStatsFile } from './stats.js';
 import { POTION_TYPES } from './potions.js';
+import { loadedMotion } from './player-nbt.js';
 
 const get = nbtGet;
 const MAX_TIME = BigInt(Number.MAX_SAFE_INTEGER);
@@ -165,7 +166,10 @@ export function javaPlayerFromNbt(tag, { convertItem = (c, o) => itemStackFromNb
   for (const e of list(tag, 'ActiveEffects', NBT.COMPOUND)) {
     const id = get(e, 'Id', NBT.BYTE, 0);
     if (!POTION_TYPES[id]) { lost.push(`ActiveEffects Id ${id}`); continue; }
-    effects.push({ id, amplifier: get(e, 'Amplifier', NBT.BYTE, 0), duration: get(e, 'Duration', NBT.INT, 0), ambient: get(e, 'Ambient', NBT.BYTE, 0) !== 0 });
+    const amplifier = get(e, 'Amplifier', NBT.BYTE, 0), key = POTION_TYPES[id].modifier && `${POTION_TYPES[id].key} ${amplifier}`;
+    // EntityLivingBase.readEntityFromNBT puts the effect in the map without applying it (executed, entnbt96); the attribute modifier is there only when the saved Attributes hold it.
+    const bare = !!key && !list(tag, 'Attributes', NBT.COMPOUND).some((a) => list(a, 'Modifiers', NBT.COMPOUND).some((m) => get(m, 'Name', NBT.STRING, '') === key));
+    effects.push({ id, amplifier, duration: get(e, 'Duration', NBT.INT, 0), ambient: get(e, 'Ambient', NBT.BYTE, 0) !== 0, ...(bare ? { bare } : {}) });
   }
   if (effects.some((e) => e.ambient)) lost.push('ActiveEffects.Ambient');
   // FoodStats.readNBT: all four only when foodLevel is present.
@@ -194,8 +198,8 @@ export function javaPlayerFromNbt(tag, { convertItem = (c, o) => itemStackFromNb
   const sleepingAt = sleeping && position ? [Math.floor(position.x), Math.floor(position.y), Math.floor(position.z)] : null;
   const selected = get(tag, 'SelectedItemSlot', NBT.INT, 0);
   if (selected < 0 || selected > 8) lost.push(`SelectedItemSlot ${selected} (clamped to the hotbar)`);
-  const motion = list(tag, 'Motion', NBT.DOUBLE);
-  if (motion.length === 3 && motion.some((v) => v !== 0 && Math.abs(v) > 0.08)) lost.push('Motion');
+  const motion = loadedMotion(list(tag, 'Motion', NBT.DOUBLE)); // kept in the server copy of the player (Entity.readFromNBT)
+  const sleepTimer = get(tag, 'SleepTimer', NBT.SHORT, 0); // a sleeper is woken at once (timer 0); an awake player keeps the value and counts it to 110
   const playerGameType = hasNumber(tag, 'playerGameType') ? gameTypeOf(get(tag, 'playerGameType', NBT.INT, -1)) : -1;
   lost.push(...[...tag.keys()].filter((k) => !PLAYER_KEYS.has(k)));
   return {
@@ -203,7 +207,7 @@ export function javaPlayerFromNbt(tag, { convertItem = (c, o) => itemStackFromNb
       health, ...food,
       air: get(tag, 'Air', NBT.SHORT, 300),
       fire: get(tag, 'Fire', NBT.SHORT, 0),
-      effects: effects.map(({ id, amplifier, duration }) => ({ id, amplifier, duration })),
+      effects: effects.map(({ id, amplifier, duration, bare }) => ({ id, amplifier, duration, ...(bare ? { bare } : {}) })),
       absorption: get(tag, 'AbsorptionAmount', NBT.FLOAT, 0),
       slots, armor, current: Math.max(0, Math.min(8, selected)), enderItems,
     },
@@ -215,7 +219,7 @@ export function javaPlayerFromNbt(tag, { convertItem = (c, o) => itemStackFromNb
     dimension: get(tag, 'Dimension', NBT.INT, 0),
     portalCooldown: get(tag, 'PortalCooldown', NBT.INT, 0),
     abilities,
-    flying: abilities.flying, spawnForced, sleeping, sleepingAt,
+    flying: abilities.flying, spawnForced, sleeping, sleepingAt, motion, sleepTimer: sleeping ? 0 : sleepTimer,
     // EntityPlayerMP.readEntityFromNBT: playerGameType (-1 when absent, then the world's GameType applies).
     playerGameType,
     bedSpawn,
