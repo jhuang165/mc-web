@@ -33,3 +33,42 @@ test("seeds 37 and 70: the killed unridden horse runs its AI and wanders (wi.bh 
 test("a killed horse with a saddled player rider never drifts, on any of 150 seeds (wi.bh: rider and saddle block the AI)", () => {
   for (let seed = 1; seed <= 150; seed++) assert.ok(run(seed, "player", true) < 1e-6, `seed ${seed}`);
 });
+
+// ---- 1. a rider whose eyes are in water steps off a horse (sv.C 278-310, Executed in horse95-reference.json) ----
+import { readFileSync } from "node:fs";
+import { makeSide, spawn, serverClick } from "../tools/sweep-use75.mjs";
+import { WATER } from "./world.js";
+const ref = JSON.parse(readFileSync(new URL("../public/research/horse95-reference.json", import.meta.url), "utf8"));
+const first = (name) => ref.scenarios.find((s) => s.name === name).ticks.findIndex((t) => !t.linked);
+
+const ridden = (waterTop) => {
+  const side = makeSide(), e = spawn(side, "horse");
+  e.horse.tame = true; e.horse.saddled = true; e.horse.speed = 0.3; e.horse.jump = 0.7; e.health = 30; e.growingAge = 0; e.onGround = true;
+  for (let x = 40; x <= 90; x++) for (let z = 40; z <= 90; z++) for (let y = 10; y <= waterTop; y++) side.s.world.put(x, y, z, WATER, 0, false);
+  side.p.survival.inventory.main[0] = null;
+  serverClick(side, e);
+  return { side, e };
+};
+const runN = (side, n) => { for (let i = 0; i < n; i++) side.s.tick(); };
+
+test("the reference: a shallow pool never unseats the rider, eyes in the water do (walkIn, startInside, deep)", () => {
+  assert.equal(first("dryControl"), -1);
+  assert.equal(first("walkIn"), -1, "2 deep: the eyes stay above the surface");
+  assert.equal(first("startInside"), 0);
+  assert.ok(first("deep") > 0);
+});
+
+test("dedicated server: a player riding a horse with the eyes in water is let go in the first tick", () => {
+  const { side, e } = ridden(13); // 4 cells deep: the seated eye (about y + 3.9) is under the surface at 14
+  assert.ok(side.p.mount && e.rider, "mounted");
+  runN(side, 2);
+  assert.equal(side.p.mount, null);
+  assert.equal(e.rider, null);
+});
+
+test("dedicated server: eyes above the water keep the rider on (2 cells deep, 30 ticks)", () => {
+  const { side, e } = ridden(11);
+  assert.ok(side.p.mount && e.rider);
+  runN(side, 30);
+  assert.ok(side.p.mount && e.rider, "still riding");
+});

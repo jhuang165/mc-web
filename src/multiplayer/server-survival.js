@@ -43,7 +43,10 @@ export class ServerSurvival {
     const s = p.survival;
     s.difficulty = this.sim.difficulty ?? NORMAL;
     if (!p.dead) {
-      tickPlayerEnvironment({ world: p.world, weather: this.sim.weather, position: p.position, survival: s, motion: p.motion, flying: p.flying, sleeping: !!p.sleeping }, moved, { tickWeather() {} });
+      const env = tickPlayerEnvironment({ world: p.world, weather: this.sim.weather, position: p.position, survival: s, motion: p.motion, flying: p.flying, sleeping: !!p.sleeping }, moved, { tickWeather() {} });
+      // b95 horse95 (Executed: Horse95Probe, horse95-reference.json): EntityLivingBase.onEntityUpdate (sv.C 278-310) ends the water branch with `!isRemote && isRiding() && ridingEntity instanceof
+      // EntityLivingBase -> mountEntity(null)`: a rider whose eyes are in water steps off a horse or pig at once (no health or damage test; boats and carts are not living, so they keep it).
+      if (env.underwater && p.mount?.mob && s.health > 0) this.sim.vehicles?.dismount(p);
       finishPlayerMovement(p, moved); p.inWater = !!moved?.inWater; // b63 mppvp: the critical-hit test of a melee attack reads it
       if (s.health <= 0) this.die(p);
     } else this.tickDeath(p);
