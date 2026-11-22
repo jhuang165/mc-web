@@ -318,6 +318,7 @@ export function installHorse(EntityWorld) {
   // then mw.a(sa)'s S1B and setPlayerLocation, whose S08 puts the client on that spot (`released`, vehicle-simulation.js finishVehicleTick). Executed: horse89-reference.json.
   proto.riderSneakOff = function (e) {
     const rider = e.rider;
+    if (!rider) return; // b95 horse95: main.js also calls this for a rider in water
     rider.sneakDismount = false;
     if (rider.sneakSeat) Object.assign(rider, rider.sneakSeat); // the live seat (vehicle-simulation.js); the client's own seat follows the tracked copy
     rider.sneakSeat = null;

@@ -3247,7 +3247,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   const inPortalNow = dims.tick(world, oldPosition, position, { creative: survival.creative, riding: !!rider.vehicle, alive: survival.health > 0 });
   portalTimer.tick(survival.effects.get(NAUSEA)?.duration ?? 0, inPortalNow);
   dims.portalFrame(portalTimer, inPortalNow);
-  tickPlayerEnvironment({ world, weather, position, survival, motion, flying, sleeping: bedSleep.sleeping }, { inWater, inLavaNow }, {
+  const env95 = tickPlayerEnvironment({ world, weather, position, survival, motion, flying, sleeping: bedSleep.sleeping }, { inWater, inLavaNow }, {
     tickWeather,
     slow: (f) => { velocity.x *= f; velocity.z *= f; }, // BlockSoulSand.onEntityCollidedWithBlock
     afterSurvival: () => {
@@ -3261,6 +3261,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
     },
     fizz: playerFizz,
   });
+  if (env95.underwater && rider.vehicle?.entity && survival.health > 0) mobs?.riderSneakOff?.(rider.vehicle.entity); // b95 horse95 (sv.C 278-310, Executed): eyes in water and riding an EntityLivingBase -> mountEntity(null), the same let-go as the sneak (horse-live.js)
   // Scheduled sand and gravel updates and the falling-block entities (WorldServer.tick).
   if (falling) {
     foreignTicks?.tick(mobs?.saveTotalTime());
