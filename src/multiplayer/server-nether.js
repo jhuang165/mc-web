@@ -130,7 +130,7 @@ export function buildNetherInside(sim, n, saved = {}) {
   sim.mobs = n.mobs;
   buildNetherVehicles(sim, n, saved.vehicles ?? null); // b63: after the mobs and the dispenser (a pig's seat, a dispenser's boat)
   n.pistons = new ServerPistons({ sim, dim: n.dim ?? NETHER, redstone: n.redstone, world: n.world, mobs: () => n.mobs, items: () => n.items, xp: () => n.xp, dispense: () => n.dispense, falling: () => n.falling, vehicles: () => n.vehicles }); // b66 mppistons
-  if (saved.items) n.items.load(saved.items, s => reader.read(s), 0);
+  if (saved.items) n.items.load(saved.items, s => reader.read(s), 0, { reload: true });
 }
 
 // What the Nether adds to the save (read back through `saveField`).

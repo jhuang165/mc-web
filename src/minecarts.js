@@ -713,7 +713,7 @@ export class Minecarts {
         (it.repairCost === undefined || Number.isInteger(it.repairCost)) && (it.displayName === undefined || typeof it.displayName === 'string') &&
         (it.unbreakable === undefined || typeof it.unbreakable === 'boolean'));
       let cart; try {
-        cart = m.spawnCart(c.type, { x: c.x, y: c.y, z: c.z, items: V.isContainerType(c.type) ? items : [], fuel: c.fuel, spawner: c.spawner, pushX: c.pushX, pushZ: c.pushZ, fuse: c.fuse, cooldown: c.cooldown, command: c.command, customName: typeof c.customName === "string" && c.customName ? c.customName : null });
+        cart = m.spawnCart(c.type, { x: c.x, y: c.y, z: c.z, items: V.isContainerType(c.type) ? items : [], fuel: c.fuel, spawner: c.spawner, pushX: c.pushX, pushZ: c.pushZ, fuse: c.fuse, cooldown: c.cooldown, command: c.command, customDisplay: c.customDisplay === true, displayTile: c.displayTile, displayData: c.displayData, displayOffset: c.displayOffset, customName: typeof c.customName === "string" && c.customName ? c.customName : null });
       } catch (e) { if (e instanceof LastOutputError) continue; throw e; } // xn.a(dh) threw on an invalid LastOutput: the cart does not load
       cart.restorePlayer = c.rider === true;
       if (isUuid(c.uuid)) cart.uuid = c.uuid.toLowerCase(); // Entity.writeToNBT's UUIDMost/UUIDLeast (entity-uuid.js)

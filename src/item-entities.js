@@ -534,17 +534,18 @@ export class ItemEntities {
   }
   // Reads saved items, and the stack piles written before 0.10 (one item per
   // stack at the pile's position, aged by the time the pile had left).
-  load(records, read, time = 0) {
+  // reload: a real world load (EntityItem is built by `new xk(world)` then NBT: pickup delay 0 and a random hover; neither is saved). In-session rebuilds keep both.
+  load(records, read, time = 0, { reload = false } = {}) {
     this.items = [];
     const ok = (...v) => v.every(Number.isFinite);
     for (const d of Array.isArray(records) ? records.slice(0, 512) : []) {
       if (d?.stack && ok(d.x, d.y, d.z)) {
         const stack = read(d.stack);
         if (!stack) continue;
-        const e = this.spawn(stack, d.x, d.y + W, d.z, { delay: ok(d.delay) ? Math.max(0, Math.min(40, d.delay)) : 0, motion: [ok(d.mx) ? d.mx : 0, ok(d.my) ? d.my : 0, ok(d.mz) ? d.mz : 0], death: !!d.death, empty: true });
+        const e = this.spawn(stack, d.x, d.y + W, d.z, { delay: !reload && ok(d.delay) ? Math.max(0, Math.min(40, d.delay)) : 0, motion: [ok(d.mx) ? d.mx : 0, ok(d.my) ? d.my : 0, ok(d.mz) ? d.mz : 0], death: !!d.death, empty: true });
         if (!e) continue;
         e.age = ok(d.age) ? Math.max(-32768, Math.min(32767, Math.trunc(d.age))) : 0; // b87 summon87: EntityItem.readEntityFromNBT keeps any short Age, a negative one too (summon87-reference.json); 6000 or more dies on the next update
-        if (ok(d.hover)) e.hover = d.hover;
+        if (!reload && ok(d.hover)) e.hover = d.hover;
         if (typeof d.owner === "string" && d.owner) e.owner = d.owner.slice(0, 64); // EntityItem Owner (func_145797_a)
         if (typeof d.thrower === "string" && d.thrower) e.thrower = d.thrower.slice(0, 64); // EntityItem Thrower (func_145799_b), set by a Q drop
         if (Number.isInteger(d.fire)) e.fire = e.loadedFire = d.fire; // b79 falling79: the saved Fire of an item that has not ticked since (serializeOne writes it back); b80 fluids80: Entity.readFromNBT also sets the counter, which burns on (fire80 load, executed)
