@@ -60,7 +60,7 @@ test("shears take 1 to 3 wool of the fleece colour once, wear 1 durability and l
   assert.equal(w.shear(e, 120, p), false);
   assert.equal(w.shear(e, 125, p), true);
   const events = w.drain(), drops = events.filter((x) => x.drop);
-  assert.equal(drops.length, 2);
+  assert.ok(drops.length >= 1 && drops.length <= 3, String(drops.length)); // b95 lead: the count is the sheep's own Entity.rand nextInt(3) + 1 (mobrec95, executed 9817), not the world random the old test fixed at 0.5
   assert.ok(drops.every((d) => d.drop === WOOL && d.damage === 14 && d.count === 1 && d.offsetY === 1));
   assert.deepEqual(events.find((x) => x.sound), { sound: "mob.sheep.shear", volume: 1, position: { x: 64, y: 0, z: 64 } });
   assert.equal(e.sheared, true);
