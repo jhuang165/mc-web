@@ -652,7 +652,7 @@ class AttackOnCollide extends Task {
   }
   shouldExecute() {
     const t = this.m.attackTarget;
-    if (!t || !t.alive) return false;
+    if (!t || !(t.heldAlive ?? t.alive)) return false; // b95 spcopy95: a held copy standing at its arrival
     if (this.kind && (this.kind === "player") !== !!t.isPlayer) return false;
     if (this.kind === "villager" && t.e?.type !== "villager") return false;
     this.path = this.m.navigator.getPathToEntityLiving(t);
@@ -660,7 +660,7 @@ class AttackOnCollide extends Task {
   }
   continueExecuting() {
     const t = this.m.attackTarget;
-    if (!t || !t.alive) return false;
+    if (!t || !(t.heldAlive ?? t.alive)) return false; // b95 spcopy95: a held copy standing at its arrival
     if (this.longMemory) return isWithinHome(this.m.e, Math.floor(t.x), Math.floor(t.y), Math.floor(t.z));
     return !this.m.navigator.noPath();
   }
@@ -844,7 +844,7 @@ class TargetBase extends Task {
   }
   continueExecuting() {
     const t = this.m.attackTarget;
-    if (!t || !t.alive) return false;
+    if (!t || !(t.heldAlive ?? t.alive)) return false; // b95 spcopy95: a held copy standing at its arrival
     const range = this.range();
     if (this.m.distSq(t) > range * range) return false;
     if (this.checkSight) {
@@ -1348,6 +1348,7 @@ class PlayerView {
     // `brokenSeat`: the seat a boat or cart broken by damage under the copy re-linked it at (EntityBoat / EntityMinecart.attackEntityFrom -> rider.mountEntity(this) ->
     // setPlayerLocation(s, t, u)); entities.js serverPlayerUpdate sends that S08 (server-process-player.js brokenMountLocation).
     this._left = false;
+    this.hint = null; this.home = null; // b95 spcopy95: see `depart`
     this.departing = false;
     this.absent = false;
     this.brokenSeat = null;
@@ -1403,7 +1404,29 @@ class PlayerView {
   // away-entities.js: that world has no EntityPlayerMP at all). Before, the b91 gates read only `_left`, so the away run's legacy mobs (closestPlayer with range -1), tamed pets (owner()),
   // villagers and the siege still found the far stand-in (executed against the real readers in spcopy92-b92.test.js).
   get left() { return this._left || this.absent === true; }
-  set left(v) { this._left = !!v; }
+  set left(v) { this._left = !!v; this.placeAtArrival(); }
+  // b95 spcopy95: transferPlayerToDimension runs the Teleporter BEFORE the old world's next tick (and before its save), so from then on the old world's mobs see the EntityPlayerMP
+  // (alive, not in playerEntities) at the arrival, in the new dimension's coordinates, and holders of it as a target keep it (EntityAITarget.continueExecuting reads isEntityAlive,
+  // the squared distance and the sight line only; bytecode-read vu.b, executed spcopy93). dimension-live.js computes the arrival before the save (`announceArrival`); `depart`
+  // hands it over: the copy's x / y / z read as the arrival until it comes back (a failed trip) or the world is replaced. `hint.scaled` is where World.updateEntityWithOptionalForce
+  // (oi.a(sa,int,mt,mt) calls mt.a(sa,Z) at the scaled position first) listed it in the old world's chunk: that chunk and the Y slice of its old height, NOT the arrival's (executed
+  // SpCopy95Probe: srcChunksHoldingPlayer is the scaled chunk, also when the Teleporter built the portal in the next chunk). An entity query of the old world finds it only through that list.
+  depart(hint) { this.hint = hint ?? null; this.placeAtArrival(); }
+  placeAtArrival() {
+    if (this._left && this.hint && !this.home) { this.home = { x: this.x, y: this.y, z: this.z }; this.x = this.hint.x; this.y = this.hint.y; this.z = this.hint.z; }
+    else if ((!this._left || !this.hint) && this.home) { this.x = this.home.x; this.y = this.home.y; this.z = this.home.z; this.home = null; }
+  }
+  // The target readers of a mob: alive for the copy that left but stands at a known arrival (the holder keeps it), else `alive`.
+  get heldAlive() { return this._alive && !this.absent && (!this._left || !!this.home); }
+  // World.getEntitiesWithinAABBExcludingEntity over the old world (ahb.b(sa,azt), bytecode-read): chunks floor((min - 2) / 16) .. floor((max + 2) / 16) in x and z, each chunk's Y slices
+  // clamp(floor((minY - 2) / 16)) .. clamp(floor((maxY + 2) / 16)) to 0..15. `box`: [minX, minY, minZ, maxX, maxY, maxZ]. True when the listing (see `depart`) is inside that range.
+  listedIn(box) {
+    const at = this._left && this.home ? this.hint?.scaled : null;
+    if (!at) return false;
+    const c = (v) => Math.floor(v), cl = (v) => Math.min(15, Math.max(0, v));
+    const cx = c(at.x) >> 4, cz = c(at.z) >> 4, sy = cl(c(at.y) >> 4);
+    return cx >= c((box[0] - 2) / 16) && cx <= c((box[3] + 2) / 16) && cz >= c((box[2] - 2) / 16) && cz <= c((box[5] + 2) / 16) && sy >= cl(c((box[1] - 2) / 16)) && sy <= cl(c((box[4] + 2) / 16));
+  }
   set alive(v) { this._alive = v; }
   // Entity.posY: the box minY, plus yOffset 0.2 while lying (sleepInBedAt; bytecode-read b68, sleeper-eye.js). Distances between entities read it.
   get posY() { return this.sleeping ? this.y + f(0.2) : this.y; }

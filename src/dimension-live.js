@@ -487,6 +487,7 @@ export class DimensionLive {
       const h = this.host, rec = h.active(), p = h.player();
       await this.settle();
       this.peeks.clear();
+      if (target && !exit && !death) await this.announceArrival(rec, p, target); // b95 spcopy95: transferPlayerToDimension runs the Teleporter before the old world's save point
       await h.save();
       this.awayIdle = null;
       const root = h.worlds().find((w) => w.id === rootIdOf(rec));
@@ -507,6 +508,31 @@ export class DimensionLive {
       h.advanceTicks?.(Math.round(ms / 50)); // the loading screen's ticks the Overworld clock and weather timers did not run (every trip, not only the return)
       return true;
     } finally { this.busy = false; this.quiet = false; this.setOverlay(0); }
+  }
+  // b95 spcopy95: the player's arrival, known before the old world's save point. Natively oi.a(mw,int) -> oi.a(sa,int,mt,mt) places the entity with the Teleporter first (the old world
+  // keeps ticking with the EntityPlayerMP at the arrival); the port builds the new world only after the save, so the same Teleporter runs here on a peek of the destination with COPIES of
+  // the shared portal cache and random (arrive repeats it for real and reaches the same spot: same terrain, edits, cache, clock). Nether and End destinations only: their peeks read cheap
+  // terrain; an Overworld arrival would need the Overworld's terrain on this thread (left to arrive). Any failure leaves the trip as before (no hint). host.arrivalHint gets
+  // { x, y, z, scaled: {x, y, z} }, `scaled` being the position the old world listed the entity at (transferTarget, before the Teleporter).
+  async announceArrival(rec, p, target) {
+    const h = this.host;
+    if (typeof h.arrivalHint !== "function" || target === OVERWORLD) return;
+    try {
+      const root = h.worlds().find((w) => w.id === rootIdOf(rec));
+      if (!root) return;
+      const from = dimensionOf(rec), tt = transferTarget(from, target, p.x, p.y, p.z, mcYaw(p.yaw ?? 0));
+      const edits = new Map(await this.readEdits(viewId(root.id, target)));
+      for (const [x, y, z, id, meta] of root.portalArrivals?.[target]?.writes ?? []) edits.set(`${x},${y},${z}`, id | (meta << 8));
+      const peek = new TerrainPeek(new DimensionWorld(root.seed, target), edits);
+      peek.dimension = target; peek.actualHeight = actualHeight(target); peek.seed = javaSeed(root.seed); peek.time = this.clock(root);
+      const kept = this.sharedCache(`${root.id}:${target}`, peek.time, peek.seed), random = new JavaRandom(0);
+      random.restore(kept.random.save());
+      const teleporter = new Teleporter(peek, { isSolid: solidId, random });
+      teleporter.cache = new Map([...kept.cache].map(([k, v]) => [k, { ...v }])); teleporter.keys = [...kept.keys];
+      const e = { x: tt.x, y: tt.y, z: tt.z, vx: p.motion?.x ?? 0, vy: p.motion?.y ?? 0, vz: p.motion?.z ?? 0, yaw: tt.yaw, pitch: 0, teleportDirection: this.state.teleportDirection ?? 0 };
+      drain(teleporter.placeInPortalSteps(e, tt.x, tt.y, tt.z, tt.yaw));
+      if (this.busy) h.arrivalHint({ x: e.x, y: e.y, z: e.z, scaled: { x: tt.x, y: tt.y, z: tt.z } });
+    } catch (error) { console.warn("arrival preview failed:", error); }
   }
   // Per physics tick (EntityPlayerSP.onLivingUpdate / Entity.onEntityUpdate / BlockPortal / BlockEndPortal). `prev`/`pos`: feet
   // positions of the previous and current tick. Returns whether the player is standing in a nether portal (overlay input).
