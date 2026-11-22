@@ -16,12 +16,12 @@ export const cartTypeOfSummon = (type) => (typeof type === "string" && type.star
 export function summonCart(minecarts, type, x, y, z, tag) {
   if (!minecarts) return false;
   const record = { x, y: y + Y_OFFSET, z, items: [] }, ignored = [];
+  if (type === 5) record.cooldown = tag instanceof Map ? nbtGet(tag, "TransferCooldown", NBT.INT, 0) : 0; // b96 portals96 (xr.a(dh) bytecode-read): CommandSummon builds the cart through createEntityFromNBT, and readEntityFromNBT getIntegers TransferCooldown unconditionally: absent reads 0 (the constructor's -1 is overwritten)
   if (tag instanceof Map) {
     if (hasNumber(tag, "Fuel")) record.fuel = nbtGet(tag, "Fuel", NBT.SHORT, 0);
     if (hasNumber(tag, "PushX")) record.pushX = nbtGet(tag, "PushX", NBT.DOUBLE, 0);
     if (hasNumber(tag, "PushZ")) record.pushZ = nbtGet(tag, "PushZ", NBT.DOUBLE, 0);
     if (hasNumber(tag, "TNTFuse")) record.fuse = nbtGet(tag, "TNTFuse", NBT.INT, -1);
-    if (hasNumber(tag, "TransferCooldown")) record.cooldown = nbtGet(tag, "TransferCooldown", NBT.INT, -1);
     if (nbtGet(tag, "CustomDisplayTile", NBT.BYTE, 0)) Object.assign(record, { customDisplay: true, displayTile: nbtGet(tag, "DisplayTile", NBT.INT, 0), displayData: nbtGet(tag, "DisplayData", NBT.INT, 0), displayOffset: nbtGet(tag, "DisplayOffset", NBT.INT, 0) });
     const name = nbtGet(tag, "CustomName", NBT.STRING, "");
     if (name) record.customName = name;

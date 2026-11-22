@@ -186,6 +186,7 @@ export class RemoteVehicles {
       if (v.boat) { v.timeSinceHit = s.th ?? 0; v.damage = s.dm ?? 0; v.forwardDir = s.fd ?? 1; } else {
         if (v.type === 6 && v.command && typeof s.cmd === 'string') v.command.command = s.cmd; // b63: watcher 23, what the command cart's GUI shows
         v.rolling = s.rl ?? 0; v.rollingDir = s.rd ?? 1; v.damage = s.dm ?? 0; v.lit = !!s.lit; v.fuse = s.fuse ?? -1;
+        if (Number.isInteger(s.dr)) Object.assign(v, { dispRaw: s.dr, dispOffset: Number.isInteger(s.dof) ? s.dof : 6, dispOn: 1 }); else v.dispOn = 0; // b96 portals96: watchers 20-22
       }
     }
     for (const key of message.del ?? []) {
