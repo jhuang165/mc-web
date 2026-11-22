@@ -145,6 +145,22 @@ Batch 79 (2026-11-16/18, ten tracks in `../wt79-<name>` on `batch79-<name>`, cut
 - Verification: the first full run hung on those two files; after the fix one full `npm test` on 536376793: 8964 tests, 8964 pass. Build and bridge tests ok. No browser checks.
 - Open: "Still open from batch 79" in `public/research/remaining-gaps.md`.
 
+Batch 96 (2026-11-22, ten tracks in `../wt96-<name>` on `batch96-<track>96`, cut from 0e2854338, merged --no-ff on `batch96-lead`; track agents ran on Sonnet, by request; shared rules `../artifacts/b96-lead/track-rules.md`; lead note `b96-lead-track.md`; no browser checks or full test runs in tracks, by request):
+- 0.125.0, by track (details in the `*-b96-track.md` notes and "Done in batch 96" in `public/research/remaining-gaps.md`):
+  - horse96: a killed player rider keeps its mount through the death ticks (`Kill96Probe`), on the server and in single player; a lead on a ridden horse was already native (`Horse96Probe`).
+  - mpobjects96: the Nether and End lanes flush block changes at `mq.b`'s place; village and siege ticks run at `mt.b`'s place.
+  - credit96: mob-on-mob Knockback along the attacker's yaw, which also slows the attacker; Looting on a player's splash-potion kill.
+  - console96: `/netstat` counts a player's spawn packets (`Console96Probe`) and each tracker's real per-tick packets.
+  - mpperf96: iterator-free tracker and tick loops behind `MC_MPPERF96=on|off|verify`; hashes unchanged.
+  - spcopy96: the Overworld arrival hint comes from the prewarmed cells, in the portal tick (`SpCopy96Probe`).
+  - portals96: a hopper cart's absent TransferCooldown reads 0; custom cart display reaches client copies.
+  - tiles96: `Tiles96Probe` fixes for jukebox tag and Damage, unregistered Record, raw skull drops and piston blockId.
+  - entnbt96: `Entnbt96Probe`: loaded effects are bare, saved potion Modifiers, player Motion and SleepTimer.
+  - mobrec96: 65 executed cow, mooshroom, pig, chicken, shears and bat records; fixes the breeding XP orb, the shears break draw and the baby growth nudge.
+- Lead: ten clean merges; no test edits needed.
+- Verification: one full `npm test` on the merged tree: 10685/10686. The failure was a load flake: `mpwither-b63` skull hit, 22/22 targeted reruns. Build and bridge tests ok. No browser checks.
+- Open: "Still open from batch 96" in `public/research/remaining-gaps.md`.
+
 Batch 95 (2026-11-21, ten tracks in `../wt95-<name>` on `batch95-<track>95`, cut from f5062f77e, merged --no-ff on `batch95-lead`; track agents ran on Sonnet, by request; shared rules `../artifacts/b95-lead/track-rules.md`; lead note `b95-lead-track.md`; no browser checks or full test runs in tracks, by request):
 - 0.124.0, by track (details in the `*-b95-track.md` notes and "Done in batch 95" in `public/research/remaining-gaps.md`):
   - horse95: a player rider whose eyes are in water steps off a horse or pig (`Horse95Probe`), server and single player; killed-horse drift is native unridden wander.
