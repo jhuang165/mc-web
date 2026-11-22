@@ -12,7 +12,7 @@
 - Executed world hashes (`--state`, 150 ticks), equal off = on = verify: travel `7459b9003fda4e13,ff999ef463b1dfa9,d5aa46cad2ae3123`, pen `d086204fea891b9e,ae05bf9079f7a664,3af862547ec8f96a`, terrain `f924502c999eb782,446240d4e983e152,38f38c4ab6dfde24` (same as the b94 baselines).
 
 ## Verification
-- `node --test --test-concurrency=2 src/mpperf95-b95.test.js`: 4 pass (flat vs PositionSet over 33 random/dense/far/colliding add sequences incl. a treeified case; nested acquire refused; explosionBlocks off = on = verify for 5 sizes x 3 seeds and the nested fallback; bench hashes pen/travel off/on/verify + mode95). Mutation (executed): `binLen >= 9` instead of `>= 8` fails test 1.
+- `node --test --test-concurrency=2 src/mpperf95-b95.test.js`: 4 pass (flat vs PositionSet over 33 random/dense/far/colliding add sequences incl. a treeified case; nested acquire refused; explosionBlocks off = on = verify for 5 sizes x 3 seeds and the nested fallback; bench hashes pen/travel off/on/verify + mode95). Mutation (executed): `binLen >= 9` instead of `>= 8` fails test 1 (the first version of the test did not catch it; added the 6..14 same-hash cases ending at a 9-entry bin).
 - Neighbours: the new test, mpperf86..90, 94 and every test naming explosion.js / explosionBlocks / PositionSet (53 files, concurrency 2): 518 pass / 0 fail. No full npm test, no build (imports only between existing modules), no browser.
 
 ## Found wrong in the batch 94 list

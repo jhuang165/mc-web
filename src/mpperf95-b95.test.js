@@ -24,6 +24,10 @@ test("flat set: same add results, size, order and treeified flag as PositionSet"
   assert.deepEqual(flatList(cube), refList(cube));
   const clash = Array.from({ length: 40 }, (_, i) => [i * 981131, 0 - i * 8976890 | 0, 0]);
   assert.deepEqual(flatList(clash), refList(clash));
+  for (let n = 6; n <= 14; n++) { // the add that makes a bin 9 long in a small table resizes at that moment: the final table size shows in the order
+    const some = [...Array.from({ length: n }, (_, i) => [i * 981131, 0 - i * 8976890 | 0, 0]), [1, 2, 3], [4, 5, 6], [7, 8, 9], [-3, 1, 2]];
+    assert.deepEqual(flatList(some), refList(some));
+  }
   assert.equal(refList(clash).tree, true, "the clash case does reach a 9-entry bin in a table of 64 or more");
 });
 
