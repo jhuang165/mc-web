@@ -36,10 +36,12 @@ export class ServerPortalTravel {
     const at = { dim, getId: (x, y, z) => p.world.get(x, y, z) };
     const lists = [['mob', p.mobs?.mobs.entities, p.mobs?.mobs], ['item', p.items?.items, p.items], ['orb', p.xp?.orbs, p.xp], ['cart', p.vehicles?.carts.carts, p.vehicles?.carts], ['boat', p.vehicles?.boats.carts, p.vehicles?.boats]];
     const departures = [];
-    for (const [kind, list, owner] of lists) {
+    for (let li = 0; li < lists.length; li++) { // b96 mpperf96: index loops (no array iterators; list / owner read from the row)
+      const row = lists[li], kind = row[0], list = row[1], owner = row[2];
       if (!list?.length) continue;
       let gone = null;
-      for (const e of list) {
+      for (let ei = 0; ei < list.length; ei++) {
+        const e = list[ei];
         if (e.dead) continue;
         // BlockPortal and BlockEndPortal collide only with an entity that has no rider and no vehicle (mob jockeys and a mob a player rides too): the countdown still runs.
         if (kind === 'mob' && (e.rider || e.vehicle || e.ridingEntity || e.riddenBy)) { this.portals.step(e, kind, { ...at, riding: true }); continue; }

@@ -110,7 +110,8 @@ export function fineSorted(buf, n) {
 export function pickupHits(items, feet, width, height, W, H, skip, posY) {
   const f = Math.fround, r = f(width) / 2 + 1, out = [];
   const x0 = feet.x - r, x1 = feet.x + r, y0 = feet.y - 0.5, y1 = feet.y + f(height) + 0.5, z0 = feet.z - r, z1 = feet.z + r;
-  for (const e of items) {
+  for (let i = 0; i < items.length; i++) { // b96 mpperf96: an index loop (`items` is the ItemEntities array; no iterator result per step)
+    const e = items[i];
     if (skip(e)) continue;
     const ex = e.x, ey = e.y, ez = e.z, a = ex - W, b = ey, c = ez - W, d = ex + W, g = ey + H, h = ez + W;
     if (!(d > x0 && a < x1 && g > y0 && b < y1 && h > z0 && c < z1)) continue;

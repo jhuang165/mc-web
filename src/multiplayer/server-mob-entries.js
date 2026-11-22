@@ -10,6 +10,7 @@ import { effectsInMapOrder } from '../mob-effects.js'; // b89 mobpackets89
 import { fast85, fail85, SIZE_SCRATCH } from '../mpperf85-fast.js'; // b85 mpperf85
 import { fast86, fail86 } from '../mpperf86-fast.js'; // b86 mpperf86
 import { fast87, EntryStamps } from '../mpperf87-fast.js'; // b87 mpperf87
+import { eachValue96 } from '../mpperf96-fast.js'; // b96 mpperf96: Map loops without an iterator
 import { releaseWatcher88 } from '../mpperf88-fast.js'; // b88 mpperf88
 import { fast91, fail91, newQuick91, sameAttrs91, noteAttrs91 } from '../mpperf91-fast.js'; // b91 mpperf91
 
@@ -28,6 +29,7 @@ export const effectPacket = (x) => ({ type: 'effect', effect: sbyte(x.id), ampli
 
 // A TrackerEntry whose `tracked` is "somebody tracks me" for the packets sent to everyone (send), and "this watcher tracks me" while `cur` is set (the range test of one player).
 // `dest` maps each emitted packet to the watchers it goes to, decided when it was emitted (a watcher that joins later gets the spawn instead).
+function tryWatcher96(w) { const b = this.birth; if (b === null) this.tryStartFor(w); else if (!w.late89) this.tryStartWith(w, b); }
 export class SharedEntry extends TrackerEntry {
   constructor(e, options, view, owner) {
     super(e, options, view);
@@ -75,8 +77,7 @@ export class SharedEntry extends TrackerEntry {
   // b89 mobpackets89: the try of addEntityToTracker (the entry made at the spawn) uses the spawn state; a player arriving in this server tick is not in the world yet natively (it is
   // tried after, at its own slot: serverStep's look loop).
   updatePlayerList() {
-    const b = this.birth;
-    for (const w of this.owner.watchers.values()) if (b === null) this.tryStartFor(w); else if (!w.late89) this.tryStartWith(w, b);
+    eachValue96(this.owner.watchers, tryWatcher96, this); // b96 mpperf96: no Map iterator per entry per tick
   }
   tryStartFor(w) {
     this.cur = w; this.view = w.view;
@@ -186,7 +187,7 @@ export class SharedMobTracker extends MobTracker {
     const w = this.watchers.get(id);
     if (!w) return;
     this.watchers.delete(id);
-    for (const en of this.entries.values()) en.entry.set.delete(w);
+    eachValue96(this.entries, (en) => en.entry.set.delete(w));
     releaseWatcher88(this.entries, w); // b88 mpperf88: the stale stamp slots (and a destination snapshot) naming the watcher are cleared
   }
   // b88 track88: before the world's entity pass (ServerMobs.tick, before EntityWorld.tick). EntityLivingBase.onUpdate's equipment check runs at the start of each update, so a change
@@ -197,13 +198,13 @@ export class SharedMobTracker extends MobTracker {
     const list = this.birthList?.(); // b89 mobpackets89: the spawn state of each mob without an entry (create)
     if (list) for (let i = 0; i < list.length; i++) { const e = list[i]; if (!this.entries.has(e) && !this.births.has(e)) this.births.set(e, { s: snapOf(e), t: this.tick }); }
     let look = null;
-    for (const w of this.watchers.values()) if (w.joining || w.peek?.()) (look ??= []).push(w);
-    for (const en of this.entries.values()) {
+    eachValue96(this.watchers, (w) => { if (w.joining || w.peek?.()) (look ??= []).push(w); });
+    eachValue96(this.entries, (en) => {
       const entry = en.entry;
       if (entry.e.equipment || entry.gear) entry.checkGear();
-      if (look === null) continue;
+      if (look === null) return;
       for (let k = 0; k < look.length; k++) if (en.seq > look[k].seq && !entry.set.has(look[k])) { entry.pre = snapOf(entry.e); /* b89 mobpackets89: the effects copied too (S1D) */ this.pres.push(entry); break; }
-    }
+    });
   }
   // EntityTracker.updateTrackedEntities once for the world: the removals, the joiners, the new entries, every entry's location once (one `ticks` for all watchers), then each
   // flagged player (moved more than 4 blocks) re-evaluates every entry in set order.
@@ -216,11 +217,11 @@ export class SharedMobTracker extends MobTracker {
   serverStep(mobs, size) {
     this.tick++;
     this.sizeOf = size;
-    for (const w of this.watchers.values()) {
+    eachValue96(this.watchers, (w) => {
       const p = w.pos();
       w.view.player = { x: p.x, y: p.y, z: p.z };
       w.watch.update(w.view.player);
-    }
+    });
     const fast = fast85.mode !== 'off', tick = this.tick;
     let alive = null;
     if (fast) { for (let i = 0; i < mobs.length; i++) { const en = this.entries.get(mobs[i]); if (en !== undefined) en.seen85 = tick; } } // b85 mpperf85: a stamp, not a Set of every mob
@@ -234,12 +235,12 @@ export class SharedMobTracker extends MobTracker {
     if (m86 === 'off') for (const [e, en] of this.entries) sweep(en, e);
     else this.entries.forEach(sweep); // b86 mpperf86: no [key, value] pair per entry (forEach visits in the same order and skips the deleted ones alike)
     let look = null, late = null; // b88 track88
-    for (const w of this.watchers.values()) {
+    eachValue96(this.watchers, (w) => {
       const fresh = !!w.fresh?.(); // b72 mpstream72: columns sent / unloaded this tick
       if (w.joining || fresh) (look ??= []).push(w);
       if (w.joining && w.sameTick?.()) { (late ??= []).push(w); w.late89 = true; } // b89 mobpackets89: not tried by the spawn try of this pass's new entries
       w.joining = false;
-    }
+    });
     if (!fast) for (const e of mobs) { const [width, height] = size(e); this.entryOf(e, width, height); }
     else for (let i = 0; i < mobs.length; i++) { // b85 mpperf85: an existing entry needs no size (entryOf only reads it for a new entry)
       const e = mobs[i];
@@ -249,25 +250,26 @@ export class SharedMobTracker extends MobTracker {
     if (late !== null) for (const w of late) { w.seq = ++this.seq; w.late89 = false; } // b88 track88: after this pass's new entries
     const order = this.walk(); // b86 mpperf86: the one walk list of this pass (stepEntry and tryStartFor add or remove no entry)
     let after = null; // b88 track88: [entry, watcher] tried after the pass (a newer entry without a copy)
-    if (look !== null) for (const e of order) {
-      const en = this.entries.get(e), entry = en.entry;
-      for (const w of look) {
+    if (look !== null) for (let oi = 0; oi < order.length; oi++) {
+      const en = this.entries.get(order[oi]), entry = en.entry;
+      for (let li = 0; li < look.length; li++) {
+        const w = look[li];
         if (entry.set.has(w)) continue;
         if (en.seq < w.seq) entry.tryStartFor(w); else if (entry.pre !== null) entry.tryStartWith(w, entry.pre); else (after ??= []).push(entry, w);
       }
     }
     for (const entry of this.pres) entry.pre = null;
     this.pres.length = 0;
-    for (const e of order) this.stepEntry(e);
+    for (let oi = 0; oi < order.length; oi++) this.stepEntry(order[oi]);
     if (after !== null) for (let k = 0; k < after.length; k += 2) after[k].tryStartFor(after[k + 1]);
-    for (const w of this.watchers.values()) {
+    eachValue96(this.watchers, (w) => {
       const p = w.view.player, g = w.flag, dx = p.x - g.x, dy = (p.y ?? 0) - g.y, dz = p.z - g.z;
       w.flagged = false;
       if (!g.initialised || dx * dx + dy * dy + dz * dz > 16) { g.x = p.x; g.y = p.y ?? 0; g.z = p.z; g.initialised = true; w.flagged = true; }
-      if (!w.flagged) continue;
+      if (!w.flagged) return;
       const list = m86 === 'off' ? this.walk() : order;
       if (m86 === 'verify') { const r = this.walk(); if (r.length !== list.length || r.some((e, k) => e !== list[k])) fail86('flagged walk'); }
-      for (const e of list) this.entries.get(e).entry.tryStartFor(w);
-    }
+      for (let k = 0; k < list.length; k++) this.entries.get(list[k]).entry.tryStartFor(w);
+    });
   }
 }
