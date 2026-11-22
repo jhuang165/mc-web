@@ -1403,6 +1403,7 @@ function save() {
   active.position = { x: position.x, y: position.y, z: position.z, yaw, pitch };
   active.portalState = dims.state.save();
   active.player = survival.serialize();
+  active.playerState = { onGround: grounded === true, fallDistance, hurtTime: survival.hurtTime, deathTime: screen === "dead" ? Math.min(deathTime, 20) : 0, sprinting: !!motion.sprinting }; // level.dat Player: OnGround, FallDistance, HurtTime, DeathTime and the sprint modifier (region-export.js levelNbt)
   active.achievements = achievements.save();
   active.stats = stats.save();
   active.scoreboard = scoreboardToJSON(scoreboard);
