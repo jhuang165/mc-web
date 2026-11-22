@@ -14,7 +14,7 @@
 
 ## Verification
 - `node --test --test-concurrency=2 src/mpperf96-b96.test.js`: 3 pass (eachValue96 off/on/verify over Map/Set/array with adds and deletes during the walk; hash-set keys and chunk order against the old loops; bench hashes pen and travel off/on/verify plus `mode96`). Mutation (executed): `i = -radius + 1` in the chunk order loop fails the chunk-order test.
-- Neighbours: see the last lines below.
+- Neighbours: the 61 test files naming the touched modules or mpperf86..96 (`--test-concurrency=2`, run in zsh with `${=FILES}`) were started; the run stalled after about 1650 output lines on the loaded Mac and I stopped it. No `not ok` line appeared in the output before it stalled; there is no final pass/fail count, so the neighbour result is partial (not verified to the end).
 - No full npm test intended, no build (imports only between existing modules), no browser. Incident: one early command chained after a failed `sed` ran `node --test` with an empty `$FILES` and started the whole suite; I stopped it with TaskStop after about 2 minutes (it had reported one failure in a dragon test, unrelated, not rerun).
 
 ## Found wrong in the batch 95 list
