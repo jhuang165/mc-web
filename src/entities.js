@@ -1947,7 +1947,7 @@ export class EntityWorld {
     // EntityOcelot.createChild (wn.b): a tamed parent's kitten has its owner and CatType.
     if(a.type==='ocelot')Object.assign(baby,kittenFields(a));
     // EntitySheep.createChild (wp.b(rx)): the lamb's colour is the parents' dye mix.
-    if(a.type==='sheep')baby.color=childColor(a.color,b.color,this.random);
+    if(a.type==='sheep'){const wr=(this.worldRandom??=new JavaRandom(Math.floor(Math.random()*2**48)));baby.color=childColor(a.color,b.color,()=>wr.nextBoolean()?0:1);} // b95 mobrec95 (Executed sheep-breed-9815, bytecode-read wp.a(wf,wf)): no dye recipe -> World.rand.nextBoolean() picks the mother's (true) or the partner's colour
     if(a.type==='horse')Object.assign(baby,horseChildFields(a,b,entityRandom(a)));
     return baby;
   }
@@ -2155,8 +2155,8 @@ export class EntityWorld {
   shear(e,id,survival){
     if(!this.entities.includes(e)||e.type!=='sheep'||id!==125||e.sheared||e.growingAge<0)return false;
     if(!survival.creative&&!survival.count(id))return false;
-    const r=this.random,n=1+Math.floor(r()*3);e.sheared=true;
-    for(let i=0;i<n;i++){const my=f(r()*f(0.05)),mx=f(f(r()-r())*f(0.1)),mz=f(f(r()-r())*f(0.1));
+    const r=entityRandom(e),n=1+r.nextInt(3);e.sheared=true; // b95 mobrec95: EntitySheep.interact draws on the sheep's own Entity.rand (executed b95mr-sheep-shear-9817), not the world's
+    for(let i=0;i<n;i++){const my=f(r.nextFloat()*f(0.05)),mx=f(f(r.nextFloat()-r.nextFloat())*f(0.1)),mz=f(f(r.nextFloat()-r.nextFloat())*f(0.1));
       this.emitLoot({drop:WOOL,count:1,damage:e.color,offsetY:1,kick:[mx,my,mz],position:{x:e.x,y:e.y,z:e.z}});}
     this.events.push({sound:'mob.sheep.shear',volume:1,position:{x:e.x,y:e.y,z:e.z}});
     if(!survival.creative)survival.wear(id,1);
@@ -3428,6 +3428,7 @@ export class EntityWorld {
     // EntityLivingBase.moveForward is one field: the previous tick's x 0.98 decay (walk) carries over when the
     // legacy action state leaves it unset (no waypoint beyond width x 2).
     st.moveForward = f(f(st.moveForward || 0) * f(0.98));
+    st.entityAge = e.idle || 0; // b95 mobrec95: the port's idle counter is EntityLiving.entityAge (a hit resets it); the giant never synced it, so a struck giant kept aging toward the 1 in 800 roll
     if (st.attackTime > 0) st.attackTime--;
     if (this.ai.brightness(Math.floor(e.x), Math.floor(e.y + f(t.height * 0.66)), Math.floor(e.z)) > 0.5) st.entityAge += 2;
     if (fast89.mode === "off" || m.senseCache.size !== 0) // b89 mpperf89: Map.prototype.clear allocates even on an empty map
@@ -3457,6 +3458,7 @@ export class EntityWorld {
     };
     creatureActionState(st, env);
     st.randomYaw = f(f(st.randomYaw || 0) * f(0.9)); // EntityLivingBase.onLivingUpdate: randomYawVelocity *= 0.9F after the action state
+    e.idle = st.entityAge;
     e.rotationYaw = st.rotationYaw; e.rotationPitch = st.rotationPitch;
     e.rotationYawHead = e.rotationYaw; // as the silverfish (sw.e)
     e.moveForward = st.moveForward; e.jumping = st.jumping;
