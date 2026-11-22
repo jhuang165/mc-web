@@ -72,3 +72,15 @@ export function profileOfSkullTile(entries) {
 }
 /** TileEntitySkull.writeToNBT's Owner entry for a stored tile (none without a profile). Native writes no ExtraType. */
 export const skullOwnerEntry = (tile) => (tile?.profile ? tag(NBT.COMPOUND, profileToNbt(tile.profile)) : null);
+
+/**
+ * TileEntitySkull keeps SkullType and Rot as raw bytes (b95 tiles95, executed: type 7, Rot 20 and Rot -1 are written back unchanged). TileEntitySkullRenderer's
+ * switch sends every type outside 0-4 to the skeleton skin (bytecode-read bms: default goes to case 0) and the rotation is drawn mod 16, so the port's `type` is
+ * 0 there and `rot` is masked; `rawType` / `rawRot` carry the stored byte only when it differs, and the exporter writes them.
+ */
+export function skullBytes(type, rot) {
+  const rawType = (type << 24) >> 24, rawRot = (rot << 24) >> 24, out = { type: rawType >= 0 && rawType <= 4 ? rawType : 0, rot: rawRot & 15 };
+  if (rawType !== out.type) out.rawType = rawType;
+  if (rawRot !== out.rot) out.rawRot = rawRot;
+  return out;
+}

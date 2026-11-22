@@ -7,15 +7,14 @@
 import { NBT } from './nbt.js';
 import { toOriginal } from './block-registry.js';
 import { compoundFromJson } from './spawner-data.js';
-import { readContainerTile, itemFromOriginal } from './region-import.js';
+import { readContainerTile, itemFromOriginal, itemStackFromNbt, jukeboxStackFromNbt } from './region-import.js';
 import { nbtGet, hasNumber } from './nbt-get.js';
 import { getStringAny } from './nbt-string.js';
 import { readNBT as readSpawner, spawnerJSON, makeSpawner } from './mob-spawner.js';
 import { writeCommandBlock, readCommandBlock } from './command-block.js';
 import { LastOutputError } from './chat-component.js';
 import { writeNoteTile, readNoteTile } from './note-blocks.js';
-import { writeJukeboxTile, readJukeboxTile } from './jukebox.js';
-import { isDisc, canonicalDisc } from './note-jukebox-content.js';
+import { writeJukeboxTile, readJukeboxStack } from './jukebox.js';
 import { profileOfSkullTile, skullOwnerEntry } from './skull-profile.js';
 import { potNbtOf, potFromNbt, potContents, setPotContents } from './stone-utility.js';
 
@@ -49,11 +48,11 @@ const OTHER = {
   // TileEntitySkull.readFromNBT: SkullType and Rot bytes, then the Owner compound or ExtraType name of a player head.
   Skull({ tag, x, y, z, host }) {
     if (!host.skulls) return false;
-    const old = host.skulls.tile(x, y, z), base = new Map([['SkullType', entry(NBT.BYTE, old?.type ?? 0)], ['Rot', entry(NBT.BYTE, old?.rot ?? 0)]]);
+    const old = host.skulls.tile(x, y, z), base = new Map([['SkullType', entry(NBT.BYTE, old?.rawType ?? old?.type ?? 0)], ['Rot', entry(NBT.BYTE, old?.rawRot ?? old?.rot ?? 0)]]);
     const owner = skullOwnerEntry(old);
     if (owner) base.set('Owner', owner);
     const merged = overlay(base, tag);
-    host.skulls.create(x, y, z, Math.max(0, Math.min(4, nbtGet(merged, 'SkullType', NBT.BYTE, 0))), nbtGet(merged, 'Rot', NBT.BYTE, 0) & 15, '', profileOfSkullTile(merged));
+    host.skulls.create(x, y, z, nbtGet(merged, 'SkullType', NBT.BYTE, 0), nbtGet(merged, 'Rot', NBT.BYTE, 0), '', profileOfSkullTile(merged));
     return true;
   },
   // TileEntityFlowerPot.readFromNBT: Item and Data ints; b81: a registered item the port does not draw is kept (stone-utility.js potFromNbt).
@@ -77,12 +76,12 @@ const OTHER = {
     tile.note = readNoteTile(overlay(writeNoteTile(tile, x, y, z), tag)).note;
     return true;
   },
-  // TileEntityJukebox.readFromNBT: RecordItem, else a legacy Record id; the port's jukebox holds discs only.
+  // TileEntityJukebox.readFromNBT: RecordItem, else a legacy Record id; any stack since b95.
   RecordPlayer({ tag, x, y, z, host }) {
     const tile = host.music?.jukeboxes.tile(x, y, z);
     if (!tile) return false;
-    const { record } = readJukeboxTile(overlay(writeJukeboxTile(tile, x, y, z), tag));
-    tile.record = record && isDisc(record.id) ? { id: canonicalDisc(record.id), count: 1, damage: 0 } : null;
+    const { record } = readJukeboxStack(overlay(writeJukeboxTile(tile, x, y, z), tag), jukeboxStackFromNbt);
+    tile.record = record; // b95 tiles95: any stack
     return true;
   },
   // TileEntityBeacon.readFromNBT: Primary, Secondary and Levels ints.

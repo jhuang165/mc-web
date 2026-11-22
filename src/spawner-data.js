@@ -2,15 +2,17 @@
 // An entry is { type, weight, props } where `props` is the Properties compound as a src/nbt.js Map, so /summon-style tags
 // and region NBT feed it unchanged. JSON helpers keep a save free of Maps and BigInts. Notes: public/research/spawner-cart.md.
 import { NBT } from "./nbt.js";
+import { getStringAny } from "./nbt-string.js";
 
 const MINECART_TYPES = ["MinecartRideable", "MinecartChest", "MinecartFurnace"];
 const int = (t) => (t && typeof t.value === "number" ? t.value | 0 : undefined);
 
-// agr(logic, compound): Weight (int, 0 when absent), Properties (compound) and Type (string, default "Pig"); the legacy Type "Minecart"
+// agr(logic, compound): Weight (int, 0 when absent), Properties (compound) and Type (getString: "" when absent, any other tag as its toString; b95 tiles95, executed:
+// an entry with no Type is written back with Type "" and spawns nothing, it is not a Pig); the legacy Type "Minecart"
 // becomes MinecartRideable, MinecartChest or MinecartFurnace by Properties.Type (0, 1, 2; absent is 0, anything else stays "Minecart").
-export function readEntry(tag, fallbackType = "Pig") {
+export function readEntry(tag, fallbackType = "") {
   const props = tag.get("Properties")?.type === NBT.COMPOUND ? tag.get("Properties").value : new Map();
-  let type = tag.get("Type")?.type === NBT.STRING ? tag.get("Type").value : fallbackType;
+  let type = getStringAny(tag, "Type", fallbackType);
   if (type === "Minecart") type = MINECART_TYPES[int(props.get("Type")) ?? 0] ?? type; // a Properties.Type outside 0..2 keeps "Minecart"
   return { type, weight: tag.get("Weight") && typeof tag.get("Weight").value === "number" ? int(tag.get("Weight")) : 0, props };
 }

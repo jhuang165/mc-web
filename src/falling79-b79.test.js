@@ -15,7 +15,7 @@ import { Beacons } from './pyramid.js';
 import { potFromNbt, potContents } from './stone-utility.js';
 import { newCommandBlock, readCommandBlock } from './command-block.js';
 import { readNoteTile } from './note-blocks.js';
-import { readJukeboxTile } from './jukebox.js';
+import { readJukeboxStack } from './jukebox.js';
 import { isDisc, canonicalDisc } from './note-jukebox-content.js';
 import { World } from './world.js';
 import { nbtGet } from './nbt-get.js';
@@ -55,12 +55,12 @@ function nativeProj(name, t) {
     }
     case 'skull': {
       const o = t.get('Owner')?.value;
-      return { type: Math.max(0, Math.min(4, t.get('SkullType').value)), rot: t.get('Rot').value & 15, owner: o ? [str(o, 'Name'), str(o, 'Id')] : null };
+      const ty = t.get('SkullType').value; return { type: ty >= 0 && ty <= 4 ? ty : 0, rot: t.get('Rot').value & 15, owner: o ? [str(o, 'Name'), str(o, 'Id')] : null };
     }
     case 'flowerpot': return { pot: potFromNbt({ Item: t.get('Item').value, Data: t.get('Data').value }, itemFromOriginal) }; // b81: undrawn items keep their drop stack
     case 'command': return (({ command, successCount, customName, trackOutput, lastOutput }) => ({ command, successCount, customName, trackOutput, lastOutput }))(readCommandBlock(t));
     case 'note': return { note: readNoteTile(t).note };
-    case 'jukebox': { const { record } = readJukeboxTile(t); return { record: record && isDisc(record.id) ? { id: canonicalDisc(record.id), count: 1, damage: 0 } : null }; }
+    case 'jukebox': { const { record } = readJukeboxStack(t, (c) => { const m = itemFromOriginal(c.get('id').value, 0); return m ? { id: m.id, count: c.get('Count')?.value ?? 0, damage: 0 } : null; }); return { record: record ? { id: isDisc(record.id) ? canonicalDisc(record.id) : record.id, count: record.count, damage: 0 } : null }; } // b95 tiles95: native holds any stack
     case 'beacon': return { primary: t.get('Primary').value, secondary: t.get('Secondary').value, levels: t.get('Levels').value };
     case 'comparator': return { signal: t.get('OutputSignal').value };
     default: return null;

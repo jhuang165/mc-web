@@ -26,9 +26,9 @@ export function summonCart(minecarts, type, x, y, z, tag) {
     const name = nbtGet(tag, "CustomName", NBT.STRING, "");
     if (name) record.customName = name;
     if (type === 6) { // CommandBlockLogic.func_145759_b (agp.b(dh)); the CustomName key is shared with the entity name
-      record.command = { command: nbtGet(tag, "Command", NBT.STRING, ""), successCount: nbtGet(tag, "SuccessCount", NBT.INT, 0) };
-      if (name) record.command.customName = name;
-      if (hasNumber(tag, "TrackOutput")) record.command.trackOutput = !!nbtGet(tag, "TrackOutput", NBT.BYTE, 1);
+      record.command = { command: getStringAny(tag, "Command"), successCount: nbtGet(tag, "SuccessCount", NBT.INT, 0) }; // b95 tiles95: agp.b reads Command with getString (any tag)
+      if (tag.get("CustomName")?.type === NBT.STRING) record.command.customName = tag.get("CustomName").value; // an empty name is kept (hasKey(.., 8))
+      if (tag.get("TrackOutput")?.type === NBT.BYTE) record.command.trackOutput = !!nbtGet(tag, "TrackOutput", NBT.BYTE, 1); // hasKey("TrackOutput", 1): byte tags only
       const last = nbtGet(tag, "LastOutput", NBT.STRING, null);
       if (last != null) record.command.lastOutput = last;
     }
