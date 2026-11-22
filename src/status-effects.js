@@ -41,11 +41,13 @@ export class Effects {
       duration: Math.min(2147483647, Math.floor(effect.duration)),
       amplifier: Number.isFinite(effect.amplifier) ? Math.max(0, Math.min(255, Math.floor(effect.amplifier))) : 0,
       ...(effect.ambient === true ? { ambient: true } : {}),
+      ...(effect.bare === true ? { bare: true } : {}), // b96 entnbt96: read from NBT without its attribute modifiers (the server never applied them; the S1D packet does not either), so Speed, Slowness, Strength, Weakness and Health Boost change nothing until re-added
     }, old = this.active.get(next.id);
     if (!old) {
       this.active.set(next.id, next);
       if (next.id === PT.ABSORPTION && this.player) this.player.absorption = Math.fround((this.player.absorption || 0) + 4 * (next.amplifier + 1)); // Potion.applyAttributesModifiersToEntity
     } else {
+      delete old.bare; // addPotionEffect -> onChangedPotionEffect(effect, true) applies the modifiers (executed, entnbt96)
       // PotionEffect.combine (rw.a(rw), executed through EntityLivingBase.addPotionEffect, b55comb): a stronger amplifier replaces amplifier and duration (the ambient flag stays the
       // old one's); an equal amplifier takes a longer duration; in every other case (weaker, or equal and not longer) a non-ambient effect clears the old one's ambient flag.
       if (next.amplifier > old.amplifier) { old.amplifier = next.amplifier; old.duration = next.duration; }
@@ -92,7 +94,7 @@ export class Effects {
   // generic.movementSpeed: the potion modifiers (operation 2) multiply the value: Speed +20% and Slowness -15% per level.
   moveSpeedMultiplier() {
     let m = 1;
-    for (const id of [PT.SPEED, PT.SLOWNESS]) { const e = this.active.get(id); if (e) m *= 1 + modifierAmount(POTION_TYPES[id], e.amplifier); }
+    for (const id of [PT.SPEED, PT.SLOWNESS]) { const e = this.active.get(id); if (e && !e.bare) m *= 1 + modifierAmount(POTION_TYPES[id], e.amplifier); }
     return Math.max(0, m); // RangedAttribute(movementSpeed) clamps the attribute value at 0 (probe: Slowness 8 and up)
   }
   // EntityLivingBase.jump: Jump Boost adds 0.1 per level to the upward motion.
@@ -106,8 +108,8 @@ export class Effects {
   attackDamage(base) {
     let d = base;
     const w = this.active.get(PT.WEAKNESS), st = this.active.get(PT.STRENGTH);
-    if (w) d += modifierAmount(POTION_TYPES[PT.WEAKNESS], w.amplifier);
-    if (st) d *= 1 + modifierAmount(POTION_TYPES[PT.STRENGTH], st.amplifier);
+    if (w && !w.bare) d += modifierAmount(POTION_TYPES[PT.WEAKNESS], w.amplifier);
+    if (st && !st.bare) d *= 1 + modifierAmount(POTION_TYPES[PT.STRENGTH], st.amplifier);
     return Math.max(0, d); // RangedAttribute(attackDamage) has minimum 0 (probe: Weakness II or more on an empty hand is 0, not negative)
   }
   clear() { this.active.clear(); }

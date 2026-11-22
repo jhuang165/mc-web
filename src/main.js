@@ -1403,7 +1403,7 @@ function save() {
   active.position = { x: position.x, y: position.y, z: position.z, yaw, pitch };
   active.portalState = dims.state.save();
   active.player = survival.serialize();
-  active.playerState = { onGround: grounded === true, fallDistance, hurtTime: survival.hurtTime, deathTime: screen === "dead" ? Math.min(deathTime, 20) : 0, sprinting: !!motion.sprinting }; // level.dat Player: OnGround, FallDistance, HurtTime, DeathTime and the sprint modifier (region-export.js levelNbt)
+  active.playerState = { onGround: grounded === true, fallDistance, hurtTime: survival.hurtTime, deathTime: screen === "dead" ? Math.min(deathTime, 20) : 0, sprinting: !!motion.sprinting, motion: mobs?.ai?.player ? [mobs.ai.player.motion.x, mobs.ai.player.motion.y, mobs.ai.player.motion.z] : undefined }; // level.dat Player: OnGround, FallDistance, HurtTime, DeathTime and the sprint modifier (region-export.js levelNbt)
   active.achievements = achievements.save();
   active.stats = stats.save();
   active.scoreboard = scoreboardToJSON(scoreboard);
@@ -1922,6 +1922,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     mobs.serverSeat = () => { const v = rider.vehicle, sys = v && vehicleSystem(vehicleState()); if (!sys) return null; const was = { x: rider.x, y: rider.y, z: rider.z }; sys.updateRiderPosition(v); const seat = { x: rider.x, y: rider.y, z: rider.z }; Object.assign(rider, was); return seat; }; // b87 spcopy87: the riding branch's mw.m.ac() on the live mount
     const arrival = tripArrival; tripArrival = null; // b89 spcopy89: record.transit is gone by now (arrive deleted it), so b88's test never passed in the game
     if (tripLoading && arrival && !arrival.exit && !arrival.death) mobs.ai.player.arriveFrom(leftCopy, arrival.arrivalMotion); // b88 spcopy88: its fallDistance, and setPlayerLocation at the arrival (an End exit or a death is respawnPlayer: a new one); b89 spcopy89: its motion, as the Teleporter left it
+    if (!arrival && Array.isArray(record.playerState?.motion)) [mobs.ai.player.motion.x, mobs.ai.player.motion.y, mobs.ai.player.motion.z] = record.playerState.motion; // b96 entnbt96: the server copy's saved Motion (level.dat Player.Motion)
     mobs.serverMount = () => rider.vehicle ?? null; // b88 spcopy88: the copy's ridingEntity, so a dead or removed mount lets it go at its seat (entities.js serverPlayerUpdate)
     mobs.serverFallStat = (p, d) => addFallStat(stats, d, false); // b88 spcopy88: the copy's EntityPlayer.fall (yz.b(F)) adds the distance-fallen stat (handleFalling tests allowFlying)
     mobs.serverCorrect = (at) => { position.set(at.x, at.y, at.z); previous.copy(position); velocity.set(0, 0, 0); }; // b85 spcopy85: processPlayer's setPlayerLocation (S08) for the integrated server's copy: bjb.a(fu) puts the client at the position and zeroes its motion (bytecode-read)
