@@ -41,6 +41,7 @@ import { Scoreboard, scoreboardFromJSON, scoreboardDocument } from './scoreboard
 import { GEAR_TYPES, gearFieldsFrom } from './mob-equipment-live.js';
 import { uuidOf, uuidLongs } from './entity-uuid.js';
 import { livingAttributesNbt } from './mob-attribute-list.js';
+import { HELD_DAMAGE_MODIFIERS, ITEM_MODIFIER_UUID } from './player-nbt.js';
 import { effectsInMapOrder } from './mob-effects.js';
 import { exportPlayerUuid, ownerText, playerLeashTag } from './owner-links.js';
 import { leashRawTag } from './java-mobs.js';
@@ -227,6 +228,12 @@ const specialTiles=(p,cells,pots,ox,oz,names={})=>{for(const [orig,x,y,z,m] of c
  if(orig===116&&typeof names[`${x},${y},${z}`]==='string'&&names[`${x},${y},${z}`].length>0)n.CustomName=str(names[`${x},${y},${z}`]); // TileEntityEnchantmentTable.writeToNBT: CustomName only when named (b74)
  if(orig===140){const nbt=potNbtOf(pots.get(`${x},${y},${z}`)??potContentsOfMeta(m));n.Item=int(nbt.Item);n.Data=int(nbt.Data);}
  p.tileEntities.push(new Map(Object.entries(n)));}return p;};
+// EntityPlayerMP's attribute modifiers (player-nbt.js): the held tool or sword on attackDamage, the unsaved sprint modifier (an empty list) on movementSpeed.
+function playerModifiers(name,heldId,sprinting) {
+ if(name==='generic.attackDamage'&&HELD_DAMAGE_MODIFIERS[heldId]){const [n,amount]=HELD_DAMAGE_MODIFIERS[heldId];return list(NBT.COMPOUND,[new Map([['Name',str(n)],['Amount',tag(NBT.DOUBLE,amount)],['Operation',int(0)],['UUIDMost',tag(NBT.LONG,ITEM_MODIFIER_UUID.most)],['UUIDLeast',tag(NBT.LONG,ITEM_MODIFIER_UUID.least)]])]);}
+ if(name==='generic.movementSpeed'&&sprinting)return list(NBT.COMPOUND,[]);
+ return null;
+}
 // level.dat (SaveHandler.saveWorldInfoWithPlayer): WorldInfo.cloneNBTCompound(player) as Data. Key order is free (NBTTagCompound is a
 // HashMap); level-dat-reference.json holds what the unchanged WorldInfo and EntityPlayer write (level-dat.md).
 export function levelNbt(record,w,report={unmappedItems:0}) {
@@ -234,8 +241,11 @@ export function levelNbt(record,w,report={unmappedItems:0}) {
  const dimension=dimensionOf(record),ox=w.originX??0,oz=w.originZ??0;
  const spawn=record.worldSpawn??Object.values(w.spawn()).map(Math.floor);
  const health=Number.isFinite(p.health)?p.health:20;
+ // Entity.writeToNBT / EntityLivingBase / EntityPlayer: runtime state main.js save() keeps in `playerState` (onGround, fallDistance, hurtTime, deathTime, sprinting); a sleeper is saved with Sleeping and its SleepTimer (readEntityFromNBT wakes it at once).
+ const ps=record.playerState&&typeof record.playerState==='object'?record.playerState:{},sleeping=Array.isArray(record.bed?.bed),sleepTimer=sleeping&&Number.isInteger(record.bed.timer)?record.bed.timer:0;
+ const heldId=(()=>{const s=(p.slots??[])[p.current??0];return s?reverse.get(s.id)?.id:undefined;})();
  // EntityLivingBase.writeEntityToNBT: HealF and the legacy Health short (ceil); EntityPlayerMP adds playerGameType.
- const player={...entity({...pos,id:record.id,uuid:report.playerUuid??exportPlayerUuid(record),air:Number.isInteger(p.air)?p.air:300,fire:Number.isInteger(p.fire)?p.fire:0},'Player',dimension?0:ox,dimension?0:oz),Dimension:int(dimension),Health:short(Math.ceil(health)),HealF:float(health),AbsorptionAmount:float(Number.isFinite(p.absorption)?p.absorption:0),foodLevel:int(p.food??20),foodSaturationLevel:float(p.saturation??5),foodExhaustionLevel:float(p.exhaustion??0),foodTickTimer:int(p.timer??0),XpLevel:int(xp.level),XpP:float(xp.progress),XpTotal:int(xp.total),Score:int(xp.score),SelectedItemSlot:int(p.current??0),playerGameType:int(gameType),SleepTimer:short(0),Sleeping:byte(0),HurtTime:short(0),DeathTime:short(0),AttackTime:short(0),Attributes:list(NBT.COMPOUND,[['generic.maxHealth',20],['generic.knockbackResistance',0],['generic.movementSpeed',Math.fround(.1)],['generic.attackDamage',1]].map(([n,b])=>new Map([['Name',str(n)],['Base',tag(NBT.DOUBLE,b)]]))),abilities:comp({invulnerable:byte(creative?1:0),flying:byte(record.flying===true&&creative?1:0),mayfly:byte(creative?1:0),instabuild:byte(creative?1:0),mayBuild:byte(gameType===2?0:1),flySpeed:float(.05),walkSpeed:float(.1)})};
+ const player={...entity({...pos,id:record.id,uuid:report.playerUuid??exportPlayerUuid(record),air:Number.isInteger(p.air)?p.air:300,fire:Number.isInteger(p.fire)?p.fire:0,onGround:ps.onGround===true,fallDistance:Number.isFinite(ps.fallDistance)&&ps.fallDistance>0?ps.fallDistance:0},'Player',dimension?0:ox,dimension?0:oz),Dimension:int(dimension),Health:short(Math.ceil(health)),HealF:float(health),AbsorptionAmount:float(Number.isFinite(p.absorption)?p.absorption:0),foodLevel:int(p.food??20),foodSaturationLevel:float(p.saturation??5),foodExhaustionLevel:float(p.exhaustion??0),foodTickTimer:int(p.timer??0),XpLevel:int(xp.level),XpP:float(xp.progress),XpTotal:int(xp.total),Score:int(xp.score),SelectedItemSlot:int(p.current??0),playerGameType:int(gameType),SleepTimer:short(sleepTimer),Sleeping:byte(sleeping?1:0),HurtTime:short(Number.isInteger(ps.hurtTime)&&ps.hurtTime>0?ps.hurtTime:0),DeathTime:short(health<=0&&Number.isInteger(ps.deathTime)&&ps.deathTime>0?ps.deathTime:0),AttackTime:short(0),Attributes:list(NBT.COMPOUND,[['generic.maxHealth',20],['generic.knockbackResistance',0],['generic.movementSpeed',Math.fround(.1)],['generic.attackDamage',1]].map(([n,b])=>{const m=new Map([['Name',str(n)],['Base',tag(NBT.DOUBLE,b)]]),mods=playerModifiers(n,heldId,ps.sprinting===true);if(mods)m.set('Modifiers',mods);return m;})),abilities:comp({invulnerable:byte(creative?1:0),flying:byte(record.flying===true&&creative?1:0),mayfly:byte(creative?1:0),instabuild:byte(creative?1:0),mayBuild:byte(gameType===2?0:1),flySpeed:float(.05),walkSpeed:float(.1)})};
  delete player.id;
  // EntityPlayerMP's saved mount: Entity.writeToNBT nests it as Riding (ServerConfigurationManager.initializeConnectionToPlayer creates and mounts it on load).
  if(report.playerMount)player.Riding=tag(NBT.COMPOUND,report.playerMount);
