@@ -81,7 +81,7 @@ export class ServerEnd {
     const put = world.put.bind(world), swaps = { get signs() { return n.tileEntities?.signs; }, get containers() { return n.containers; }, own: () => sim.world === world }; // b88 tiles88
     world.put = (x, y, z, b, m = 0, track = true) => {
       const old = world.get(x, y, z), meta = world.getMeta(x, y, z), result = put(x, y, z, b, m, track);
-      if (result && (old !== b || meta !== m)) n.changes.set(`${x},${y},${z}`, [x, y, z, b, m]);
+      if (result && (old !== b || meta !== m)) { n.changes.set(`${x},${y},${z}`, [x, y, z, b, m]); n.settled?.delete(`${x},${y},${z}`); }
       if (result && old !== b && isSign(old)) n.tileEntities?.signs.remove(x, y, z); // b87 tiles87: a 63 <-> 68 swap starts a fresh tile (simulation.js)
       if (result) swapTiles(swaps, x, y, z, old, meta, b, m); // b88 tiles88: meta-only sign rewrite, chest <-> trapped chest (server-tile-swaps.js; inside this dimension's swap only)
       return result;

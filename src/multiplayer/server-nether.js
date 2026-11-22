@@ -32,6 +32,8 @@ import { LightVolume, lightEmission } from '../lighting.js';
 import { tickScheduledSystems, tickTileSystems, tickBlockEvents } from '../world-tick.js';
 import { attachTickTree } from '../tile-ticks.js';
 import { tickBeacons } from '../pyramid-live.js';
+import { describeTiles, describeCell } from '../tile-sync.js';
+import { splitChanges } from './protocol.js';
 import { Survival, ITEMS } from '../survival.js';
 import { PlayerInventory, makeStack } from '../inventory.js';
 import { LAVA, PHYSICS, MOB_SPAWNER } from '../world.js';
@@ -163,6 +165,8 @@ export function tickNether(sim, n, players) {
     { time: sim.time, daylight: 0, x: 64, z: 64 }, { farming: noop, fluids: noop, fire: noop });
   n.weather.tickDimension(w, null); // the three random block ticks per section, over the whole finite world (as the Overworld's weather.tick(world))
   n.weather.drain();
+  n.flushed = flushDimension(sim, n, beforeLit); // b96 mpobjects96: mt.b's mq.b() for this dimension, after the random ticks and before the villages, the block events and the entity pass
+  n.mobs.villageStep(); // b96 mpobjects96: wc.a() / wb.a() (see ServerMobs.villageStep)
   tickBlockEvents({ redstone: n.redstone }); // b94 mpobjects94: sendQueuedBlockEvents is mt.b's last step, after the random ticks
   n.dispense.tick();
   viewNetherPlayers(n, players); n.vehicles.riderInput(); // b63: a pig steers on this tick's keys
@@ -179,9 +183,43 @@ export function tickNether(sim, n, players) {
     p.survival.effects.add(e);
     (p.effectsOut ??= []).push({ id: e.id, amplifier: e.amplifier, duration: e.duration, ambient: !!e.ambient });
   }, players: players.map(p => ({ x: p.position.x, y: p.position.y, z: p.position.z, width: PHYSICS.width, height: PHYSICS.height, player: p })) });
+  dimensionLitDiff(n, beforeLit);
+  settleDimension(sim, n); // b96: what the entity pass, block events and tile entities changed waits for the next tick's flush; its light and tiles settle now
+}
+
+// b96 mpobjects96 (the Overworld's flushChanges, simulation.js b95, for the Nether and the End): the lamp / rail diff since `beforeLit` joins the changes; `beforeLit` then advances.
+function dimensionLitDiff(n, beforeLit) {
+  const w = n.world, settled = n.settled ??= new Set();
   for (const key of new Set([...beforeLit, ...n.redstone.lit])) if (beforeLit.has(key) !== n.redstone.lit.has(key)) {
     const [x, y, z] = key.split(',').map(Number);
     n.changes.set(key, [x, y, z, w.get(x, y, z), w.getMeta(x, y, z)]);
+    settled.delete(key);
   }
-  n.light.updateMany(n.changes.values()); // b78 mpexplosion78
+  beforeLit.clear(); for (const k of n.redstone.lit) beforeLit.add(k);
+}
+// Light flood (one per merged box) and tile cleanup once per cell; `settled` is cleared by a later put of the cell (the dimension's put hook).
+function settleDimension(sim, n) {
+  const settled = n.settled ??= new Set(), w = n.world;
+  const fresh = [...n.changes].filter(([k]) => !settled.has(k)).map(([, v]) => v);
+  n.light.updateMany(fresh); // b78 mpexplosion78
+  for (const [x, y, z] of fresh) { sim.dropTiles(x, y, z, w.get(x, y, z)); settled.add(`${x},${y},${z}`); }
+}
+// The dimension's chunk-update flush: the tick message's changes / chunks / tiles. Runs inside the dimension's swap.
+function flushDimension(sim, n, beforeLit) {
+  const w = n.world;
+  dimensionLitDiff(n, beforeLit);
+  settleDimension(sim, n);
+  const final = [...n.changes.values()].map(([x, y, z]) => [x, y, z, w.get(x, y, z), w.getMeta(x, y, z)]);
+  n.changes.clear(); n.settled.clear();
+  const { changes, chunks } = splitChanges(final, (cx, cz) => w.chunks.get(`${cx},${cz}`), (cx, cz, mask) => describeTiles(n.tileEntities, cx, cz, mask));
+  const tiles = [], seen = new Set(), covered = (x, y, z) => chunks.some(c => c.x === x >> 4 && c.z === z >> 4 && (c.mask >> (y >> 4) & 1));
+  for (const [x, y, z] of [...changes, ...[...n.dirtyTiles].map(k => k.split(',').map(Number))]) {
+    const key = `${x},${y},${z}`;
+    if (seen.has(key) || covered(x, y, z)) continue;
+    seen.add(key);
+    const t = describeCell(n.tileEntities, x, y, z);
+    if (t) tiles.push(t);
+  }
+  n.dirtyTiles.clear();
+  return { changes, ...(chunks.length ? { chunks } : {}), ...(tiles.length ? { tiles } : {}) };
 }
