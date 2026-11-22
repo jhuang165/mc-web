@@ -796,10 +796,12 @@ export class Survival {
   // EnchantmentHelper.func_151384_a(this, attacker): the Thorns of every armour piece, rolled on the player's
   // Entity.rand (the inventory's saved random, which durability damage also uses). The piece that carries Thorns
   // loses 3 durability on a hit and 1 on a miss; a broken piece sets `broken`. Returns the damage dealt per hit.
-  thorns({ hurt, sound } = {}) {
+  // b95 credit95 (afv.a(sv, sa) bytecode-read): `byPlayer` (the attacker is an EntityPlayer) visits the victim's held item a second time, after the armour (PvP).
+  thorns({ hurt, sound, byPlayer = false } = {}) {
     const inv = this.inventory;
     return thornsReaction({
       items: () => inv.armor, random: inv.random, hurt, sound,
+      extra: byPlayer ? () => inv.held : null,
       wear: (i, amount) => {
         const s = inv.getStack(36 + i);
         if (s && inv.damage(36 + i, amount, true)) this.broken = s.id; // Thorns calls ItemStack.damageItem: the piece stays at size 0

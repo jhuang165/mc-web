@@ -1986,6 +1986,12 @@ export class EntityWorld {
       }
       if (melee.fire > 0) setMobFire(target, melee.fire);
     }
+    // b95 credit95 (yg.n bytecode-read: afv.a(target, this) after the knockback and Fire Aspect, before afv.b): a landed hit on a living mob runs the victim's Thorns on the attacker. A mob attacker is not an EntityPlayer, so one visit.
+    // EntityWolf, EntitySlime, EntityIronGolem and EntityOcelot override attackEntityAsMob without it (NO_THORNS_ATTACKER).
+    if (hit && target.equipment && !NO_THORNS_ATTACKER.has(e.type)) this.thornsOfVictim(target, {
+      hurt: (n) => this.attackEntityFrom(e, n, { from: { x: target.x, z: target.z }, attacker: target, name: "thorns" }),
+      sound: () => this.events.push({ sound: "damage.thorns", volume: 0.5, pitch: 1, position: { x: e.x, y: e.y, z: e.z } }),
+    });
     // EntityMob.attackEntityAsMob (yg.n) ends with EnchantmentHelper.func_151385_b(this, target) on a landed hit: Bane of Arthropods on the mob's five equipment
     // slots (EntityLiving.getLastActiveItems) and its held item again, rolled on the mob's own Entity.rand; the Slowness IV lands on an arthropod target.
     if (hit && e.equipment) {
