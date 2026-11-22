@@ -71,7 +71,8 @@ export class ExperienceOrbs {
  }
  rng(o){if(!this.entityRandom)return this.random;let r=this.rands.get(o);if(!r)this.rands.set(o,r=this.entityRandom());return r;}
  // `p` is the spawn point (posY): EntityXPOrb.getXPSplit pieces, one orb each.
- spawn(value,p){for(const n of splitExperience(Math.max(0,Math.floor(value))).slice(0,128)){const o=newOrb(n,p.x,p.y,p.z,Math.random,this.ids);this.orbs.push(o);this.joined?.(o);}} // joined: entity-simulation.js (entityWalkers), the orb's place in World.loadedEntityList
+ // whole (b96 mobrec96, executed cow/pig/chicken breeding): EntityAIMate.spawnBaby makes ONE EntityXPOrb of the rolled value, no getXPSplit pieces (only a mob's death splits).
+ spawn(value,p,whole=false){for(const n of (whole?[Math.max(0,Math.floor(value))]:splitExperience(Math.max(0,Math.floor(value)))).slice(0,128)){const o=newOrb(n,p.x,p.y,p.z,Math.random,this.ids);this.orbs.push(o);this.joined?.(o);}} // joined: entity-simulation.js (entityWalkers), the orb's place in World.loadedEntityList
  // EntityXPOrb.attackEntityFrom [sq.a(ro,F)]: health -= amount, truncated; dead at 0. It does
  // not check isDead, so later hits in the same tick keep counting down.
  hurt(o,source,amount){if(o.invulnerable)return;/* b85 fire85: sq.a tests isEntityInvulnerable first */o.velocityChanged=true;/* Entity.setBeenAttacked (S12 by the tracker) */o.health=Math.trunc(o.health-amount);if(o.health<=0)o.dead=true;}

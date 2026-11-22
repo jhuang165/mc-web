@@ -1,5 +1,6 @@
 // Live wiring of the mooshroom and the snow golem (see public/research/mooshroom-golem.md): installs methods on EntityWorld,
 // the snow golem's snowballs in flight and its AI task list. Rules are in mooshroom.js and snow-golem.js.
+import { JavaRandom } from "./lighting.js";
 import { Projectiles, heading, mobTargets, thrownHit } from "./projectiles.js";
 import { entityRandom, ENTITY_TYPES } from "./entities.js";
 import { throwSpawn } from "./witch.js";
@@ -95,7 +96,7 @@ export function installMooshroomGolem(EntityWorld) {
     if (this.fx) this.fx.spawn("largeexplode", e.x, e.y + h / 2, e.z, 0, 0, 0);
     for (let i = 0; i < SHEAR_MUSHROOMS; i++) this.events.push({ drop: RED_MUSHROOM, count: 1, offsetY: f(h), position: { x: e.x, y: e.y, z: e.z } });
     this.events.push({ sound: "mob.sheep.shear", volume: 1, pitch: 1, position: { x: e.x, y: e.y, z: e.z } });
-    if (!survival.creative) survival.wear(SHEARS, 1);
+    if (!survival.creative && survival.wear(SHEARS, 1)) (this.worldRandom ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48))).nextFloat(); // b96 mobrec96: the broken stack's renderBrokenItemStack pitch is a World.rand draw (executed, sheep shears)
     return true;
   };
   // BlockPumpkin.onBlockAdded (amw.b): snow golem first (two snow blocks), else the iron golem. Returns the cleared cells or null.
