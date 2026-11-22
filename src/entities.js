@@ -1534,7 +1534,7 @@ export class EntityWorld {
     };
     const blocked = (box) => {
       const p = this.ai?.player;
-      if (p?.inWorld && boxesIntersect(box, mobBox(p.x, p.y, p.z, 0.6, 1.8))) return true;
+      if ((p?.inWorld || p?.listedIn?.(box)) && boxesIntersect(box, mobBox(p.x, p.y, p.z, 0.6, 1.8))) return true; // b95 spcopy95: or listed in the old world's chunk (PlayerView.listedIn)
       // World.checkNoEntityCollision: not yet setDead (a dying mob still counts).
       // preventEntitySpawning is set by EntityLivingBase (bats included, though they are not pushable); probed natively.
       for (const o of this.entities) if ((o.type === "bat" || o.type === "ender_dragon" || o.type === "ender_crystal" || pushable(o)) && boxesIntersect(box, sized(o))) return true;
@@ -2945,7 +2945,7 @@ export class EntityWorld {
     // no box can meet and the pair is skipped without changing the result (the O(n^2) scan is the ring-mob cost).
     const cand = pushNear(this.entities, e, near, pushHalf, meetsArg(fineConfig.mode, () => (o) => pushable(o) && o.ridingEntity !== e && e.ridingEntity !== o && pushMeets(near, o, this, pushBox))) ?? pushCandidates(this.entities, e); // b78 (push-grid.js FineGrid): only the entities whose box can reach this one's; b75 (push-grid.js): the entities within 12 blocks in list order during the mob loop, else null (the whole list)
     const p = this.ai.player;
-    let pend = !!(p?.inWorld && !e.rider?.player && boxesMeet(near, pushBox(p, p.width, p.height))); // b92: the player's push waits for its place in the list
+    let pend = !!((p?.inWorld || p?.listedIn?.(near)) && !e.rider?.player && boxesMeet(near, pushBox(p, p.width, p.height))); // b92: the player's push waits for its place in the list
     for (const o of liveOrder(this, cand ?? this.entities)) // b61: an unloaded chunk's entities do not push (getEntitiesWithinAABB)
       if (o !== e && Math.abs(o.x - e.x) <= 12 && Math.abs(o.z - e.z) <= 12 && Math.abs(o.y - e.y) <= 12 && o.ridingEntity !== e && e.ridingEntity !== o && pushable(o) && pushMeets(near, o, this, pushBox)) { // b77 mpperf77: no per-candidate box arrays
         if (e.type === "iron_golem" && golemCollideRetargets(entityRandom(e), o.type)) this.ai.brain(e).attackTarget = this.ai.brain(o); // EntityIronGolem.collideWithEntity
@@ -2970,7 +2970,7 @@ export class EntityWorld {
     let n = 0;
     const p = this.ai.player;
     let pend = false; // b92: the player's push waits for its place in the list (EntityLivingBase.collideWithNearbyEntities walks getEntitiesWithinAABBExcludingEntity in list order)
-    if (p?.inWorld && !e.rider?.player) {
+    if ((p?.inWorld || p?.listedIn?.(near)) && !e.rider?.player) {
       const pw = f(f(p.width) / 2), ph = f(p.height), x = p.x, y = p.y, z = p.z;
       pend = x + pw > near[0] && x - pw < near[3] && y + ph > near[1] && y < near[4] && z + pw > near[2] && z - pw < near[5]; // boxesMeet(near, pushBox(p, p.width, p.height))
       if (fast87.mode === "verify" && pend !== boxesMeet(near, pushBox(p, p.width, p.height))) fail87("push player box");

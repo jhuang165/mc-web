@@ -1693,6 +1693,7 @@ let awayIdle = null; // b60 lead: module scope, as tickSurvival reads it (set in
 async function launch(record, prepared, { slice = false } = {}) {
   try {
     active = record;
+    spGateConfig.enabled = !active?.remote; // b95 spcopy95: before this world's first tracker is made (idleTrack at launch, or the first tick's update), not at the first movement tick
     world = prepared;
     portalTimer.reset();
     dims.restorePlayer(record);
@@ -3196,6 +3197,7 @@ const dims = new DimensionLive({
     if (r.deathPlaced) { if (!r.deathPlaced.keepInventory) { survival.inventory.takeAll(); experience.death(); } survival.hurtTicks = 0; survival.protection = 0; if (!survival.damage(survival.health + 1, r.deathPlaced.cause) && survival.health > 0 && !survival.creative) { survival.health = 0; survival.lastDamage = r.deathPlaced.cause; survival.died = true; } r.stats.commands.death = r.deathPlaced; renderHotbar(); renderVitals(); }
     // The return builds the Overworld record from `root`, whose player state is the departure's: carry what the replay changed (the tile maps in root.player are the Overworld's own).
     if (r.stats.commands.replayed?.applied || r.deathPlaced) { const sp = survival.serialize(); root.player = { ...(root.player ?? {}) }; for (const k of Object.keys(sp)) if (!TILE_KEYS.includes(k)) root.player[k] = sp[k]; root.experience = experience.serialize(); root.mode = survival.mode; root.achievements = achievements.save(); root.stats = stats.save(); } },
+  arrivalHint: (hint) => { if (mobs?.ai?.player) mobs.ai.player.depart(hint); }, // b95 spcopy95: the Teleporter's result, known before the old world's save point (dimension-live.js announceArrival)
   player: () => ({ x: position.x, y: position.y, z: position.z, yaw, motion: mobs?.ai?.player?.motion }), // b89 spcopy89: the server copy's motion rides the transit
   sound: (n, o) => sounds.play(n, o),
   showCredits: async () => {
@@ -4096,6 +4098,7 @@ function movementTick(controls) {
   // it still had the player, and the entity after it is stepped over. The ticks after that (the port's async save) start with the copy gone.
   if (mobs?.ai?.player) {
     const copy = mobs.ai.player;
+    if (!dims.busy && copy.hint) copy.depart(null); // b95 spcopy95: a failed trip gives the copy back at its own place
     if (!dims.busy) { copy.left = false; copy.departing = null; }
     else if (!copy._left && !copy.departing) copy.departing = { skip: dims.listSkip };
   }
