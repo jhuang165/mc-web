@@ -33,6 +33,8 @@ export function nearbyLate(entities, skip, brainOf, cheap, late, overlaps) {
     if (out.length !== ref.length || out.some((b, i) => b !== ref[i])) throw new Error('mpperf77 nearbyLate mismatch');
     return out;
   }
+  // b96 mpperf96: an index loop (the array iterator's per-step result is gone; the same elements in the same order); `entities` may be a Set-free array only
+  if (Array.isArray(entities)) { for (let i = 0; i < entities.length; i++) { const e = entities[i]; if (skip(e)) continue; const b = brainOf(e); if (cheap(b) && overlaps(b) && late(b)) out.push(b); } return out; }
   for (const e of entities) { if (skip(e)) continue; const b = brainOf(e); if (cheap(b) && overlaps(b) && late(b)) out.push(b); }
   return out;
 }

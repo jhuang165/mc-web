@@ -2415,7 +2415,7 @@ export class EntityWorld {
   // Mobs have no spawn hook: a mob not seen before is a spawn made since the last call, early or late as `early` says. `spawnLen` makes the in-pass check one comparison.
   noteMobSpawns(early) {
     const seen = (this.spawnSeen ??= new WeakSet());
-    for (const e of this.entities) if (!seen.has(e)) { seen.add(e); if (early && this.playerStamp !== undefined) (this.earlySpawns ??= new WeakSet()).add(e); }
+    for (let i = 0; i < this.entities.length; i++) { const e = this.entities[i]; if (!seen.has(e)) { seen.add(e); if (early && this.playerStamp !== undefined) (this.earlySpawns ??= new WeakSet()).add(e); } } // b96 mpperf96: an index loop
     this.spawnLen = this.entities.length;
     this.spawnTail = this.entities[this.entities.length - 1];
   }

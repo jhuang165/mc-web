@@ -33,7 +33,7 @@ export class ChunkSet {
   order(centres, radius = VIEW_DISTANCE) {
     const set = new JavaHashSetOrder(this.mode);
     if (this.capacity > set.capacity) set.table = new Array(this.capacity).fill(null).map(() => []);
-    for (const [cx, cz] of centres) for (let i = -radius; i <= radius; i++) for (let j = -radius; j <= radius; j++) {
+    for (let ci = 0; ci < centres.length; ci++) for (let cx = centres[ci][0], cz = centres[ci][1], i = -radius; i <= radius; i++) for (let j = -radius; j <= radius; j++) { // b96 mpperf96: no destructuring iterator
       const x = cx + i, z = cz + j;
       set.add(`${x},${z}`, chunkHash(x, z));
     }

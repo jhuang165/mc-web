@@ -1204,7 +1204,9 @@ export class Brain {
   // isEntityAlive test drops it (findNearestEntityWithinAABB in EntityAIWatchClosest hands back a corpse, which ends the watch one tick later).
   nearby(rx, ry, rz, test, base = 0, dying = false) {
     const out = [];
-    for (const e of this.ai.entities()) {
+    const list = this.ai.entities(); // b96 mpperf96: an index loop, no array iterator
+    for (let i = 0; i < list.length; i++) {
+      const e = list[i];
       if (e === this.e || (e.health <= 0 && !(dying && (e.death ?? 0) < 20))) continue;
       const b = this.ai.brain(e);
       if (test(b) && this.ai.overlaps(this, b, rx, ry, rz, base)) out.push(b);

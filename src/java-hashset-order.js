@@ -77,7 +77,7 @@ export class JavaHashSetOrder {
     this.table = next;
   }
   // the keys in HashSet iteration order
-  keys() { const out = []; for (const bin of this.table) for (const node of bin) out.push(node.key); return out; }
+  keys() { const out = [], t = this.table; for (let i = 0; i < t.length; i++) { const bin = t[i]; for (let j = 0; j < bin.length; j++) out.push(bin[j].key); } return out; } // b96 mpperf96: index loops
 }
 
 // The iteration order of the set after a history of ops: [["add", id] | ["remove", id], ...] (the set holds ids); returns the ids in order.
