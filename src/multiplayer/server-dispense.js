@@ -324,7 +324,7 @@ export class ServerDispense {
       for (const ev of p.drain()) {
         const from = mobs.events.length;
         this.credit(this.ownerOf(ball), () => {
-          if (ev.potion) { const who = this.throwerBody(ball) ?? this.ownerOf(ball); potions.impact(ev.potion, null, null, who ? { x: who.position.x, z: who.position.z, name: who.name } : null); this.splashPlayers(ev.potion, lane, ball); } else if (ev.expBottle) potions.expImpact(ev.expBottle);
+          if (ev.potion) { const who = this.throwerBody(ball) ?? this.ownerOf(ball); potions.impact(ev.potion, null, null, who ? { x: who.position.x, z: who.position.z, name: who.name, held: who.survival?.held ?? null } : null); this.splashPlayers(ev.potion, lane, ball); } else if (ev.expBottle) potions.expImpact(ev.expBottle);
         });
         for (let i = from; i < mobs.events.length; i++) {
           const e = mobs.events[i];

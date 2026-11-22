@@ -8,6 +8,7 @@ import { entityRandom, ENTITY_TYPES } from "./entities.js";
 import { addMobEffect, isUndeadMob, isPotionApplicable } from "./mob-effects.js";
 import { expBottleOrbs } from "./spawn-eggs.js";
 import { JavaRandom } from "./java-random.js";
+import { getLootingModifier } from "./enchantments.js";
 import { chooseThrownPotion, throwSpawn, splashImpact, WITCH } from "./witch.js";
 import { keptBaseSave, keptBaseRestore } from "./entity-base-nbt.js"; // b88 entnbt88
 const f = Math.fround;
@@ -96,6 +97,8 @@ export class WitchPotions {
   impact({ x, y, z, damage, owner, hit, custom, ownerBody }, player, survival, thrower = null) {
     // b63 (mpprojectiles2): EntityPotion.onImpact -> causeIndirectMagicDamage(potion, getThrower()): a player's potion is a player hit (`player`: recentlyHit 100, so drops and kill XP follow); `thrower` (the server's player) also gives the knockback direction.
     const byPlayer = owner === "player" || !!thrower;
+    // b96 credit96 (sv.a(ro) bytecode-read as b88): a player kill through the potion gives the Looting of the item the thrower holds at that moment (the source entity is the thrower). A dead old body holds its frozen item.
+    const looting = byPlayer ? getLootingModifier((ownerBody ? ownerBody.survival?.held : thrower ? thrower.held : survival?.held) ?? null) : 0;
     const mobs = this.mobs, victims = [];
     for (const e of mobs.entities) {
       if (e.health <= 0) continue;
@@ -116,7 +119,7 @@ export class WitchPotions {
       }
       const e = r.ref;
       for (const s of r.steps) {
-        if (s.hurt > 0) mobs.attackEntityFrom(e, s.hurt, { name: "indirectMagic", from: owner?.x !== undefined ? { x: owner.x, z: owner.z } : ownerBody ? { x: ownerBody.position.x, z: ownerBody.position.z } : thrower ? { x: thrower.x, z: thrower.z } : undefined, attacker: owner?.x !== undefined ? owner : null, ...(ownerBody ? { deadAttacker: true } : {}), ...(byPlayer ? { player: true, ...(thrower?.name ? { playerName: thrower.name } : {}) } : {}) });
+        if (s.hurt > 0) mobs.attackEntityFrom(e, s.hurt, { name: "indirectMagic", ...(byPlayer ? { looting } : {}), from: owner?.x !== undefined ? { x: owner.x, z: owner.z } : ownerBody ? { x: ownerBody.position.x, z: ownerBody.position.z } : thrower ? { x: thrower.x, z: thrower.z } : undefined, attacker: owner?.x !== undefined ? owner : null, ...(ownerBody ? { deadAttacker: true } : {}), ...(byPlayer ? { player: true, ...(thrower?.name ? { playerName: thrower.name } : {}) } : {}) });
         if (s.heal > 0) e.health = Math.min(ENTITY_TYPES[e.type].health, f(e.health + s.heal));
       }
       for (const effect of r.effects) addMobEffect(e, effect.id, effect.duration, effect.amplifier);
