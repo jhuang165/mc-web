@@ -171,6 +171,7 @@ export class DedicatedSimulation {
     this.serverItems = new ServerItems(this, saved); // b59: world drops, XP orbs, inventory authority, pickup, saved items (server-items.js)
     this.savedPlayers = new Map(saved.players ?? []);
     this.changes = new Map();
+    this.settled = new Set(); // b95 mpobjects95: cells whose light flood and tile cleanup already ran (the entity pass's changes wait for the next tick's flush)
     this.actions = [];
     this.soundRand = seeded(); this.soundsOut = []; // World.rand for the drink and burp pitch; sounds queued this tick
     this.tiles = new Survival(saved.tiles ?? {}, 'creative');
@@ -232,7 +233,7 @@ export class DedicatedSimulation {
     this.world.put = (x, y, z, b, m = 0, track = true) => {
       const old = this.world.get(x, y, z), meta = this.world.getMeta(x, y, z);
       const result = put(x, y, z, b, m, track);
-      if (result && (old !== b || meta !== m)) this.changes.set(`${x},${y},${z}`, [x, y, z, b, m]);
+      if (result && (old !== b || meta !== m)) { this.changes.set(`${x},${y},${z}`, [x, y, z, b, m]); this.settled.delete(`${x},${y},${z}`); }
       if (result && old !== b && isSign(old)) this.tileEntities?.signs.remove(x, y, z); // b87 tiles87: BlockSign's breakBlock on any id change (a 63 <-> 68 swap starts a fresh tile)
       if (result) swapTiles(swaps, x, y, z, old, meta, b, m); // b88 tiles88: a meta-only sign rewrite and a chest <-> trapped chest swap (server-tile-swaps.js)
       return result;
@@ -618,6 +619,40 @@ export class DedicatedSimulation {
     if (block === MOB_SPAWNER) { if (!t.spawners.get(x, y, z)) t.spawners.add({ x, y, z }); } else t.spawners.remove(x, y, z);
     if (block !== COMMAND_BLOCK) t.commandBlocks?.remove(x, y, z); // b80 mpcmd80: a new command block at the cell starts empty
   }
+  // b95 mpobjects95 (bytecode-read mt.b: g() then mq.b()): the chunk-update flush. `beforeLit` is advanced so the lamp / rail diff after the flush belongs to the next one.
+  litDiff(beforeLit) {
+    for (const key of new Set([...beforeLit, ...this.redstone.lit])) if (beforeLit.has(key) !== this.redstone.lit.has(key)) {
+      const [x, y, z] = key.split(',').map(Number);
+      this.changes.set(key, [x, y, z, this.world.get(x, y, z), this.world.getMeta(x, y, z)]);
+      this.settled.delete(key);
+    }
+    beforeLit.clear(); for (const k of this.redstone.lit) beforeLit.add(k);
+  }
+  settleChanges() {
+    const fresh = [...this.changes].filter(([k]) => !this.settled.has(k)).map(([, v]) => v);
+    this.light.updateMany(fresh); // b78 mpexplosion78: one flood per merged box (lighting.js)
+    for (const [x, y, z] of fresh) { this.dropTiles(x, y, z, this.world.get(x, y, z)); this.settled.add(`${x},${y},${z}`); }
+  }
+  flushChanges(beforeLit) {
+    this.litDiff(beforeLit);
+    this.settleChanges();
+    const final = [...this.changes.values()].map(([x, y, z]) => [x, y, z, this.world.get(x, y, z), this.world.getMeta(x, y, z)]);
+    this.changes.clear(); this.settled.clear();
+    // PlayerInstance.sendChunkUpdate: under 64 changed cells in a chunk go as cells, 64 resend the chunk (protocol.js splitChanges).
+    const { changes, chunks } = splitChanges(final, (cx, cz) => this.world.chunks.get(`${cx},${cz}`), (cx, cz, mask) => describeTiles(this.tileEntities, cx, cz, mask));
+    // sendChunkUpdate's other branches: each changed cell that is not inside a resent chunk sends its tile entity's description, and so does an
+    // edited tile (dirtyTiles). They ride in `tiles`; expandChunks adds the descriptions of the resent chunks.
+    const tiles = [], seen = new Set(), covered = (x, y, z) => chunks.some(c => c.x === x >> 4 && c.z === z >> 4 && (c.mask >> (y >> 4) & 1));
+    for (const [x, y, z] of [...changes, ...[...this.dirtyTiles].map(k => k.split(',').map(Number))]) {
+      const key = `${x},${y},${z}`;
+      if (seen.has(key) || covered(x, y, z)) continue;
+      seen.add(key);
+      const t = describeCell(this.tileEntities, x, y, z);
+      if (t) tiles.push(t);
+    }
+    this.dirtyTiles.clear();
+    return { changes, ...(chunks.length ? { chunks } : {}), ...(tiles.length ? { tiles } : {}) };
+  }
   tick() {
     setGameRuleSource((name) => ruleOn(this, name)); // b80 mpcmd80: entities.js / fire.js / ... read gameRule() (mobGriefing, doMobLoot, doFireTick); without a source they saw the defaults, so /gamerule did not reach them on the server
     const beforeLit = new Set(this.redstone.lit);
@@ -689,6 +724,7 @@ export class DedicatedSimulation {
     this.weather.tick(this.world, null, true);
     this.lightning.tick(); // b66 mplightning
     this.weather.drain();
+    const flushed = this.flushChanges(beforeLit); // b95 mpobjects95: mt.b's mq.b() (PlayerManager.updatePlayerInstances: S23 / S22 / S35 of the dirty chunks) after tickBlocks, before the block events, the village tick and the entity pass
     tickBlockEvents({ redstone: this.redstone }); // b94 mpobjects94: WorldServer.sendQueuedBlockEvents ends mt.b, after the random ticks and the weather bolts (it ran before them)
     this.dispense.tick(); // b61: dispensed TNT, balls, arrows, rockets, potions (before the mobs, as tickEntitySimulation)
     this.vehicles.riderInput(); // b62: a pig steers on this tick's keys
@@ -714,28 +750,10 @@ export class DedicatedSimulation {
       p.survival.effects.add(e);
       (p.effectsOut ??= []).push({ id: e.id, amplifier: e.amplifier, duration: e.duration, ambient: !!e.ambient });
     }, players: [...this.players.values()].map(p => ({ x: p.position.x, y: p.position.y, z: p.position.z, width: PHYSICS.width, height: PHYSICS.height, player: p })) });
-    for (const key of new Set([...beforeLit, ...this.redstone.lit])) if (beforeLit.has(key) !== this.redstone.lit.has(key)) {
-      const [x, y, z] = key.split(',').map(Number);
-      this.changes.set(key, [x, y, z, this.world.get(x, y, z), this.world.getMeta(x, y, z)]);
-    }
-    this.light.updateMany(this.changes.values()); // b78 mpexplosion78: one flood per merged box (lighting.js)
-    const final = [...this.changes.values()].map(([x, y, z]) => [x, y, z, this.world.get(x, y, z), this.world.getMeta(x, y, z)]);
-    this.changes.clear();
-    for (const [x, y, z, b] of final) this.dropTiles(x, y, z, b);
-    // PlayerInstance.sendChunkUpdate: under 64 changed cells in a chunk go as cells, 64 resend the chunk (protocol.js splitChanges).
-    const { changes, chunks } = splitChanges(final, (cx, cz) => this.world.chunks.get(`${cx},${cz}`), (cx, cz, mask) => describeTiles(this.tileEntities, cx, cz, mask));
-    // sendChunkUpdate's other branches: each changed cell that is not inside a resent chunk sends its tile entity's description, and so does an
-    // edited tile (dirtyTiles). They ride in `tiles`; expandChunks adds the descriptions of the resent chunks.
-    const tiles = [], seen = new Set(), covered = (x, y, z) => chunks.some(c => c.x === x >> 4 && c.z === z >> 4 && (c.mask >> (y >> 4) & 1));
-    for (const [x, y, z] of [...changes, ...[...this.dirtyTiles].map(k => k.split(',').map(Number))]) {
-      const key = `${x},${y},${z}`;
-      if (seen.has(key) || covered(x, y, z)) continue;
-      seen.add(key);
-      const t = describeCell(this.tileEntities, x, y, z);
-      if (t) tiles.push(t);
-    }
-    this.dirtyTiles.clear();
-    return { type: 'tick', tick: this.ticks, time: this.time, changes, ...(chunks.length ? { chunks } : {}), ...(tiles.length ? { tiles } : {}), players: this.presence(), weather: this.weather.save(), redstone: { lit: [...this.redstone.lit] }, ...this.itemsField(), ...this.serverItems.tickFields(), ...this.containers.actionsField() };
+    // b95 mpobjects95: what the entity pass, the block events and the tile entities changed waits for the NEXT tick's flush (mq.b); settle its light and tiles now, as the world does at once.
+    this.litDiff(beforeLit);
+    this.settleChanges();
+    return { type: 'tick', tick: this.ticks, time: this.time, ...flushed, players: this.presence(), weather: this.weather.save(), redstone: { lit: [...this.redstone.lit] }, ...this.itemsField(), ...this.serverItems.tickFields(), ...this.containers.actionsField() };
   }
   // `items` rides in a tick while any exist, and once more (empty) after the last one is gone.
   itemsField() { const list = this.itemList(); for (const e of this.items.items) e.velocityChanged = false; /* b83 tracker83: EntityTrackerEntry clears it after its S12 (my.a(List) tail), once a tick */ if (!list.length && !this.itemsSent) return {}; this.itemsSent = list.length; return { items: list }; }
