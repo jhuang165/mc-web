@@ -378,6 +378,15 @@ export class ServerMobs {
     this.spawnPass();
     this.spawnStepped = true;
   }
+  // b96 mpobjects96 (bytecode-read mt.b: mq.b(), then wc.a() VillageCollection.tick and wb.a() VillageSiege.tick, then the portal forcer, ahp.a, and Z() the block events): the villages tick right after the
+  // chunk flush, before the block events (a door a piston event changes this tick is counted next tick) and before the entity pass. EntityWorld.tickMobs then skips its own village tick once.
+  villageStep() {
+    if (!this.views.size) return;
+    const m = this.mobs;
+    m.villages.tick();
+    m.siege.tick();
+    m.villageStepped = true;
+  }
   // One game tick. Nothing runs while nobody is in the world.
   tick() {
     const { mobs, views } = this;

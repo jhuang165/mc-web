@@ -2503,8 +2503,11 @@ export class EntityWorld {
       else if (x.sound && !x.silent) this.clientSounds.push({ sound: x.sound, volume: x.volume, pitch: x.pitch, position: { x: x.x, y: x.y, z: x.z }, clientOnly: true });
     }
     // World.tick: villageCollectionObj.tick() before the entities.
-    this.villages.tick();
-    this.siegeClock = survival?.time; this.siege.tick(); // b67 sieges: VillageSiege (village-siege.js), after the village tick as in WorldServer.tick
+    if (this.villageStepped) this.villageStepped = false; // b96 mpobjects96: the dedicated server's world tick already ran both at mt.b's place (ServerMobs.villageStep)
+    else {
+      this.villages.tick();
+      this.siegeClock = survival?.time; this.siege.tick(); // b67 sieges: VillageSiege (village-siege.js), after the village tick as in WorldServer.tick
+    }
     // Leash knots, witch potions, wither skulls and snow golem snowballs tick in the walk below when `walks` holds their kind (entity-simulation.js entityWalkers).
     if (!this.walks?.has("knot")) this.knotTick(); // horse-gear-live.js: EntityLeashKnot.onUpdate (fence check every 101st tick)
     if (!this.walks?.has("potion")) this.potions?.tick(player, survival); // witch-potions.js; main.js attaches it

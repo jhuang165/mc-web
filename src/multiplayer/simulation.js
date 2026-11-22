@@ -725,6 +725,7 @@ export class DedicatedSimulation {
     this.lightning.tick(); // b66 mplightning
     this.weather.drain();
     const flushed = this.flushChanges(beforeLit); // b95 mpobjects95: mt.b's mq.b() (PlayerManager.updatePlayerInstances: S23 / S22 / S35 of the dirty chunks) after tickBlocks, before the block events, the village tick and the entity pass
+    this.mobs.villageStep(); // b96 mpobjects96: mt.b's wc.a() / wb.a() (VillageCollection and VillageSiege ticks) follow mq.b and precede the block events and the entity pass
     tickBlockEvents({ redstone: this.redstone }); // b94 mpobjects94: WorldServer.sendQueuedBlockEvents ends mt.b, after the random ticks and the weather bolts (it ran before them)
     this.dispense.tick(); // b61: dispensed TNT, balls, arrows, rockets, potions (before the mobs, as tickEntitySimulation)
     this.vehicles.riderInput(); // b62: a pig steers on this tick's keys
