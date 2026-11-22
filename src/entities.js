@@ -1980,9 +1980,12 @@ export class EntityWorld {
     const hit = this.attackEntityFrom(target, f(mobHitAmount(e) + (melee ? melee.damage : 0)), { from: { x: e.x, z: e.z }, attacker: e, name: "mob", player: false });
     if (hit && melee) {
       // Knockback (EntityLivingBase.getKnockbackModifier): Entity.addVelocity along the mob's facing; Fire Aspect: setFire(level * 4).
+      // b96 credit96 (yg.n bytecode-read): addVelocity(-sin(yaw) * i * 0.5F, 0.1, cos(yaw) * i * 0.5F) along the ATTACKER's own yaw (sine table), then its own motionX/Z * 0.6 (not the direction to the target).
       if (melee.knockback > 0) {
-        const dx = target.x - e.x, dz = target.z - e.z, d = Math.hypot(dx, dz) || 1;
-        addVelocity(target, f(f((dx / d) * melee.knockback) * 0.5), 0.1, f(f((dz / d) * melee.knockback) * 0.5));
+        const yaw = Number.isFinite(e.rotationYaw) ? e.rotationYaw : (-(e.yaw || 0) * 180) / Math.PI, rad = f(f(yaw * f(Math.PI)) / 180);
+        addVelocity(target, f(f(-mhSin(rad) * melee.knockback) * 0.5), 0.1, f(f(mhCos(rad) * melee.knockback) * 0.5));
+        e.vx *= 0.6;
+        e.vz *= 0.6;
       }
       if (melee.fire > 0) setMobFire(target, melee.fire);
     }
