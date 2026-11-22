@@ -60,6 +60,7 @@ export const explosionResistance = (id) => f(RESIST[id] ?? 0);
 // ArrayList.addAll(set), so its order is this iteration order. A bin that would
 // reach 9 entries in a table of 64 or more becomes a TreeNode bin in Java, whose
 // order is not modelled; `treeified` reports it (never seen in the probe cases).
+import { fast95, FlatPositionSet95, fail95 } from "./mpperf95-fast.js";
 export class PositionSet {
   constructor() {
     this.table = null;
@@ -116,7 +117,25 @@ const RAY_STEP = f(0.3), RAY_DECAY = f(f(0.3) * f(0.75)), RAY_STEP_D = RAY_STEP;
 // included) visited while the strength is positive joins the set. Returns the affected
 // positions in ArrayList order. `world.get(x, y, z)` gives internal block ids.
 export function explosionBlocks(world, x, y, z, size, rand, resistance = explosionResistance) {
-  const set = new PositionSet(), n = 16, last = f(n - 1);
+  if (fast95.mode === "off") return explosionBlocksWith(new PositionSet(), world, x, y, z, size, rand, resistance);
+  const flat = FlatPositionSet95.acquire();
+  if (!flat) return explosionBlocksWith(new PositionSet(), world, x, y, z, size, rand, resistance); // nested (not seen): the reference set
+  try {
+    fast95.flat++;
+    if (fast95.mode !== "verify") return explosionBlocksWith(flat, world, x, y, z, size, rand, resistance);
+    // verify: the same rays (the rand is replayed from a copy of its state) through both sets
+    const calls = [];
+    const rec = { nextFloat: () => { const v = rand.nextFloat(); calls.push(v); return v; } };
+    const a = explosionBlocksWith(flat, world, x, y, z, size, rec, resistance);
+    let i = 0;
+    const b = explosionBlocksWith(new PositionSet(), world, x, y, z, size, { nextFloat: () => calls[i++] }, resistance);
+    if (a.length !== b.length || a.treeified !== b.treeified) fail95("explosion list length");
+    for (let j = 0; j < a.length; j++) if (a[j][0] !== b[j][0] || a[j][1] !== b[j][1] || a[j][2] !== b[j][2]) fail95("explosion list order");
+    return a;
+  } finally { flat.release(); }
+}
+function explosionBlocksWith(set, world, x, y, z, size, rand, resistance) {
+  const n = 16, last = f(n - 1);
   for (let i = 0; i < n; i++)
     for (let j = 0; j < n; j++)
       for (let k = 0; k < n; k++) {
