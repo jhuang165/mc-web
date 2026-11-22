@@ -12,7 +12,7 @@
 
 ## Verification
 - `node --test --test-concurrency=2 src/mpobjects95-b95.test.js`: 3 pass; with `simulation.js` reverted: 2 fail, 1 pass (the same-tick case).
-- Neighbours: see below.
+- Neighbours: 186 test files naming DedicatedSimulation or multiplayer/simulation (xargs node --test --test-concurrency=2): 1678 tests, 1678 pass, 0 fail. No old test edited.
 
 ## Found wrong in the batch 94 list
 - None.
