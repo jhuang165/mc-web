@@ -7,6 +7,7 @@ import { bitmapHtml } from './bitmap-text.js';
 import { font } from './font-renderer.js';
 import { NBT } from './nbt.js';
 import { nbtGet } from './nbt-get.js';
+import { ITEM_KEYS } from './item-keys-data.js';
 import { ORIGINAL_ITEMS } from './original-items.js';
 import { isDisc, canonicalDisc, discIndex, discOriginal, DISC_ORIGINAL_FIRST, DISC_FIRST, DISC_COUNT, nowPlaying } from './note-jukebox-content.js';
 
@@ -20,13 +21,29 @@ for (const [key, live] of Object.entries(ORIGINAL_ITEMS)) { const [o, damage] = 
 export const jukeboxOriginal = (id) => (isDisc(id) ? { id: discOriginal(id), damage: undefined } : REVERSE.get(id) ?? null);
 // TileEntityJukebox.writeToNBT: id RecordPlayer, x, y, z, legacy Record int and RecordItem (the stack as ItemStack.writeToNBT).
 // `record` is { id (internal item), count, damage } | null; `original` converts an internal item to its original id (a number, or { id, damage }, or null when unmapped).
-export function writeJukeboxTile(tile, x, y, z, original = jukeboxOriginal) {
+// b96 tiles96: `entryOf(stack)` (region-export's stackNbt) writes the whole stack: tag compound and the raw Damage. Without it only id, Count and Damage are written.
+// A stack the port cannot draw but 1.7.10 registers keeps `rawId`; a legacy Record int naming no registered item is a stack with a null item (`ghost`), which native
+// writes as Record 0 and a RecordItem with id 0, Count 1 and Damage 0 (executed, tiles96-reference.json).
+export function writeJukeboxTile(tile, x, y, z, original = jukeboxOriginal, entryOf = null) {
   const t = (type, value) => ({ type, value });
   const map = new Map([['id', t(NBT.STRING, 'RecordPlayer')], ['x', t(NBT.INT, x)], ['y', t(NBT.INT, y)], ['z', t(NBT.INT, z)]]);
-  const o = tile.record ? original(tile.record.id) : null, id = typeof o === 'number' ? o : o?.id;
+  const record = tile.record;
+  if (record?.ghost) {
+    map.set('Record', t(NBT.INT, 0));
+    map.set('RecordItem', t(NBT.COMPOUND, new Map([['id', t(NBT.SHORT, 0)], ['Count', t(NBT.BYTE, record.count ?? 1)], ['Damage', t(NBT.SHORT, 0)]])));
+    return map;
+  }
+  if (record?.rawId > 0) {
+    const raw = Number.isInteger(record.rawDamage) && record.rawDamage > 0 ? record.rawDamage : 0;
+    map.set('Record', t(NBT.INT, record.rawId));
+    map.set('RecordItem', t(NBT.COMPOUND, new Map([['id', t(NBT.SHORT, record.rawId)], ['Count', t(NBT.BYTE, record.count ?? 1)], ['Damage', t(NBT.SHORT, raw)]])));
+    return map;
+  }
+  const o = record ? original(record.id) : null, id = typeof o === 'number' ? o : o?.id;
   if (id) {
+    const entry = entryOf?.(record);
     map.set('Record', t(NBT.INT, id));
-    map.set('RecordItem', t(NBT.COMPOUND, new Map([['id', t(NBT.SHORT, id)], ['Count', t(NBT.BYTE, tile.record.count ?? 1)], ['Damage', t(NBT.SHORT, o?.damage ?? tile.record.damage ?? 0)]])));
+    map.set('RecordItem', t(NBT.COMPOUND, entry ?? new Map([['id', t(NBT.SHORT, id)], ['Count', t(NBT.BYTE, record.count ?? 1)], ['Damage', t(NBT.SHORT, o?.damage ?? record.damage ?? 0)]])));
   }
   return map;
 }
@@ -43,12 +60,24 @@ export function readJukeboxTile(tag, internal = (id) => (id >= DISC_ORIGINAL_FIR
 }
 
 // b95 tiles95: the same read for any item. `convert(compound)` turns an ItemStack compound into the port's { id, count, damage } (null when the port has no such item);
-// the legacy Record int is a one-item stack of that id (ids above a short are not items).
+// the legacy Record int is a one-item stack of that id.
+// b96 tiles96 (executed): ItemStack.loadItemStackFromNBT keeps a stack whenever Item.getItemById(id) is registered, so a registered item the port cannot draw is
+// kept as `{ id: 0, rawId, count, damage: 0 }` (RecordItem) and a legacy Record int is a one-item stack even when no item has that id (`ghost`, a null item:
+// every int above 0 reads that way, 32768 and up included). A RecordItem naming no registered item is no stack (so Record is not consulted either).
+const registered = (id) => Number.isInteger(id) && id > 0 && id in ITEM_KEYS;
 export function readJukeboxStack(tag, convert) {
   const item = tag.get('RecordItem');
-  if (item?.type === NBT.COMPOUND) return { record: convert(item.value) };
+  if (item?.type === NBT.COMPOUND) {
+    const record = convert(item.value);
+    if (record) return { record };
+    const raw = nbtGet(item.value, 'id', NBT.SHORT, 0);
+    return { record: registered(raw) ? { id: 0, rawId: raw, count: nbtGet(item.value, 'Count', NBT.BYTE, 0), damage: 0 } : null };
+  }
   const legacy = nbtGet(tag, 'Record', NBT.INT, 0);
-  return { record: legacy > 0 && legacy <= 32767 ? convert(new Map([['id', { type: NBT.SHORT, value: legacy }], ['Count', { type: NBT.BYTE, value: 1 }], ['Damage', { type: NBT.SHORT, value: 0 }]])) : null };
+  if (legacy <= 0) return { record: null };
+  const record = legacy <= 32767 ? convert(new Map([['id', { type: NBT.SHORT, value: legacy }], ['Count', { type: NBT.BYTE, value: 1 }], ['Damage', { type: NBT.SHORT, value: 0 }]])) : null;
+  if (record) return { record };
+  return { record: registered(legacy) ? { id: 0, rawId: legacy, count: 1, damage: 0 } : { id: 0, ghost: true, count: 1, damage: 0 } };
 }
 
 // The comparator reading: ItemRecord id + 1 - record_13 id, so disc index + 1 (0 when empty or not a disc).
@@ -81,7 +110,7 @@ export function installJukeboxes(redstone, { play = () => {}, spawn = () => {}, 
     t.record = null;
     w.setBlockMetadataWithNotify(x, y, z, 0, 2);
     const [d0, d1, d2] = ejectOffsets(w.rand);
-    if ((stack.count | 0) > 0) spawn({ ...stack }, x + d0, y + d1, z + d2); // b95 tiles95: a kept Count 0 stack has nothing to drop here (the port's item entity needs a count)
+    if ((stack.count | 0) > 0 && stack.id > 0) spawn({ ...stack }, x + d0, y + d1, z + d2); // b95 tiles95: a kept Count 0 stack has nothing to drop here (the port's item entity needs a count); b96 tiles96: nor has a stack with no port item (rawId, ghost: unproven natively, bytecode not read)
     changed();
     return true;
   };
@@ -103,16 +132,26 @@ export function installJukeboxes(redstone, { play = () => {}, spawn = () => {}, 
     // b84 cmdfix84: BlockJukebox.breakBlock's dropRecord for a block replaced outside the redstone engine (/setblock): stop the record, empty the tile, the disc as an item.
     eject: (x, y, z) => eject(redstone, x, y, z),
     // ItemRecord.onItemUse on a jukebox with metadata 0: insert the disc (the caller takes it from the stack outside Creative).
-    insert(x, y, z, item) {
+    // b96 tiles96: `stack` is the held stack; BlockJukebox.func_149926_b stores stack.copy() with its size 1, so the tag and Damage ride along.
+    insert(x, y, z, item, stack = null) {
       if (!isDisc(item) || redstone.getBlock(x, y, z) !== JUKEBOX_ID || redstone.getBlockMetadata(x, y, z) !== 0) return false;
-      tile(x, y, z).record = { id: canonicalDisc(item), count: 1, damage: 0 };
+      tile(x, y, z).record = { ...(stack && stack.id === item ? stack : {}), id: canonicalDisc(item), count: 1, damage: 0 };
       redstone.setBlockMetadataWithNotify(x, y, z, 1, 2);
       play(canonicalDisc(item), x, y, z);
       changed();
       return true;
     },
     save: () => [...tiles].filter(([k, v]) => v.record && (() => { const p = k.split(',').map(Number); return !redstone.loaded?.(...p) || redstone.getBlock(...p) === JUKEBOX_ID; })()).map(([k, v]) => { const [x, y, z] = k.split(',').map(Number); return { x, y, z, record: { ...v.record } }; }),
-    restore(records) { tiles.clear(); for (const e of records ?? []) if ([e.x, e.y, e.z].every(Number.isInteger) && Number.isInteger(e.record?.id) && e.record.id > 0) tiles.set(key(e.x, e.y, e.z), { record: { id: isDisc(e.record.id) ? canonicalDisc(e.record.id) : e.record.id, count: Number.isInteger(e.record.count) ? e.record.count : 1, damage: Number.isInteger(e.record.damage) ? e.record.damage : 0 } }); }, // b95 tiles95: any stack, as the tile keeps
+    restore(records) { // b95 tiles95: any stack, as the tile keeps; b96 tiles96: with its tags, raw Damage and the rawId / ghost stacks
+      tiles.clear();
+      for (const e of records ?? []) {
+        const r = e?.record;
+        if (![e?.x, e?.y, e?.z].every(Number.isInteger) || !r) continue;
+        const kept = (Number.isInteger(r.id) && r.id > 0) || (r.id === 0 && (r.ghost === true || (Number.isInteger(r.rawId) && r.rawId > 0)));
+        if (!kept) continue;
+        tiles.set(key(e.x, e.y, e.z), { record: { ...r, id: isDisc(r.id) ? canonicalDisc(r.id) : r.id, count: Number.isInteger(r.count) ? r.count : 1, damage: Number.isInteger(r.damage) ? r.damage : 0 } });
+      }
+    },
   };
 }
 

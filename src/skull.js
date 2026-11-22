@@ -41,9 +41,12 @@ export function skullPose(meta, rot) {
 export const skullRot = (yaw) => Math.floor((yaw * 16) / 360 + 0.5) & 15;
 // BlockSkull.breakBlock drops the item of the tile's type unless the metadata carries bit 8 (Creative harvest).
 // A player head (type 3) with a profile keeps it as the item's SkullOwner compound (BlockSkull.dropBlockAsItemWithChance, bytecode-read and executed).
+// b96 tiles96 (executed, tiles96-reference.json drops): `type` is the tile's raw SkullType byte and the item takes it whole (7 drops Damage 7, 100 drops 100), a negative one
+// reads as 0 (ItemStack.setItemDamage). The port's item has damage 0..4, so a raw type above 4 is damage 0 with rawDamage, which draws as the skeleton skull as native does.
 export function skullDrops(type, profile = null) {
-  const drop = { id: ITEM_SKULL, count: 1, damage: type | 0 };
-  if ((type | 0) === 3 && profile) {
+  const t = type | 0, drop = { id: ITEM_SKULL, count: 1, damage: t >= 0 && t <= 4 ? t : 0 };
+  if (t > 4) drop.tags = { rawDamage: t };
+  if (t === 3 && profile) {
     drop.tags = { skullRaw: rawOf({ type: NBT.COMPOUND, value: profileToNbt(profile) }) };
     if (typeof profile.name === 'string') drop.tags.skullOwner = profile.name;
   }
@@ -91,7 +94,7 @@ export function installSkullBreak(world, skulls, drop) {
     if (!tile) return;
     store.remove(x, y, z);
     if (meta & 8) return;
-    drop(skullDrops(tile.type, tile.profile ?? null), x, y, z);
+    drop(skullDrops(tile.rawType ?? tile.type, tile.profile ?? null), x, y, z); // b96 tiles96: the raw SkullType byte
   };
 }
 const FACE_OFFSET = [[0, -1, 0], [0, 1, 0], [0, 0, -1], [0, 0, 1], [-1, 0, 0], [1, 0, 0]];
@@ -141,7 +144,8 @@ export function placeSkull(state, { id, damage = 0, target, stack = null }, hook
   // There is no canPlace or replaceable test: setBlock replaces whatever stands in the target cell.
   const rot = side === 1 ? skullRot(state.yawDegrees ?? doorRotationYaw(state.yaw ?? 0)) : 0, skulls = hooks.skulls ?? SKULLS;
   world.set(x, y, z, SKULL, true, side);
-  const tile = skulls.create(x, y, z, damage, rot, '', skullProfileOfStack(stack, damage));
+  const type = damage === 0 && Number.isInteger(stack?.rawDamage) && stack.rawDamage > 4 && stack.rawDamage <= 127 ? stack.rawDamage : damage; // b96 tiles96: ItemSkull.onItemUse stores the stack's whole damage as SkullType
+  const tile = skulls.create(x, y, z, type, rot, '', skullProfileOfStack(stack, damage));
   const built = tryBuildWither(world, skulls, x, y, z, { difficulty: hooks.difficulty ?? 2, spawn: hooks.spawnWither, soulSand: hooks.soulSand });
   if (!survival.creative) survival.take(id);
   hooks.updateBlock?.(x, z, y);

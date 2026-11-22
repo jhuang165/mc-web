@@ -14,7 +14,7 @@ import { readNBT as readSpawner, spawnerJSON, makeSpawner } from './mob-spawner.
 import { writeCommandBlock, readCommandBlock } from './command-block.js';
 import { LastOutputError } from './chat-component.js';
 import { writeNoteTile, readNoteTile } from './note-blocks.js';
-import { writeJukeboxTile, readJukeboxStack } from './jukebox.js';
+import { readJukeboxStack } from './jukebox.js';
 import { profileOfSkullTile, skullOwnerEntry } from './skull-profile.js';
 import { potNbtOf, potFromNbt, potContents, setPotContents } from './stone-utility.js';
 
@@ -80,8 +80,8 @@ const OTHER = {
   RecordPlayer({ tag, x, y, z, host }) {
     const tile = host.music?.jukeboxes.tile(x, y, z);
     if (!tile) return false;
-    const { record } = readJukeboxStack(overlay(writeJukeboxTile(tile, x, y, z), tag), jukeboxStackFromNbt);
-    tile.record = record; // b95 tiles95: any stack
+    // b96 tiles96: readFromNBT sets the record only for a RecordItem compound or a Record int above 0 and otherwise leaves the old stack (with its tag) alone.
+    if (tag.get('RecordItem')?.type === NBT.COMPOUND || nbtGet(tag, 'Record', NBT.INT, 0) > 0) tile.record = readJukeboxStack(tag, jukeboxStackFromNbt).record; // b95 tiles95: any stack
     return true;
   },
   // TileEntityBeacon.readFromNBT: Primary, Secondary and Levels ints.

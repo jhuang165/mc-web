@@ -23,7 +23,7 @@ import { QUARTZ_BLOCK, quartzDropDamage } from './nether-blocks.js';
 // the tree system's random stream drives leaf drops as it does in the browser.
 // BlockSkull.breakBlock: the item of the tile's SkullType (none in Creative, whose harvest sets metadata bit 8).
 // b84 drops84: the tile is consumed here (the world's skullBreak hook would otherwise drop the same skull again when the cell clears); `skulls` is the dimension's store.
-const skullBreakDrops = (p, drops, skulls = SKULLS) => { const tile = skulls.tile(...p); skulls.remove(...p); return drops ? skullDrops(tile?.type ?? 0, tile?.profile) : []; };
+const skullBreakDrops = (p, drops, skulls = SKULLS) => { const tile = skulls.tile(...p); skulls.remove(...p); return drops ? skullDrops(tile?.rawType ?? tile?.type ?? 0, tile?.profile) : []; };
 export function breakPlayerBlock({ world, survival, items, xpOrbs, farming, trees, heldTool }, coords, {
   skulls = SKULLS, // b84 drops84: the dimension's skull tiles (the server passes its own; the global store is single player's)
   creative = false,

@@ -51,7 +51,7 @@ const tag=(type,value)=>({type,value}), comp=value=>tag(NBT.COMPOUND,new Map(Obj
 const byte=v=>tag(NBT.BYTE,(v<<24)>>24), short=v=>tag(NBT.SHORT,v), int=v=>tag(NBT.INT,v), str=v=>tag(NBT.STRING,v), float=v=>tag(NBT.FLOAT,v), long=v=>tag(NBT.LONG,BigInt(Math.trunc(v)));
 const reverse=new Map();
 for(const [k,id] of Object.entries(ORIGINAL_ITEMS)) {const [o,damage]=k.split(':').map(Number);if(!reverse.has(id)||damage===undefined)reverse.set(id,{id:o,damage});}
-function stackNbt(s,slot,report,original=false) {
+export function stackNbt(s,slot,report,original=false) {
  if(!s)return null;const o=original?s:reverse.get(s.id);
  if(!o){report.unmappedItems++;return null;}
  const rawId=(s.rawId===8&&o.id===9)||(s.rawId===10&&o.id===11)?s.rawId:o.id; // b79 falling79: flowing water/lava ItemBlocks
@@ -204,7 +204,7 @@ function payloadIn(state,ox,oz,report,blockAt) {
  for(const {value:e} of state.comparatorTiles??[]){const b=blockAt(e.x,e.y,e.z);if(b===149||b===150)tiles.push(new Map(Object.entries({id:str('Comparator'),x:int(e.x+ox),y:int(e.y),z:int(e.z+oz),OutputSignal:int(e.signal)})));}
  for(const {value:e} of state.commandBlocks??[])tiles.push(writeCommandBlock(e,e.x+ox,e.y,e.z+oz));
  // TileEntityNote (Music) and TileEntityJukebox (RecordPlayer): the note byte, the Record int and the RecordItem stack.
- for(const {value:e} of state.musicTiles??[])tiles.push(e.kind==='note'?writeNoteTile(e,e.x+ox,e.y,e.z+oz):writeJukeboxTile(e,e.x+ox,e.y,e.z+oz));
+ for(const {value:e} of state.musicTiles??[])tiles.push(e.kind==='note'?writeNoteTile(e,e.x+ox,e.y,e.z+oz):writeJukeboxTile(e,e.x+ox,e.y,e.z+oz,undefined,s=>stackNbt(s,undefined,report)));
  // TileEntitySign.writeToNBT: Text1-Text4 (signs.js).
  for(const {value:e} of state.signs??[])tiles.push(new Map(Object.entries({id:str('Sign'),x:int(e.x+ox),y:int(e.y),z:int(e.z+oz),Text1:str(e.text?.[0]??''),Text2:str(e.text?.[1]??''),Text3:str(e.text?.[2]??''),Text4:str(e.text?.[3]??'')})));
  // TileEntitySkull.writeToNBT (bytecode-read, item-tags2-reference.json): SkullType and Rot bytes and the Owner GameProfile compound; 1.7.10 writes no ExtraType (skull-profile.js).

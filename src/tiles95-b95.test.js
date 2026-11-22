@@ -53,7 +53,8 @@ test("jukebox keeps any stack: read and written as the native tile does", () => 
   for (const r of cases("RecordPlayer")) {
     const { record } = readJukeboxStack(input(r), convert);
     const native = r.nbt.v.RecordItem;
-    if (!native || num(r.nbt.v.Record) === 0) { assert.equal(record, null, r.label); continue; }
+    if (!native) { assert.equal(record, null, r.label); continue; }
+    if (num(r.nbt.v.Record) === 0) { assert.equal(record.ghost, true, r.label); continue; } // b96 tiles96: native keeps a null-item stack for an unregistered Record int (written Record 0, RecordItem id 0); this row had expected none
     assert.ok(record, r.label);
     const out = writeJukeboxTile({ record }, 1, 2, 3);
     assert.equal(out.get("Record").value, num(r.nbt.v.Record), r.label);
