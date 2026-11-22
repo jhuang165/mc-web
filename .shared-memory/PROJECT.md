@@ -145,6 +145,22 @@ Batch 79 (2026-11-16/18, ten tracks in `../wt79-<name>` on `batch79-<name>`, cut
 - Verification: the first full run hung on those two files; after the fix one full `npm test` on 536376793: 8964 tests, 8964 pass. Build and bridge tests ok. No browser checks.
 - Open: "Still open from batch 79" in `public/research/remaining-gaps.md`.
 
+Batch 95 (2026-11-21, ten tracks in `../wt95-<name>` on `batch95-<track>95`, cut from f5062f77e, merged --no-ff on `batch95-lead`; track agents ran on Sonnet, by request; shared rules `../artifacts/b95-lead/track-rules.md`; lead note `b95-lead-track.md`; no browser checks or full test runs in tracks, by request):
+- 0.124.0, by track (details in the `*-b95-track.md` notes and "Done in batch 95" in `public/research/remaining-gaps.md`):
+  - horse95: a player rider whose eyes are in water steps off a horse or pig (`Horse95Probe`), server and single player; killed-horse drift is native unridden wander.
+  - mpobjects95: Overworld server block-change flush at `mq.b`'s place, entity-pass changes go out next tick.
+  - credit95: PvP victim's held Thorns; mob-on-mob `hitMob` Thorns.
+  - console95: only player entities' S13 is immediate (`Console95Probe`); `/netstat` counts it.
+  - mpperf95: flat explosion position set behind `MC_MPPERF95=on|off|verify`; hashes unchanged.
+  - spcopy95: arrival known before the old world's save (`announceArrival`), held targets keep the copy, old chunk listing (`SpCopy95Probe`), gate switch at launch.
+  - portals95: only a title-screen open resets mob transients and item pickup delay; cart display fields and furnace Fuel survive.
+  - tiles95: idle away stop `skipTicks`; `Tiles95Probe` tile NBT fixes (skull bytes, jukebox any stack, spawner Type, cart command reads).
+  - entnbt95: player NBT from a real `EntityPlayerMP` (`Entnbt95Probe`, `player-nbt.js`).
+  - mobrec95: 31 executed pigman/giant/sheep/squid records; giant age, shear Random, lamb colour.
+- Lead: ten clean merges; the sheep shear test encoded the world random and now asserts the native range.
+- Verification: one full `npm test` on the merged tree: 10565/10567 (`horse93-b93` load flake, 3/3 alone; `sheep.test.js` fixed, 52/52 over 5 targeted runs). Build and bridge tests ok. No browser checks.
+- Open: "Still open from batch 95" in `public/research/remaining-gaps.md`.
+
 Batch 94 (2026-11-21, ten tracks in `../wt94-<name>` on `batch94-<track>94`, cut from 5650dbe8b, merged --no-ff on `batch94-lead`; track agents ran on Sonnet, by request; shared rules `../artifacts/b94-lead/track-rules.md`; lead note `b94-lead-track.md`; no browser checks or full test runs in tracks, by request):
 - 0.123.0, by track (details in the `*-b94-track.md` notes and "Done in batch 94" in `public/research/remaining-gaps.md`):
   - horse94: the `horse88-b88`/`horse92-b92` flakes were test rolls (tests now stub the AI and inject a no-hit Random); server rider input decays 0.98 per C05 (`decayRideInput`, boats too); `Horse94Probe`.

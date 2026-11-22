@@ -2,6 +2,46 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 95
+
+Batch 95 covered these areas (track agents ran on Sonnet):
+- **Horses.** A player rider whose eyes are in water steps off a horse or pig at once, on the dedicated server and in single player (`sv.C`, Executed: `Horse95Probe`, `horse95-reference.json`); mob riders already did. The killed saddled horse's rare drift is the native wander of an unridden horse (`wi.bh` has no health test), not a port bug.
+- **Multiplayer objects.** The Overworld dedicated server builds its block-change flush right after weather, at `mq.b`'s place before block events and the entity pass, so changes made later in the tick (falling blocks, pistons, hoppers, mob griefing) reach clients in the next tick's flush (bytecode-read).
+- **Kill credit.** A player victim of a player runs its held item's Thorns after its armour; mob-on-mob `hitMob` runs the victim's Thorns once (not for wolves, slimes, magma cubes, iron golems, ocelots and snow golems, whose attacks skip `yg.n`). Bytecode-read.
+- **The dedicated server.** Only a player entity's S13 is sent at once (`mw.d` executed in `Console95Probe`); mobs, items and carts killed during network handling are removed in the next tick's entity pass, so the batch 94 queue was already right for them. `/netstat` counts the immediate S13 of a player leaving the tracked set or disconnecting.
+- **Server speed.** Behind `MC_MPPERF95=on|off|verify`: a flat explosion position set reproducing Java HashMap resize and bin order. Explosion allocation 5.5 to 3.2 MB per 150 travel ticks, heap per tick 1 to 3% lower in travel; tick time within noise; scenario hashes unchanged.
+- **The single-player copy.** The Teleporter result is computed on a copy of the destination before the old world's save point (`announceArrival`), so a copy that left reads as standing at its arrival and mobs targeting it keep it within follow range (Nether and End destinations). `SpCopy95Probe` executed the old world's listing at the scaled chunk (none for End exits), modelled by `PlayerView.listedIn`. The chunk-gate switch is set at `launch`.
+- **Portals.** Only a world opened from the title screen (and the dedicated server's start) resets port-only mob transients and gives dropped items delay 0 and a fresh hover (`xk.a(dh)` reads no PickupDelay, bytecode-read); portal trips, away runs and dimension switches keep them. Cart custom display fields survive save and portals; furnace cart Fuel is no longer clamped.
+- **Tiles.** An idle-stopped away run counts its unrun ticks with `skipTicks`. `Tiles95Probe` (81 records over 12 tiles): spawner Type defaults to `""`, cart command block string reads, raw skull SkullType and Rot bytes survive saves and export, the jukebox holds and ejects any stack.
+- **Entity NBT.** `Entnbt95Probe` (a real `EntityPlayerMP`): player export writes Sleeping/SleepTimer, HurtTime, DeathTime at Health 0, OnGround, FallDistance, the held weapon or tool attack modifier and the sprint speed entry (`player-nbt.js`). Zombie and horse random attributes round-trip from executed compounds.
+- **Mob records.** 31 new executed records replay with no divergence: long pigman and giant fights, sheep and squid. Fixes: the giant's age drives its despawn roll, shearing uses the sheep's own Random, a lamb's undyed colour draws the world Random.
+
+Found wrong in the batch 94 list:
+- The killed-horse drift was an unridden horse's wander, not a rider case.
+- A PvP victim's held Thorns visit is its only one, not a second.
+- A removal during network handling sends its S13 at once only for player entities.
+- A player saved at Health 0 was modelled (`die()` saves); a later save on the death screen kept DeathTime 0.
+- Two old tests encoded port assumptions (skull type clamp, disc-only jukebox) and were corrected.
+
+Still open from batch 95:
+- **Multiplayer.**
+  - Horses: a lead pulling a ridden horse and /kill on a real player rider are unprobed; the water dismount's S08/S1B packets and spot are not compared against a probe.
+  - Objects: the Nether and End still send entity-pass block changes in the same tick; village and siege ticks still run inside `mobs.tick`.
+  - The dedicated server: the S0C of a player entering the tracked set is not counted; `tick` counts an S18 for every other player row, far rows included.
+  - Speed: `blockBoxesFast`, `tickMobs` shapes, tracker iterators, `moveEntityBody`'s box copy.
+  - Portals: the server's own cart records were not checked for custom display tiles.
+  - Server commands: /publish stays off. End island tails past 128 blocks are cut on some seeds (left for the user's decision). WebSocket compression stays off.
+  - Not seen in a browser: pistons and falling blocks one tick later on clients, plus the batch 67 to 94 lists.
+- **Single player.**
+  - The copy: a Nether-to-Overworld trip gets no early arrival (needs Overworld terrain on the main thread); ticks before the arrival hint is ready behave as before.
+  - Kill credit: after a reload a stashed ball keeps the dead body where native looks the thrower up by name.
+  - Tiles: jukebox stack tags and disc Damage, raw type 7 skull drops, an unregistered `Record` id.
+  - Entity NBT: player Motion and AttackTime are 0; effect attribute modifiers; SleepTimer after waking.
+  - Mob records: cows, pigs, chicken breeding, bats and villager trading are thin; shearing with a real shears stack.
+  - Not seen in a browser: the water dismount, a title-screen open resetting mobs while a trip keeps them, raw type 7 skulls, non-disc jukebox ejection, plus the batch 94 list.
+- **Rendering.** No native pixel capture.
+- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+
 ## Done in batch 94
 
 Batch 94 covered these areas (track agents ran on Sonnet):
@@ -25,25 +65,7 @@ Found wrong in the batch 93 list:
 - A live mob's `DeathTime` does not tilt the client copy (the spawn packet does not carry it).
 - The probe's explosion double not pushing skulls was a probe artefact; the armoured wither's arrow immunity existed but never fired for bow arrows.
 
-Still open from batch 94:
-- **Multiplayer.**
-  - Horses: a mount entering water, a lead pulling the rider off and /kill on a real player rider are unprobed; a killed saddled horse drifted in about 3% of live-AI runs (not root-caused).
-  - Objects: block changes from the entity pass reach clients one tick early (one `changes` map per tick; natively `mq.b` flushes before entities); village and siege ticks still run inside `mobs.tick`.
-  - Kill credit: a player victim hit by a player does not get the second Thorns visit; mob-on-mob hits never run the victim's Thorns.
-  - The dedicated server: a removal during the same tick's network handling would send its S13 at once natively.
-  - Speed: `explosionBlocks`, `blockBoxesFast`, `tickMobs` shapes, tracker iterators, `moveEntityBody`'s box copy.
-  - Server commands: /publish stays off. End island tails past 128 blocks are cut on some seeds (left for the user's decision). WebSocket compression stays off.
-  - Not seen in a browser: leads across server portals, plus the batch 67 to 93 lists.
-- **Single player.**
-  - The copy: a held target with a near arrival and the old chunk listing still need the arrival before the old world's save point.
-  - Portals: item `load()` still reads the saved pickup delay on a reload; a true game reload keeps port-only transients from the save (native resets them, since the port also rebuilds dimensions in-session from the save); cart subtypes are not audited field by field.
-  - Tiles: an away run that stops idle assumes no rule change in the ticks it never ran.
-  - Kill credit: after a reload a stashed ball keeps the dead body where native looks the thrower up by name.
-  - Mob records: longer pigman and giant melee fights.
-  - Entity NBT: player export always writes `DeathTime` 0.
-  - Not seen in a browser: entities popping in chunk by chunk after login and portal trips (new in this batch), immortal corpses after a reload, negative-rotation item frames, the wither's break sound and armour shimmer, the clock after a trip that turned `doDaylightCycle` on, plus the batch 93 list.
-- **Rendering.** No native pixel capture.
-- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+Still open from batch 94: carried into the batch 95 list above, less what batch 95 fixed or found wrong.
 
 ## Done in batch 93
 
