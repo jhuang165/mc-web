@@ -106,7 +106,7 @@ export class DimensionLive {
   // host: { active(), world(), worlds(), save(), openWorld(record), sound(name, opts) }
   constructor(host) {
     this.host = host; this.state = new PortalState(); this.busy = false; this.listSkip = false; this.overlayAmount = 0; this.writes = [];
-    this.portals = new EntityPortals(); this.peeks = new Map(); this.exitCache = new Map(); this.queue = Promise.resolve(); this.flights = 0;
+    this.portals = new EntityPortals(); this.peeks = new Map(); this.exitCache = new Map(); this.queue = Promise.resolve(); this.flights = 0; this.arrivalPre = null;
     this.readEdits = readChunkEdits; this.readColumns = readChunkColumns; this.writeColumns = writeChunkColumns; this.away = null; this.awayLog = null; this.makeAwayWorker = () => new Worker(new URL("./away-worker.js", import.meta.url), { type: "module" }); this.listBases = listBaseColumns; this.readBases = readBaseColumns; this.storedIndexes = new Map(); this.onDragonSpawn = () => {}; this.exitWarm = new ExitPrewarm(); this.prewarmEnabled = true; this.quiet = false; this.overlay = null; this.trigger = false;
   }
   // main.js openWorld hooks ------------------------------------------------------------
@@ -118,7 +118,7 @@ export class DimensionLive {
   // arrivalWarmer) builds the terrain they read ahead of them; without them (every caller but a loading-screen trip) it runs at once.
   async arrive(prepared, record, { pause = null, warm = null } = {}) {
     await restoreImportedFortress(prepared, record); // imported data/Fortress.dat starts (Nether views only)
-    const t = record.transit; delete record.transit; this.writes = []; this.exit = false; this.peeks.clear(); this.exitPortals = null;
+    const t = record.transit; delete record.transit; this.writes = []; this.exit = false; this.peeks.clear(); this.exitPortals = null; this.arrivalPre = null;
     if (!t) return;
     const to = dimensionOf(record), from = t.from;
     if (t.death || from === END) delete record.portalState; // A new player is created on respawn.
@@ -485,9 +485,13 @@ export class DimensionLive {
     this.listSkip = !exit && !death; // b92 spcopy92: transferPlayerToDimension (removePlayerEntityDangerously) steps World.updateEntities over the next entity; the End exit (removeEntity) and a death do not
     try {
       const h = this.host, rec = h.active(), p = h.player();
+      // b96 spcopy96: natively the Teleporter runs inside the portal tick (no tick in between). With the destination's saved edits read during the portal wait and no delivery in
+      // flight, the arrival is computed here, before the first await; otherwise (no wait: a scripted trip, the End portal) after the settle as in batch 95.
+      // (`target` is 0 for the Overworld: the old `target &&` tests skipped every trip to it)
+      const early = !exit && !death && this.flights === 0 && this.announceNow(rec, p, target);
       await this.settle();
       this.peeks.clear();
-      if (target && !exit && !death) await this.announceArrival(rec, p, target); // b95 spcopy95: transferPlayerToDimension runs the Teleporter before the old world's save point
+      if (!exit && !death && !early) await this.announceArrival(rec, p, target); // b95 spcopy95: transferPlayerToDimension runs the Teleporter before the old world's save point
       await h.save();
       this.awayIdle = null;
       const root = h.worlds().find((w) => w.id === rootIdOf(rec));
@@ -511,27 +515,61 @@ export class DimensionLive {
   }
   // b95 spcopy95: the player's arrival, known before the old world's save point. Natively oi.a(mw,int) -> oi.a(sa,int,mt,mt) places the entity with the Teleporter first (the old world
   // keeps ticking with the EntityPlayerMP at the arrival); the port builds the new world only after the save, so the same Teleporter runs here on a peek of the destination with COPIES of
-  // the shared portal cache and random (arrive repeats it for real and reaches the same spot: same terrain, edits, cache, clock). Nether and End destinations only: their peeks read cheap
-  // terrain; an Overworld arrival would need the Overworld's terrain on this thread (left to arrive). Any failure leaves the trip as before (no hint). host.arrivalHint gets
-  // { x, y, z, scaled: {x, y, z} }, `scaled` being the position the old world listed the entity at (transferTarget, before the Teleporter).
-  async announceArrival(rec, p, target) {
+  // the shared portal cache and random (arrive repeats it for real and reaches the same spot: same terrain, edits, cache, clock). Any failure leaves the trip as before (no hint).
+  // host.arrivalHint gets { x, y, z, scaled: {x, y, z} }, `scaled` being the position the old world listed the entity at (transferTarget, before the Teleporter).
+  // b96 spcopy96: an Overworld destination reads the columns the exit prewarm already built during the portal wait (exit-prewarm.js shell cells: the same cells the trip adopts), and
+  // stops with no hint when one is missing (no generation on this thread, so no stall). The destination's saved edits are read once during the wait (armArrival) so the whole
+  // computation can run synchronously in the portal tick (announceNow).
+  async armArrival(root, target) {
+    const key = `${root.id}:${target}`;
+    if (this.arrivalPre?.key === key) return this.arrivalPre.ready;
+    const pre = this.arrivalPre = { key, edits: null, stored: null };
+    pre.ready = (async () => {
+      pre.edits = new Map(target === OVERWORLD ? (root.chunked ? await this.readEdits(root.id) : []) : await this.readEdits(viewId(root.id, target)));
+      pre.stored = await this.warmStored(root, target);
+    })().catch(() => { if (this.arrivalPre === pre) this.arrivalPre = null; });
+    return pre.ready;
+  }
+  // The destination's terrain for the early peek: Nether and End generate cheap columns; the Overworld only what the exit prewarm built (throws when a column is missing).
+  arrivalTerrain(root, target) {
+    if (target !== OVERWORLD) return new DimensionWorld(root.seed, target);
+    const shell = this.exitWarm?.shell;
+    if (!shell || this.exitWarm.id !== `${root.id}:${OVERWORLD}` || shell.dimension) throw new Error("no prewarmed Overworld");
+    return { dimension: OVERWORLD, generateTerrainChunk: (cx, cz) => {
+      const column = shell.baseColumns?.get(`${cx},${cz}`) ?? shell.population.cells.map.get(`${cx >> 3},${cz >> 3}`)?.columns.get(`${cx},${cz}`);
+      if (!column) throw new Error(`column ${cx},${cz} not built`);
+      return column;
+    } };
+  }
+  announceNow(rec, p, target, pre = this.arrivalPre) {
     const h = this.host;
-    if (typeof h.arrivalHint !== "function" || target === OVERWORLD) return;
+    if (typeof h.arrivalHint !== "function" || !pre?.edits || pre.key !== `${rootIdOf(rec)}:${target}`) return false;
     try {
       const root = h.worlds().find((w) => w.id === rootIdOf(rec));
-      if (!root) return;
+      if (!root) return false;
       const from = dimensionOf(rec), tt = transferTarget(from, target, p.x, p.y, p.z, mcYaw(p.yaw ?? 0));
-      const edits = new Map(await this.readEdits(viewId(root.id, target)));
+      const edits = new Map(pre.edits);
       for (const [x, y, z, id, meta] of root.portalArrivals?.[target]?.writes ?? []) edits.set(`${x},${y},${z}`, id | (meta << 8));
-      const peek = new TerrainPeek(new DimensionWorld(root.seed, target), edits);
-      peek.dimension = target; peek.actualHeight = actualHeight(target); peek.seed = javaSeed(root.seed); peek.time = this.clock(root);
+      const peek = new TerrainPeek(this.arrivalTerrain(root, target), edits);
+      peek.stored = pre.stored; peek.dimension = target; peek.actualHeight = actualHeight(target); peek.seed = javaSeed(root.seed); peek.time = this.clock(root);
       const kept = this.sharedCache(`${root.id}:${target}`, peek.time, peek.seed), random = new JavaRandom(0);
       random.restore(kept.random.save());
       const teleporter = new Teleporter(peek, { isSolid: solidId, random });
       teleporter.cache = new Map([...kept.cache].map(([k, v]) => [k, { ...v }])); teleporter.keys = [...kept.keys];
       const e = { x: tt.x, y: tt.y, z: tt.z, vx: p.motion?.x ?? 0, vy: p.motion?.y ?? 0, vz: p.motion?.z ?? 0, yaw: tt.yaw, pitch: 0, teleportDirection: this.state.teleportDirection ?? 0 };
       drain(teleporter.placeInPortalSteps(e, tt.x, tt.y, tt.z, tt.yaw));
-      if (this.busy) h.arrivalHint({ x: e.x, y: e.y, z: e.z, scaled: { x: tt.x, y: tt.y, z: tt.z } });
+      if (!this.busy) return false;
+      h.arrivalHint({ x: e.x, y: e.y, z: e.z, scaled: { x: tt.x, y: tt.y, z: tt.z } });
+      return true;
+    } catch (error) { if (!/not built|no prewarmed/.test(String(error?.message))) console.warn("arrival preview failed:", error); return false; }
+  }
+  async announceArrival(rec, p, target) {
+    if (typeof this.host.arrivalHint !== "function") return;
+    try {
+      const root = this.host.worlds().find((w) => w.id === rootIdOf(rec));
+      if (!root) return;
+      await this.armArrival(root, target);
+      this.announceNow(rec, p, target);
     } catch (error) { console.warn("arrival preview failed:", error); }
   }
   // Per physics tick (EntityPlayerSP.onLivingUpdate / Entity.onEntityUpdate / BlockPortal / BlockEndPortal). `prev`/`pos`: feet
@@ -560,6 +598,7 @@ export class DimensionLive {
     const to = from === NETHER ? OVERWORLD : NETHER;
     try {
       const root = this.rootRecord(), tt = transferTarget(from, to, pos.x, pos.y, pos.z, yaw);
+      if (root) this.armArrival(root, to); // b96 spcopy96: the destination's saved edits, read before the trip so the arrival can be computed in the portal tick
       // The saved portals of the destination, read once per trip (batch 34): the exit is the one the Teleporter picks, not the target. Nothing is asked until they are known.
       const key = `${root?.id}:${to}`;
       let known = this.exitPortals;
