@@ -1936,7 +1936,7 @@ export class EntityWorld {
     // The breeding experience needs gamerule doMobLoot.
     // EntityAIMate.spawnBaby draws on the mother's Entity.rand: 7 "heart" spawnParticle argument sets (a server no-op, arguments still evaluated), then the orb's nextInt(7) + 1.
     const rand=entityRandom(a);burst(null,'heart',7,{x:a.x,y:a.y,z:a.z,width:ENTITY_TYPES[a.type].width,height:ENTITY_TYPES[a.type].height},rand,0.5);
-    if(gameRule("doMobLoot"))this.emitLoot({xp:1+rand.nextInt(7),position:{x:a.x,y:a.y,z:a.z}});
+    if(gameRule("doMobLoot"))this.emitLoot({xp:1+rand.nextInt(7),xpWhole:true,position:{x:a.x,y:a.y,z:a.z}}); // b96: one orb of the rolled value (EntityAIMate.spawnBaby, executed)
     return true;
   }
   // The createChild half of the above (EntityAgeable.createChild of `a` with partner `b`): the unspawned baby.
@@ -2159,7 +2159,7 @@ export class EntityWorld {
     for(let i=0;i<n;i++){const my=f(r.nextFloat()*f(0.05)),mx=f(f(r.nextFloat()-r.nextFloat())*f(0.1)),mz=f(f(r.nextFloat()-r.nextFloat())*f(0.1));
       this.emitLoot({drop:WOOL,count:1,damage:e.color,offsetY:1,kick:[mx,my,mz],position:{x:e.x,y:e.y,z:e.z}});}
     this.events.push({sound:'mob.sheep.shear',volume:1,position:{x:e.x,y:e.y,z:e.z}});
-    if(!survival.creative)survival.wear(id,1);
+    if(!survival.creative&&survival.wear(id,1))(this.worldRandom??=new JavaRandom(Math.floor(Math.random()*2**48))).nextFloat(); // b96 mobrec96 (Executed b96mr-sheep-shears-break-9976): ItemStack.damageItem past the maximum calls renderBrokenItemStack, which draws the break sound's pitch from World.rand
     return true;
   }
   // ItemDye.itemInteractionForEntity (acj.a(add, yz, sv)): after EntitySheep.interact
@@ -2910,6 +2910,7 @@ export class EntityWorld {
     const wasAge = e.growingAge;
     if (e.growingAge < 0 && e.type !== 'zombie') e.growingAge++; else if (e.growingAge > 0) e.growingAge--;
     if (e.type === "horse" && wasAge < 0) this.horseGrowSize(e, wasAge); // EntityHorse.setScaleForAge: the foal's box widens every tick
+    else if (wasAge < 0 && e.growingAge >= 0 && e.type !== "zombie" && e.type !== "pigman" && !isSlimeLike(e)) { const b = ENTITY_TYPES[e.type]; if (b) { const from = { x: e.x, y: e.y, z: e.z }; resizeBox(e, b.width * 0.5, b.height * 0.5, b.width, b.height, this.world); this.moveSteps(e, from); } } // the nudge is a moveEntity: its distance counts towards the step sound too (executed: a step sound 3 ticks after the cow grows up) // b96 mobrec96 (Executed b96mr-cow-calf-grow-9913, pig-piglet-grow-9943, chicken-chick-grow-9963): EntityAgeable.setGrowingAge -> setScaleForAge -> Entity.setSize widens the box from the minimum corner and nudges the grown mob back by the growth (moveEntity(oldWidth - width, 0, oldWidth - width)): the centre moves half the growth towards -x and -z, onGround false
     if (ANIMALS.has(e.type)) {
       if (e.growingAge !== 0) e.love = 0;
       if (e.love > 0 && --e.love % 10 === 0) burst(null, "heart", 1, { x: e.x, y: e.y, z: e.z, width: t.width, height: t.height }, entityRandom(e), 0.5);

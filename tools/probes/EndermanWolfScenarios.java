@@ -374,6 +374,88 @@ public class EndermanWolfScenarios {
     for (int k = 3; k < mats.length; k++) out.add(new int[] {x - r + (k - 3) * 2, 0, z + r, x - r + (k - 3) * 2 + 1, 5, z + r, mats[k], 0});
     return out.toArray(new int[0][0]);
   }
+  // Batch 96 (mobrec96, b96mr): the b95mr harness. Cows and mooshrooms, pigs, chickens (egg laying, breeding, chicks) and sheep shearing with a real shears stack (row element 13 is the held stack).
+  static void run96() throws Exception {
+    int[][] none = new int[0][0];
+    double[][] near = {{70.5, 64.5}, {64.5, 64.5}};
+    double[][] two = {{70.5, 64.5}, {72.5, 64.5}, {64.5, 64.5}};
+    double[][] hit1 = {{67.5, 64.5}, {64.5, 64.5}};
+    int[][] grass = {{50, -1, 45, 95, -1, 85, 2, 0}};
+    // cows
+    sc94("b96mr-cow-idle-9901", 9901, 300, "C", near, grass);
+    sc94("b96mr-cow-breed-9902", 9902, 320, "CC", two, none, "0 holdn 296 64", "5 use 0", "6 use 1");
+    sc94("b96mr-cow-calf-follow-9903", 9903, 240, "Cc", new double[][] {{70.5, 64.5}, {75.5, 64.5}, {64.5, 64.5}}, none);
+    sc94("b96mr-cow-wheat-9904", 9904, 240, "C", near, none, "0 look 270 0", "0 holdn 296 64", "20 walk 1 -0.1 0", "80 walk 1 0 0", "120 walk 1 0 0.1", "180 walk 1 0 0");
+    sc94("b96mr-cow-milk-9905", 9905, 120, "C", hit1, none, "0 look 270 0", "0 holdn 325 1", "10 use 0", "20 use 0", "30 melee 0");
+    sc94("b96mr-cow-milk-stack-9906", 9906, 80, "C", hit1, none, "0 look 270 0", "0 holdn 325 3", "10 use 0", "20 use 0");
+    sc94("b96mr-cow-calf-milk-9907", 9907, 80, "c", hit1, none, "0 look 270 0", "0 holdn 325 1", "10 use 0");
+    sc94("b96mr-cow-hit-9908", 9908, 200, "C", hit1, none, "0 look 270 0", "30 melee 0", "90 melee 0");
+    sc94("b96mr-cow-kill-9909", 9909, 100, "CC", new double[][] {{67.5, 64.5}, {70.5, 64.5}, {64.5, 64.5}}, none, "0 look 270 0", "0 health 0 2", "0 health 1 2", "10 melee 0", "40 melee 1");
+    sc94("b96mr-cow-fire-9910", 9910, 160, "C", near, none, "10 fire 0 5");
+    sc94("b96mr-cow-zombie-9911", 9911, 200, "CZ", new double[][] {{70.5, 64.5}, {72.5, 64.5}, {64.5, 64.5}}, none, "10 hit 0 1 3", "60 hit 0 1 3");
+    // mooshrooms
+    sc94("b96mr-mooshroom-breed-9921", 9921, 320, "MM", two, none, "0 holdn 296 64", "5 use 0", "6 use 1");
+    sc94("b96mr-mooshroom-bowl-9922", 9922, 100, "M", hit1, none, "0 look 270 0", "0 holdn 281 1", "10 use 0", "20 use 0");
+    sc94("b96mr-mooshroom-bowl-stack-9923", 9923, 60, "M", hit1, none, "0 look 270 0", "0 holdn 281 5", "10 use 0", "20 use 0");
+    sc94("b96mr-mooshroom-shear-9924", 9924, 120, "MM", new double[][] {{67.5, 64.5}, {70.5, 64.5}, {64.5, 64.5}}, none, "0 look 270 0", "0 holdn 359 1", "10 use 0", "30 use 1");
+    sc94("b96mr-mooshroom-shear-calf-9925", 9925, 80, "m", hit1, none, "0 look 270 0", "0 holdn 359 1", "10 use 0");
+    sc94("b96mr-mooshroom-kill-9926", 9926, 100, "M", hit1, none, "0 look 270 0", "0 health 0 2", "10 melee 0");
+    // pigs
+    sc94("b96mr-pig-idle-9931", 9931, 300, "P", near, grass);
+    sc94("b96mr-pig-breed-9932", 9932, 320, "PP", two, none, "0 holdn 391 64", "5 use 0", "6 use 1");
+    sc94("b96mr-pig-piglet-follow-9933", 9933, 240, "Pp", new double[][] {{70.5, 64.5}, {75.5, 64.5}, {64.5, 64.5}}, none);
+    sc94("b96mr-pig-carrot-9934", 9934, 240, "P", near, none, "0 look 270 0", "0 holdn 391 64", "20 walk 1 -0.1 0", "80 walk 1 0 0", "120 walk 1 0 0.1", "180 walk 1 0 0");
+    sc94("b96mr-pig-saddle-9935", 9935, 120, "P", hit1, none, "0 look 270 0", "0 holdn 329 2", "10 use 0", "20 use 0");
+    sc94("b96mr-pig-saddle-kill-9936", 9936, 100, "P", hit1, none, "0 look 270 0", "0 holdn 329 1", "10 use 0", "20 health 0 2", "25 holdn 0 0", "30 melee 0");
+    sc94("b96mr-pig-hit-9937", 9937, 200, "P", hit1, none, "0 look 270 0", "30 melee 0", "90 melee 0");
+    sc94("b96mr-pig-kill-9938", 9938, 100, "PP", new double[][] {{67.5, 64.5}, {70.5, 64.5}, {64.5, 64.5}}, none, "0 look 270 0", "0 health 0 2", "0 health 1 2", "10 melee 0", "40 melee 1");
+    sc94("b96mr-pig-fire-9939", 9939, 160, "P", near, none, "10 fire 0 5");
+    sc94("b96mr-pig-lightning-9940", 9940, 100, "PP", new double[][] {{70.5, 64.5}, {72.5, 64.5}, {64.5, 64.5}}, none, "10 bolt 0", "20 bolt 1");
+    sc94("b96mr-pig-zombie-9941", 9941, 200, "PZ", new double[][] {{70.5, 64.5}, {72.5, 64.5}, {64.5, 64.5}}, none, "10 hit 0 1 3", "60 hit 0 1 3");
+    // chickens
+    sc94("b96mr-chicken-idle-9951", 9951, 300, "h", near, grass, "0 egg 0 90");
+    sc94("b96mr-chicken-eggs-9952", 9952, 300, "hh", two, none, "0 egg 0 20", "0 egg 1 25");
+    sc94("b96mr-chicken-breed-9953", 9953, 320, "hh", two, none, "0 holdn 295 64", "5 use 0", "6 use 1");
+    sc94("b96mr-chicken-pumpkin-seeds-9954", 9954, 80, "hh", two, none, "0 holdn 361 64", "5 use 0", "6 use 1");
+    sc94("b96mr-chicken-melon-seeds-9955", 9955, 80, "hh", two, none, "0 holdn 362 64", "5 use 0", "6 use 1");
+    sc94("b96mr-chicken-chick-follow-9956", 9956, 240, "hy", new double[][] {{70.5, 64.5}, {75.5, 64.5}, {64.5, 64.5}}, none, "0 egg 0 60");
+    sc94("b96mr-chicken-fall-9957", 9957, 160, "h", new double[][] {{70.5, 64.5, 12}, {64.5, 64.5}}, none);
+    sc94("b96mr-chicken-seeds-9958", 9958, 240, "h", near, none, "0 look 270 0", "0 holdn 295 64", "20 walk 1 -0.1 0", "80 walk 1 0 0", "120 walk 1 0 0.1", "180 walk 1 0 0");
+    sc94("b96mr-chicken-hit-9959", 9959, 200, "h", hit1, none, "0 look 270 0", "30 melee 0", "90 melee 0");
+    sc94("b96mr-chicken-kill-9960", 9960, 100, "hh", new double[][] {{67.5, 64.5}, {70.5, 64.5}, {64.5, 64.5}}, none, "0 look 270 0", "0 health 0 2", "0 health 1 2", "10 melee 0", "40 melee 1");
+    sc94("b96mr-chicken-fire-9961", 9961, 160, "h", near, none, "10 fire 0 5");
+    sc94("b96mr-chicken-chick-kill-9962", 9962, 80, "y", hit1, none, "0 look 270 0", "10 melee 0");
+    // growth, love and a blow, baby feeding (1.7.10 gives a baby nothing for wheat), a shears stack broken on a mooshroom, bats under fire and arrows
+    sc94("b96mr-cow-love-hit-9912", 9912, 120, "CC", new double[][] {{67.5, 64.5}, {70.5, 64.5}, {64.5, 64.5}}, none, "0 look 270 0", "0 holdn 296 64", "5 use 0", "6 use 1", "30 melee 0");
+    sc94("b96mr-cow-calf-grow-9913", 9913, 160, "Cc", new double[][] {{70.5, 64.5}, {75.5, 64.5}, {64.5, 64.5}}, none, "0 agea 1 -60");
+    sc94("b96mr-cow-calf-wheat-9914", 9914, 80, "c", hit1, none, "0 look 270 0", "0 holdn 296 64", "10 use 0", "20 use 0");
+    sc94("b96mr-mooshroom-shear-break-9927", 9927, 60, "M", hit1, none, "0 look 270 0", "0 holdd 359 1 238", "10 use 0");
+    sc94("b96mr-mooshroom-calf-bowl-9928", 9928, 60, "m", hit1, none, "0 look 270 0", "0 holdn 281 1", "10 use 0");
+    sc94("b96mr-pig-love-hit-9942", 9942, 120, "PP", new double[][] {{67.5, 64.5}, {70.5, 64.5}, {64.5, 64.5}}, none, "0 look 270 0", "0 holdn 391 64", "5 use 0", "6 use 1", "30 melee 0");
+    sc94("b96mr-pig-piglet-grow-9943", 9943, 160, "Pp", new double[][] {{70.5, 64.5}, {75.5, 64.5}, {64.5, 64.5}}, none, "0 agea 1 -60");
+    sc94("b96mr-pig-piglet-carrot-9944", 9944, 80, "p", hit1, none, "0 look 270 0", "0 holdn 391 64", "10 use 0", "20 use 0");
+    sc94("b96mr-chicken-chick-grow-9963", 9963, 200, "hy", new double[][] {{70.5, 64.5}, {75.5, 64.5}, {64.5, 64.5}}, none, "0 agea 1 -50", "0 egg 1 30");
+    sc94("b96mr-chicken-love-hit-9964", 9964, 120, "hh", new double[][] {{67.5, 64.5}, {70.5, 64.5}, {64.5, 64.5}}, none, "0 look 270 0", "0 holdn 295 64", "5 use 0", "6 use 1", "30 melee 0");
+    sc94("b96mr-chicken-chick-seeds-9965", 9965, 80, "y", hit1, none, "0 look 270 0", "0 holdn 295 64", "10 use 0", "20 use 0");
+    int[][] ceil96 = {{40, 6, 40, 90, 6, 90, 1, 0}};
+    sc93("b96mr-bat-fire-9981", 9981, 200, "b", new double[][] {{70.5, 64.5, 5.1}, {64.5, 64.5, 0}}, false, ceil96, "10 fire 0 5");
+    sc93("b96mr-bat-arrow-9982", 9982, 120, "b", new double[][] {{70.5, 64.5, 5.1}, {64.5, 64.5, 0}}, false, ceil96, "10 arrowkill 0 3", "30 arrowkill 0 100");
+    // three or four animals in love at once (EntityAIMate partner search), land animals in water (the swim task, drowning)
+    sc94("b96mr-cow-three-breed-9915", 9915, 300, "CCC", new double[][] {{70.5, 64.5}, {72.5, 64.5}, {71.5, 66.5}, {64.5, 64.5}}, none, "0 holdn 296 64", "5 use 0", "6 use 1", "7 use 2");
+    sc94("b96mr-pig-two-pairs-9945", 9945, 300, "PPPP", new double[][] {{70.5, 64.5}, {72.5, 64.5}, {71.5, 66.5}, {73.5, 66.5}, {64.5, 64.5}}, none, "0 holdn 391 64", "5 use 0", "6 use 1", "7 use 2", "8 use 3");
+    int[][] pool96 = {{40, 0, 40, 90, 2, 90, 9, 0}};
+    sc93("b96mr-cow-swim-9916", 9916, 120, "C", new double[][] {{70.5, 64.5, 0.2}, {64.5, 64.5, 0}}, true, pool96);
+    sc93("b96mr-pig-swim-9946", 9946, 120, "P", new double[][] {{70.5, 64.5, 0.2}, {64.5, 64.5, 0}}, true, pool96);
+    sc93("b96mr-pig-drown-9947", 9947, 340, "P", new double[][] {{120.5, 64.5, 0.2}, {64.5, 64.5, 0}}, true, new int[][] {{100, 0, 40, 150, 6, 90, 9, 0}}); // the player stays dry (its own drowning would show at tick 300)
+    sc93("b96mr-chicken-swim-9966", 9966, 120, "h", new double[][] {{70.5, 64.5, 0.2}, {64.5, 64.5, 0}}, true, pool96);
+    // sheep shearing with a real shears stack (359): the stack's damage after each shear, a shear refused on a sheared sheep and on a lamb, a stack at its last use
+    sc94("b96mr-sheep-shears-9971", 9971, 120, "HH", new double[][] {{67.5, 64.5}, {70.5, 64.5}, {64.5, 64.5}}, none, "0 look 270 0", "0 holdn 359 1", "10 use 0", "20 use 0", "30 use 1");
+    sc94("b96mr-sheep-shears-last-9972", 9972, 80, "HH", new double[][] {{67.5, 64.5}, {70.5, 64.5}, {64.5, 64.5}}, none, "0 look 270 0", "0 color 0 5", "0 color 1 14", "0 holdd 359 1 237", "10 use 0", "20 use 1"); // the second shear takes damage 237 -> 238 -> 239 (> 238: the stack breaks)
+    sc94("b96mr-sheep-shears-break-9976", 9976, 60, "H", hit1, none, "0 look 270 0", "0 color 0 7", "0 holdd 359 1 238", "10 use 0");
+    sc94("b96mr-sheep-shears-lamb-9973", 9973, 80, "e", hit1, none, "0 look 270 0", "0 holdd 359 1 10", "10 use 0");
+    sc94("b96mr-sheep-shears-stack-9974", 9974, 120, "HH", new double[][] {{67.5, 64.5}, {70.5, 64.5}, {64.5, 64.5}}, none, "0 look 270 0", "0 color 0 3", "0 color 1 11", "0 holdd 359 3 100", "10 use 0", "20 use 1");
+    sc94("b96mr-sheep-shears-dye-9975", 9975, 120, "H", hit1, none, "0 look 270 0", "0 holdd 359 1 0", "5 use 0", "10 holdn 351 5", "15 use 0", "20 shear 0 off", "25 use 0");
+  }
   // Batch 95 (mobrec95, b95mr): the b94mr harness. Part 1: long pigman and giant melee fights (600 ticks). Part 2 (sheep, squid) follows below.
   static String[] repeat95(String op, int from, int to, int step) { java.util.ArrayList<String> o = new java.util.ArrayList<>(); for (int t = from; t < to; t += step) o.add(t + " " + op); return o.toArray(new String[0]); }
   static String[] cat95(String[]... parts) { java.util.ArrayList<String> o = new java.util.ArrayList<>(); for (String[] p : parts) o.addAll(java.util.Arrays.asList(p)); return o.toArray(new String[0]); }

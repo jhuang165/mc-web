@@ -10,7 +10,7 @@ export function explodeEvent(event, explode) {
 /** The drops and experience a mob's death queued, spawned at once (EntityWorld.flushLoot): the same two lines drainMobEvents runs, for a walk in progress. */
 export function spawnLoot({ xpOrbs, items }, events) {
   for (const event of events) {
-    if (event.xp) xpOrbs.spawn(event.xp, event.position);
+    if (event.xp) xpOrbs.spawn(event.xp, event.position, event.xpWhole);
     if (event.drop) items.dropMob(event.drop, event.count, event.position, event.damage, event);
   }
 }
@@ -44,7 +44,7 @@ export function drainMobEvents({ mobs, xpOrbs, items }, hooks = {}) {
       volume: event.volume ?? 0.6,
       pitch: event.pitch,
     }, event);
-    if (event.xp) xpOrbs.spawn(event.xp, event.position);
+    if (event.xp) xpOrbs.spawn(event.xp, event.position, event.xpWhole);
     if (event.explode) explodeEvent(event, explode);
     if (event.drop) items.dropMob(event.drop, event.count, event.position, event.damage, event);
     if (event.eatGrass) eatGrass(event.eatGrass, event);
