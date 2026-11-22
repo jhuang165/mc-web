@@ -88,7 +88,7 @@ export function crushDrops(id, meta, x, y, z, rand, { tileDrops = true, cell = n
     }
     case 144: {
       // BlockSkull.breakBlock (anl.a(ahb,III,aji,I)): the tile's skull, SkullOwner for a player head, unless bit 8 (a Creative harvest) is set.
-      if ((meta & 8) === 0) for (const d of skullDrops(skull?.type ?? 0, skull?.profile ?? null)) emit(d.id, d.damage, d.tags);
+      if ((meta & 8) === 0) for (const d of skullDrops(skull?.rawType ?? skull?.type ?? 0, skull?.profile ?? null)) emit(d.id, d.damage, d.tags);
       return out;
     }
   }

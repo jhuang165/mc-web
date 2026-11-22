@@ -32,7 +32,7 @@ export function installMusic(sim, redstone, dim = 0, saved = null) {
   const noteBlocks = installNoteBlocks(redstone, { particle: () => {}, changed: () => {} });
   const jukeboxes = installJukeboxes(redstone, {
     play: (item, x, y, z) => { for (const p of nearPlayers(sim, dim, x, y, z)) (p.itemsOut ??= []).push({ type: 'aux', events: [{ id: 1005, x, y, z, data: item ? discOriginal(item) : 0 }] }); },
-    spawn: (stack, x, y, z) => sim.items.spawn(makeStack(stack.id, stack.count ?? 1, stack.damage || 0), x, y, z, { delay: 10 }),
+    spawn: (stack, x, y, z) => sim.items.spawn(makeStack(stack.id, stack.count ?? 1, stack.damage || 0, stack.stored, stack), x, y, z, { delay: 10 }),
     changed: () => {},
   });
   // The block event: S29 and S24 instead of the single-player client's local sound and particle.
@@ -69,7 +69,7 @@ export function serverMusicUse(sim, p, [x, y, z], block, held) {
   if (block === NOTE_BLOCK) return activates && sim.redstone.use(x, y, z);
   const loaded = sim.redstone.getBlockMetadata(x, y, z) !== 0;
   if (activates && loaded) return sim.redstone.use(x, y, z); // BlockJukebox.dropRecord
-  if (!loaded && isDisc(held) && m.jukeboxes.insert(x, y, z, held)) {
+  if (!loaded && isDisc(held) && m.jukeboxes.insert(x, y, z, held, s.held)) {
     if (!s.creative) s.take(held);
     sim.stats.used(p, held);
     return true;

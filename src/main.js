@@ -1815,7 +1815,7 @@ async function launch(record, prepared, { slice = false } = {}) {
         play: (item, x, y, z) => {
           sounds.playRecord(item ? recordSound(discName(item), x, y, z) : null, x, y, z);
         },
-        spawn: (stack, x, y, z) => items.spawn(makeStack(stack.id, stack.count, stack.damage || 0), x, y, z, { delay: 10 }),
+        spawn: (stack, x, y, z) => items.spawn(makeStack(stack.id, stack.count, stack.damage || 0, stack.stored, stack), x, y, z, { delay: 10 }), // b96 tiles96: the tag and rawDamage ride along
       },
       sound: (name, x, y, z, volume, pitch) => sounds.play(name, { volume, pitch, position: { x, y, z } }),
       drop: (x, y, z, d) => spawnRedstoneDrop(items, x, y, z, d), // b83 mppiston83: at the engine's dropBlockAsItem_do position (no second dropBlock spread); keeps rawDamage and SkullOwner
@@ -3852,7 +3852,7 @@ function edit(place = false) {
     useCommandBlock: openCommandBlock,
     // ItemRecord.onItemUse / BlockJukebox / BlockNote.onBlockActivated; the disc leaves the stack outside Creative.
     useNoteJukebox: (x, y, z, held) => {
-      const r = redstoneRuntime?.music.use(x, y, z, held);
+      const r = redstoneRuntime?.music.use(x, y, z, held, survival.held);
       if (!r?.handled) return false;
       if (r.consumed && !survival.creative) { survival.take(held); renderHotbar(); }
       saved = false;

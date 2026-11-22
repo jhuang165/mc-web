@@ -98,7 +98,7 @@ function portProj(name, ctx, rec) {
     case 'flowerpot': return { pot: potContents(host.world, X, Y, Z) };
     case 'command': return (({ command, successCount, customName, trackOutput, lastOutput }) => ({ command, successCount, customName, trackOutput, lastOutput }))(ctx.cmd.get(key) ?? newCommandBlock());
     case 'note': return { note: ctx.notes.get(key)?.note ?? 0 };
-    case 'jukebox': return { record: ctx.boxes.get(key)?.record ?? null };
+    case 'jukebox': { const r = ctx.boxes.get(key)?.record; return { record: r ? { id: r.id, count: r.count, damage: r.damage } : null }; } // b96 tiles96: the projection compares id, count and the port damage; the tag and raw Damage are checked in tiles96-b96.test.js
     case 'beacon': { const b = host.beacons.get(X, Y, Z); return { primary: b.primary, secondary: b.secondary, levels: b.levels }; }
     case 'comparator': return { signal: host.comparators.get(key)?.signal ?? 0 };
     default: return null;

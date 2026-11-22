@@ -138,11 +138,11 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
   const music = {
     noteBlocks,
     jukeboxes,
-    use(x, y, z, held = 0) {
+    use(x, y, z, held = 0, stack = null) {
       const id = redstone.getBlock(x, y, z);
       let result = { handled: false, consumed: false };
       if (id === JUKEBOX_ID && redstone.getBlockMetadata(x, y, z) === 0) {
-        if (isDisc(held) && jukeboxes.insert(x, y, z, held)) result = { handled: true, consumed: true };
+        if (isDisc(held) && jukeboxes.insert(x, y, z, held, stack)) result = { handled: true, consumed: true };
       } else if (id === 25 || id === JUKEBOX_ID) result = { handled: redstone.use(x, y, z), consumed: false };
       flush();
       return result;

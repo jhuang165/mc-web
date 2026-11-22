@@ -158,12 +158,27 @@ export function itemStackFromNbt(compound, { ignored = [], allowEmpty = false } 
   return stack;
 }
 
-/** The stack a jukebox holds: any item. The port's item model has no damage on undamageable items, so a stack ItemStack.readFromNBT would keep with such a Damage keeps its id and count and reads Damage 0. */
+/**
+ * The stack a jukebox holds: any item, with its tag compound (b96 tiles96: ItemStack.readFromNBT keeps `tag` whole; `readItemTag` keeps what the port models).
+ * Damage is read as a short, negative as 0. The port's item model has no damage on undamageable items, so a Damage it cannot hold (a disc at Damage 5, stone
+ * at 9) keeps the item at damage 0 and the native Damage as `rawDamage` (the b82 convention), which the exporter writes back.
+ */
 export function jukeboxStackFromNbt(c) {
   const st = itemStackFromNbt(c, { allowEmpty: true });
-  if (st) return { id: st.id, count: st.count, damage: st.damage };
+  if (st) { const { id, count, damage, ...rest } = st; return { id, count, damage, ...rest }; }
   const mapped = itemFromOriginal(get(c, 'id', NBT.SHORT), 0);
-  return mapped ? { id: mapped.id, count: get(c, 'Count', NBT.BYTE, 0), damage: 0 } : null;
+  if (!mapped) return null;
+  const stack = { id: mapped.id, count: get(c, 'Count', NBT.BYTE, 0), damage: mapped.damage }, raw = get(c, 'Damage', NBT.SHORT, 0);
+  if (Number.isInteger(raw) && raw > 0 && raw <= 32767) stack.rawDamage = raw; // inventory.js validRawDamage
+  const nbt = get(c, 'tag', NBT.COMPOUND);
+  if (nbt) readItemTag(stack, nbt);
+  return stack;
+}
+
+/** TileEntityPiston.readFromNBT: blockId through Block.getBlockById (an unregistered id is air, executed: 70000 and -3 write back 0), blockData and facing as ints, progress as a float, extending as a boolean (byte != 0). */
+export function pistonFromNbt(tile) {
+  const block = get(tile, 'blockId', NBT.INT, 0);
+  return { block: isRegistered(block) ? block : 0, meta: get(tile, 'blockData', NBT.INT, 0), facing: get(tile, 'facing', NBT.INT, 0), progress: get(tile, 'progress', NBT.FLOAT, 0), extending: !!get(tile, 'extending', NBT.BYTE, 0) };
 }
 
 /** fromOriginal for a packed original state, memoized. */
@@ -610,8 +625,7 @@ export async function importJavaRegionArea(regions, options = {}) {
       } else if (inside && id === 'Piston' && world.get(lx, y, lz) === PISTON_MOVING) {
         // TileEntityPiston.readFromNBT: blockId, blockData, facing, progress (lastProgress = progress), extending. The
         // restore (piston-live.js) lets the move finish on the first tick, as native does.
-        pistons.push({ x: lx, y, z: lz, block: get(tile, 'blockId', NBT.INT, 0), meta: get(tile, 'blockData', NBT.INT, 0), facing: get(tile, 'facing', NBT.INT, 0),
-          progress: get(tile, 'progress', NBT.FLOAT, 0), extending: !!get(tile, 'extending', NBT.BYTE, 0) });
+        pistons.push({ x: lx, y, z: lz, ...pistonFromNbt(tile) });
         tally(tileConverted, id);
       } else tally(tileLost, inside ? id : `${id} (outside its chunk)`);
     }
