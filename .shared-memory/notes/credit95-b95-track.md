@@ -11,7 +11,7 @@
 
 ## Verification
 - `node --test --test-concurrency=2 src/credit95-b95.test.js`: 3/3 pass; with the three source files reverted 1 pass / 2 fail (the ocelot guard test passes either way).
-- Neighbour run (23 files naming thorns, hitMob, ServerPvp or attackMob): see the lead's line in the final reply.
+- Neighbour run (23 files naming thorns, hitMob, ServerPvp or attackMob): 23 files, `--test-concurrency=2`: 171 tests, 171 pass.
 - No browser, no full `npm test`, no build (no import changes).
 
 ## Found wrong in the batch 94 list
