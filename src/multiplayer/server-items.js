@@ -48,7 +48,7 @@ export class ServerItems { // b62: `mirror` (undefined = off) is the legacy Crea
     this.xp.wet = (o) => isWet(sim.weather, sim.world, { x: o.x, y: o.posY, z: o.z, inWater: false }, 0.5); // b83 rain83: Entity.isWet for the Overworld's orbs, as main.js (rain only: EntityXPOrb.handleWaterMovement never sets inWater)
     this.taken = []; // S0D collect item of this tick: { i, by }
     this.inv = new ServerInventory(sim); // b60: the player's own inventory window and tool breaks (server-inventory.js)
-    sim.items.load(saved.items, s => reader.read(s), 0);
+    sim.items.load(saved.items, s => reader.read(s), 0, { reload: true }); // b95 portals95: server start = world load
   }
   save() { return { items: this.sim.items.serialize(), xpOrbs: this.xp.serialize() }; }
 

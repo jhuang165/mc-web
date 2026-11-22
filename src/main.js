@@ -1904,9 +1904,10 @@ async function launch(record, prepared, { slice = false } = {}) {
     beacons = new Beacons().fromJSON(record.beacons); beaconRenderer?.clear();
     for (const [k, v] of world.edits) if ((v & 255) === BEACON) beacons.ensure(...k.split(",").map(Number));
     if (minecartRenderer) { minecartRenderer.clear(); minecartRenderer.minecarts = minecarts; }
+    const realLoad = !tripArrival; // b95 portals95: a world open from the title screen (no portal trip): the load native chunks go through, so port-only transients and the item pickup delay start over
     const leftCopy = mobs?.ai?.player; // b88 spcopy88: the copy that walked into the portal (transferPlayerToDimension keeps the EntityPlayerMP)
     mobs?.leaveWorld?.([objectTracker]); // the old world's tracker lets the player go: its copies are gone with the client world (b55dt)
-    mobs = new EntityWorld(world, !world.dimension && world.generationVersion >= 11 && !hasSavedPopulation(record) ? [] : record.entities, undefined, entityIds);
+    mobs = new EntityWorld(world, !world.dimension && world.generationVersion >= 11 && !hasSavedPopulation(record) ? [] : record.entities, undefined, entityIds, { reload: realLoad });
     mobs.thrownDiamond = (name) => { if (name === PLAYER_NAME) achievements.trigger("diamondsToYou"); }; // b79 spswing79: sw.e picks a thrown diamond up -> the thrower's achievement
     mobs.itemPickedUp = (e, item) => scene.drops.pickup(item, e, MOB_PICKUP_LIFT); // b80 mpcmd80: the integrated server's S0D for a mob collector: EntityPickupFX to the mob's feet - 0.5 (silent: RenderGlobal.playSound is empty)
     mobs.fx = scene.fx;
@@ -2059,6 +2060,7 @@ async function launch(record, prepared, { slice = false } = {}) {
       ),
       (st) => survival.inventory.read(st, true), // a Count 0 drop is kept (EntityItem.readEntityFromNBT)
       survival.time,
+      { reload: realLoad },
     );
     for (const d of pendingBonusDrops.splice(0)) items.dropBlock([makeStack(d.id, 1, 0)], d.x, d.y, d.z); // b75: the torch that could not stay (after items.load, which replaces the list)
     projectiles.load(record.projectiles);

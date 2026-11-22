@@ -230,7 +230,7 @@ export function cartFromNbt(tag, type, { shiftX = 0, shiftZ = 0, lost = () => {}
   if (name) cart.customName = name;
   // EntityMinecart.readEntityFromNBT (same keys as cart-summon.js): a custom display block, b91 entnbt91 (entnbt91-reference.json MinecartRideable).
   if (get(tag, 'CustomDisplayTile', NBT.BYTE, 0)) Object.assign(cart, { customDisplay: true, displayTile: get(tag, 'DisplayTile', NBT.INT, 0), displayData: get(tag, 'DisplayData', NBT.INT, 0), displayOffset: get(tag, 'DisplayOffset', NBT.INT, 0) });
-  if (type === 2) { cart.fuel = Math.max(0, get(tag, 'Fuel', NBT.SHORT, 0)); cart.pushX = get(tag, 'PushX', NBT.DOUBLE, 0); cart.pushZ = get(tag, 'PushZ', NBT.DOUBLE, 0); }
+  if (type === 2) { cart.fuel = get(tag, 'Fuel', NBT.SHORT, 0); cart.pushX = get(tag, 'PushX', NBT.DOUBLE, 0); cart.pushZ = get(tag, 'PushZ', NBT.DOUBLE, 0); }
   if (type === 3) cart.fuse = hasNumber(tag, 'TNTFuse') ? get(tag, 'TNTFuse', NBT.INT, -1) : -1;
   if (type === 5) cart.cooldown = hasNumber(tag, 'TransferCooldown') ? get(tag, 'TransferCooldown', NBT.INT, -1) : -1;
   if (type === 4) { const s = makeSpawner(0, 0, 0); readSpawnerNBT(s, spawnerRecord(tag)); cart.spawner = spawnerJSON(s); }

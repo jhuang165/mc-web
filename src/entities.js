@@ -964,7 +964,7 @@ function pushPairsReference(w, e, near, list) {
 }
 export class EntityWorld {
   // `ids` is the shared Entity.nextEntityID (entity-ids.js): main.js and the away run hand every dimension's list the same one.
-  constructor(world, saved, random = Math.random, ids = new EntityIds()) {
+  constructor(world, saved, random = Math.random, ids = new EntityIds(), { reload = false } = {}) {
     this.world = world;
     setMaxHealthHook((e) => maxHealthOf(e, ENTITY_TYPES[e.type]?.health)); // a health boost changing on a mob clamps its health to the live maximum
     this.ids = ids;
@@ -989,7 +989,7 @@ export class EntityWorld {
       this.nextId = Math.max(this.nextId, ...saved.slice(0, 256).map((e) => (/^mob-\d+$/.test(e?.id) ? Number(e.id.slice(4)) + 1 : 1)));
       const used = new Set();
       for (const e of saved.slice(0, 256)) {
-        const m = this.restore(e);
+        const m = this.restore(e, { resetTransient: reload }); // b95 portals95: reload = a real world load (page load, world open); in-session rebuilds keep the saved transients
         if (!m) continue;
         if (used.has(m.id)) m.id = "mob-" + this.ids.take();
         used.add(m.id);

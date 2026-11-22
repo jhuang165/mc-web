@@ -119,7 +119,7 @@ export class ServerMobs {
     const world = host.world;
     // undefined list: EntityWorld.seedAnimals, the opening animals of a finite world below generation 11; a saved list (even empty) is restored as it was
     const list = Array.isArray(saved) ? saved.filter(r => SUPPORTED.has(r?.type)) : (host.rules?.spawnAnimals === false ? [] : undefined); // b69 serverprops: spawn-animals false seeds no opening animals (WorldServer.a(Entity, boolean) removes them)
-    const mobs = this.mobs = new EntityWorld(world, list, undefined, new EntityIds());
+    const mobs = this.mobs = new EntityWorld(world, list, undefined, new EntityIds(), { reload: Array.isArray(saved) }); // b95 portals95: the server builds its mobs once, from the saved world at start: a real load, port-only transients start over
     stampLegacy(mobs.entities, legacyOwner); // b63: wolves and ocelots tamed in a single-player save belong to the named player
     mobs.tracker = new IdleTracker();
     mobs.naturalSpawning = false; // run per player below (`spawn`)

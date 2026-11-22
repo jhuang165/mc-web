@@ -63,7 +63,7 @@ export function installCartItems(items) {
 export function initVariant(cart, record = {}) {
   const t = cart.type;
   if (record.customDisplay) { setDisplayTile(cart, record.displayTile | 0); setDisplayTileData(cart, record.displayData | 0); setDisplayTileOffset(cart, record.displayOffset | 0); } // EntityMinecart.readEntityFromNBT: k, l, m in this order
-  if (t === 2) Object.assign(cart, { fuel: Math.max(0, record.fuel | 0), pushX: Number.isFinite(record.pushX) ? record.pushX : 0, pushZ: Number.isFinite(record.pushZ) ? record.pushZ : 0 }), cart.lit = cart.fuel > 0;
+  if (t === 2) Object.assign(cart, { fuel: (record.fuel << 16) >> 16, /* b95 portals95 (xq.a bytecode-read): Fuel is a short read as is, a negative one stays (c > 0 is the only test) */ pushX: Number.isFinite(record.pushX) ? record.pushX : 0, pushZ: Number.isFinite(record.pushZ) ? record.pushZ : 0 }), cart.lit = cart.fuel > 0;
   if (t === 3) cart.fuse = Number.isInteger(record.fuse) ? record.fuse : -1;
   // EntityMinecartMobSpawner (xt): its MobSpawnerBaseLogic (xu) with the defaults of agq; the position follows the cart (cart-spawner in structure-simulation.js).
   if (t === 4) { cart.spawner = makeSpawner(0, 0, 0); readSpawnerNBT(cart.spawner, record.spawner ?? {}); }
