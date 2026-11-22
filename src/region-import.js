@@ -2,7 +2,7 @@ import { readCommandBlock } from "./command-block.js";
 import { LastOutputError, normalizeLastOutput } from "./chat-component.js";
 import { makeSpawner, readNBT as readSpawnerNBT, spawnerJSON } from './mob-spawner.js';
 import { readNoteTile } from "./note-blocks.js";
-import { readJukeboxTile } from "./jukebox.js";
+import { readJukeboxStack } from "./jukebox.js";
 // WORLD-03g: convert an area of Java 1.7.10 region files into a new Blockworld export for the existing
 // Import screen. The export is a version-9 Java world record whose `edits` rebuild the area over the
 // generated terrain of `seed`; supported chest/furnace contents and dropped items travel in the player
@@ -20,7 +20,7 @@ import { nbtGet, hasNumber } from './nbt-get.js';
 import { readFireworkNbt } from './fireworks-nbt.js';
 import { readBookNbt } from './books-nbt.js';
 import { readItemTagsNbt } from './item-tags.js';
-import { profileOfSkullTile } from './skull-profile.js';
+import { profileOfSkullTile, skullBytes } from './skull-profile.js';
 import { NBT } from './nbt.js';
 import { potFromNbt } from './stone-utility.js';
 import { ITEMS, burnTime } from './survival.js';
@@ -158,6 +158,14 @@ export function itemStackFromNbt(compound, { ignored = [], allowEmpty = false } 
   return stack;
 }
 
+/** The stack a jukebox holds: any item. The port's item model has no damage on undamageable items, so a stack ItemStack.readFromNBT would keep with such a Damage keeps its id and count and reads Damage 0. */
+export function jukeboxStackFromNbt(c) {
+  const st = itemStackFromNbt(c, { allowEmpty: true });
+  if (st) return { id: st.id, count: st.count, damage: st.damage };
+  const mapped = itemFromOriginal(get(c, 'id', NBT.SHORT), 0);
+  return mapped ? { id: mapped.id, count: get(c, 'Count', NBT.BYTE, 0), damage: 0 } : null;
+}
+
 /** fromOriginal for a packed original state, memoized. */
 export function mapOriginalState(key) {
   let mapped = MAPPED.get(key);
@@ -235,9 +243,11 @@ export function cartFromNbt(tag, type, { shiftX = 0, shiftZ = 0, lost = () => {}
   if (type === 5) cart.cooldown = hasNumber(tag, 'TransferCooldown') ? get(tag, 'TransferCooldown', NBT.INT, -1) : -1;
   if (type === 4) { const s = makeSpawner(0, 0, 0); readSpawnerNBT(s, spawnerRecord(tag)); cart.spawner = spawnerJSON(s); }
   if (type === 6) {
-    cart.command = { command: get(tag, 'Command', NBT.STRING, ''), successCount: get(tag, 'SuccessCount', NBT.INT, 0) };
-    if (name) cart.command.customName = name;
-    if (hasNumber(tag, 'TrackOutput')) cart.command.trackOutput = get(tag, 'TrackOutput', NBT.BYTE, 1) !== 0;
+    // CommandBlockLogic.readDataFromNBT (agp.b), the one reader of tile and cart (b95 tiles95, executed on the tile): Command through getString (any tag), CustomName
+    // when a string tag (an empty name kept), TrackOutput only from a byte tag (an int 0 is ignored).
+    cart.command = { command: getStringAny(tag, 'Command'), successCount: get(tag, 'SuccessCount', NBT.INT, 0) };
+    if (tag.get('CustomName')?.type === NBT.STRING) cart.command.customName = tag.get('CustomName').value;
+    if (tag.get('TrackOutput')?.type === NBT.BYTE) cart.command.trackOutput = get(tag, 'TrackOutput', NBT.BYTE, 1) !== 0;
     const last = get(tag, 'LastOutput', NBT.STRING);
     if (typeof last === 'string') cart.command.lastOutput = last;
   }
@@ -584,11 +594,11 @@ export async function importJavaRegionArea(regions, options = {}) {
       } else if (inside && id === 'Music' && block === 177) {
         musicTiles.push({ kind: 'note', x: lx, y, z: lz, note: readNoteTile(tile).note }); tally(tileConverted, id);
       } else if (inside && id === 'RecordPlayer' && block === 178) {
-        const { record } = readJukeboxTile(tile);
+        const { record } = readJukeboxStack(tile, jukeboxStackFromNbt); // b95 tiles95: any stack, as the tile keeps
         if (record) musicTiles.push({ kind: 'jukebox', x: lx, y, z: lz, record }); tally(tileConverted, id);
       } else if (inside && id === 'Skull' && block === 172) {
         // TileEntitySkull.readFromNBT: SkullType (byte), Rot (byte), the Owner GameProfile compound or else an ExtraType name (skull-profile.js).
-        skulls.push({ x: lx, y, z: lz, type: Math.max(0, Math.min(4, Number(get(tile, 'SkullType', NBT.BYTE, 0)) | 0)), rot: Number(get(tile, 'Rot', NBT.BYTE, 0)) & 15, ...skullProfileFields(tile) }); tally(tileConverted, id);
+        skulls.push({ x: lx, y, z: lz, ...skullBytes(Number(get(tile, 'SkullType', NBT.BYTE, 0)) | 0, Number(get(tile, 'Rot', NBT.BYTE, 0)) | 0), ...skullProfileFields(tile) }); tally(tileConverted, id);
       } else if (inside && id === 'Sign' && (block === 175 || block === 176)) {
         // TileEntitySign.readFromNBT: Text1-Text4, each cut to 15 characters; the loaded tile is not editable (signs.js).
         signs.push({ x: lx, y, z: lz, text: readSignTile(tile) }); tally(tileConverted, id);

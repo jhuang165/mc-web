@@ -187,9 +187,10 @@ test("/setblock sign, note block, jukebox and comparator tags", () => {
   assert.equal(g.notes.get("6,60,5").note, 24);
   g.run("/setblock 7 60 5 jukebox 1 replace {RecordItem:{id:2256s,Count:1b,Damage:0s}}");
   assert.ok(g.juke.get("7,60,5").record, "a disc is kept");
+  // b95 tiles95: native TileEntityRecordPlayer keeps any stack (executed, tiles95-reference.json), so a stone record is held and not reported lost
   const lost = g.run("/setblock 8 60 5 jukebox 1 replace {RecordItem:{id:1s,Count:1b,Damage:0s}}");
-  assert.equal(g.juke.get("8,60,5").record, null);
-  assert.match(lost.join("\n"), /Not kept in this build: RecordItem/);
+  assert.deepEqual(g.juke.get("8,60,5").record, { id: 3, count: 1, damage: 0 }); // port id 3 = original stone
+  assert.doesNotMatch(lost.join("\n"), /Not kept in this build: RecordItem/);
   g.run("/setblock 5 60 6 unpowered_comparator 0 replace {OutputSignal:9}");
   assert.equal(g.comparators.get("5,60,6").signal, 9);
   assert.equal(applySetblockTag(1, 0, 0, 0, tagOf("{a:1}"), {}), null, "stone has no tile entity here");

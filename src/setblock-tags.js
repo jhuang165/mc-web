@@ -10,10 +10,9 @@ import { NBT } from './nbt.js';
 import { nbtGet } from './nbt-get.js';
 import { getStringAny } from './nbt-string.js';
 import { readNoteTile } from './note-blocks.js';
-import { readJukeboxTile } from './jukebox.js';
-import { isDisc, canonicalDisc } from './note-jukebox-content.js';
+import { readJukeboxStack } from './jukebox.js';
 import { potFromNbt, setPotContents, EMPTY_POT } from './stone-utility.js';
-import { itemFromOriginal } from './region-import.js';
+import { itemFromOriginal, itemStackFromNbt, jukeboxStackFromNbt } from './region-import.js';
 
 // TileEntity.readFromNBT reads x, y and z (CommandSetBlock has just set them to the cell); "id" is only read by TileEntity.createAndLoadEntity.
 const BASE = ['x', 'y', 'z', 'id'];
@@ -43,13 +42,13 @@ const READERS = {
     return rest(tag, ['note']);
   },
   // TileEntityRecordPlayer.readFromNBT: a RecordItem compound, else the legacy Record int when > 0 (jukebox.js readJukeboxTile). The port's jukebox
-  // holds discs only, so another item is reported as not kept. The record does not start playing (readFromNBT only sets the field).
+  // holds any stack since b95 (tiles95). The record does not start playing (readFromNBT only sets the field).
   84({ tag, x, y, z, stores }) {
     const tile = stores.music?.jukeboxes?.tile(x, y, z);
     if (!tile) return null;
-    const { record } = readJukeboxTile(tag), disc = record && isDisc(record.id);
-    tile.record = disc ? { id: canonicalDisc(record.id), count: 1, damage: 0 } : null;
-    const lost = !disc && (tag.has('RecordItem') || nbtGet(tag, 'Record', NBT.INT, 0) > 0) ? [tag.has('RecordItem') ? 'RecordItem' : 'Record'] : [];
+    const { record } = readJukeboxStack(tag, jukeboxStackFromNbt);
+    tile.record = record; // b95 tiles95: any stack, as the tile keeps (executed); only an item the port has no id for is lost
+    const lost = !record && (tag.has('RecordItem') || nbtGet(tag, 'Record', NBT.INT, 0) > 0) ? [tag.has('RecordItem') ? 'RecordItem' : 'Record'] : [];
     return [...rest(tag, ['RecordItem', 'Record']), ...lost];
   },
   // TileEntityComparator.readFromNBT: OutputSignal through getInteger (0 when missing), any value kept.

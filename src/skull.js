@@ -7,7 +7,7 @@ import { signSolid, clickedFace } from './signs.js';
 import { doorRotationYaw } from './doors-panes.js';
 import { NBT } from './nbt.js';
 import { rawOf, tagOf } from './item-tags.js';
-import { profileToNbt, profileOfOwnerTag, profileFromName, cloneProfile } from './skull-profile.js';
+import { profileToNbt, profileOfOwnerTag, profileFromName, cloneProfile, skullBytes } from './skull-profile.js';
 
 import { SKULL, skullBounds, installSkullBlocks } from './skull-bounds.js';
 export { SKULL, skullBounds, installSkullBlocks };
@@ -65,7 +65,7 @@ export class Skulls {
   // `profile` is the TileEntitySkull GameProfile (skull-profile.js); a bare `owner` name (ExtraType, old saves) becomes GameProfile(null, name).
   create(x, y, z, type = 0, rot = 0, owner = '', profile = null) {
     const p = profile && typeof profile === 'object' && Array.isArray(profile.properties) ? cloneProfile(profile) : owner ? profileFromName(String(owner)) : null;
-    const tile = { x, y, z, type: type & 7, rot: rot & 15, owner: (typeof p?.name === 'string' ? p.name : '') || '', ...(p ? { profile: p } : {}) };
+    const tile = { x, y, z, ...skullBytes(type, rot), owner: (typeof p?.name === 'string' ? p.name : '') || '', ...(p ? { profile: p } : {}) }; // b95 tiles95: raw SkullType / Rot bytes (skull-profile.js)
     this.tiles.set(Skulls.key(x, y, z), tile);
     return tile;
   }
@@ -74,7 +74,7 @@ export class Skulls {
   toJSON() { return [...this.tiles.values()].map((t) => ({ ...t })); }
   static fromJSON(list) {
     const s = new Skulls();
-    for (const t of Array.isArray(list) ? list : []) if ([t?.x, t?.y, t?.z].every(Number.isInteger)) s.create(t.x, t.y, t.z, t.type, t.rot, t.owner, t.profile);
+    for (const t of Array.isArray(list) ? list : []) if ([t?.x, t?.y, t?.z].every(Number.isInteger)) s.create(t.x, t.y, t.z, t.rawType ?? t.type, t.rawRot ?? t.rot, t.owner, t.profile);
     return s;
   }
 }

@@ -327,7 +327,7 @@ function runAwayTicks(plan, { now = () => performance.now(), budgetMs = WALL_BUD
   for (; ran < plan.ticks; ran++) {
     const entities = ran < AWAY_ENTITY_TICKS;
     if (!entities) ents?.close(); // spills after the gate are saved records, not entities that would tick
-    if (!entities && idle()) { stopped = "idle"; ran = plan.ticks; break; }
+    if (!entities && idle()) { stopped = "idle"; cmds.skipTicks(plan.ticks - ran); ran = plan.ticks; break; } // b95 tiles95: the ticks it never runs follow the rule as it stands (a block that turned doDaylightCycle off past tick 1200 leaves the idle rest of the trip frozen)
     if ((ran & 31) === 31 && now() - loopStart > budgetMs) { stopped = "budget"; break; }
     // World.tick order: WorldServer.tickUpdates (fluid, fire, falling and redstone entries from the one shared tree under one 1000 cap, then fire's
     // random ticks), then the block events and updateEntities (tile entities) while the gate is open.
@@ -345,7 +345,7 @@ function runAwayTicks(plan, { now = () => performance.now(), budgetMs = WALL_BUD
     cmds.endTick(); ents?.endTick();
     if (((plan.tickBase | 0) + ran + 1) % 900 === 0) { const now = cmds.spawn(); if (now[0] !== areas[areas.length - 1][0] || now[2] !== areas[areas.length - 1][2]) { areas.push([...now]); cmds.stats.areaMoves = (cmds.stats.areaMoves ?? 0) + 1; } }
   }
-  if (stopped === "budget") cmds.skipTicks(plan.ticks - ran); // b94 tiles94
+  if (stopped === "budget") cmds.skipTicks(plan.ticks - ran); // b94 tiles94 (the idle stop does the same where it breaks)
   rt.flush();
   const entityLists = ents?.finish() ?? null;
   return {

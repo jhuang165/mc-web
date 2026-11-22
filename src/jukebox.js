@@ -7,20 +7,26 @@ import { bitmapHtml } from './bitmap-text.js';
 import { font } from './font-renderer.js';
 import { NBT } from './nbt.js';
 import { nbtGet } from './nbt-get.js';
+import { ORIGINAL_ITEMS } from './original-items.js';
 import { isDisc, canonicalDisc, discIndex, discOriginal, DISC_ORIGINAL_FIRST, DISC_FIRST, DISC_COUNT, nowPlaying } from './note-jukebox-content.js';
 
 export const JUKEBOX_ID = 84;
 const f = Math.fround;
 
+// Internal item id -> { id: original id, damage } for every item the port maps (the exporter's table, first mapping wins).
+const REVERSE = new Map();
+for (const [key, live] of Object.entries(ORIGINAL_ITEMS)) { const [o, damage] = key.split(':').map(Number); if (!REVERSE.has(live) || damage === undefined) REVERSE.set(live, { id: o, damage }); }
+// b95 tiles95: TileEntityJukebox keeps any ItemStack (executed: a stone or a stack of three is written back as it was); discs go through discOriginal, other items through the item table.
+export const jukeboxOriginal = (id) => (isDisc(id) ? { id: discOriginal(id), damage: undefined } : REVERSE.get(id) ?? null);
 // TileEntityJukebox.writeToNBT: id RecordPlayer, x, y, z, legacy Record int and RecordItem (the stack as ItemStack.writeToNBT).
-// `record` is { id (internal item), count, damage } | null; `original` converts an internal item to its original id.
-export function writeJukeboxTile(tile, x, y, z, original = discOriginal) {
+// `record` is { id (internal item), count, damage } | null; `original` converts an internal item to its original id (a number, or { id, damage }, or null when unmapped).
+export function writeJukeboxTile(tile, x, y, z, original = jukeboxOriginal) {
   const t = (type, value) => ({ type, value });
   const map = new Map([['id', t(NBT.STRING, 'RecordPlayer')], ['x', t(NBT.INT, x)], ['y', t(NBT.INT, y)], ['z', t(NBT.INT, z)]]);
-  if (tile.record) {
-    const id = original(tile.record.id);
+  const o = tile.record ? original(tile.record.id) : null, id = typeof o === 'number' ? o : o?.id;
+  if (id) {
     map.set('Record', t(NBT.INT, id));
-    map.set('RecordItem', t(NBT.COMPOUND, new Map([['id', t(NBT.SHORT, id)], ['Count', t(NBT.BYTE, tile.record.count ?? 1)], ['Damage', t(NBT.SHORT, tile.record.damage ?? 0)]])));
+    map.set('RecordItem', t(NBT.COMPOUND, new Map([['id', t(NBT.SHORT, id)], ['Count', t(NBT.BYTE, tile.record.count ?? 1)], ['Damage', t(NBT.SHORT, o?.damage ?? tile.record.damage ?? 0)]])));
   }
   return map;
 }
@@ -34,6 +40,15 @@ export function readJukeboxTile(tag, internal = (id) => (id >= DISC_ORIGINAL_FIR
   }
   const legacy = nbtGet(tag, 'Record', NBT.INT, 0), id = legacy > 0 ? internal(legacy) : null;
   return { record: id ? { id, count: 1, damage: 0 } : null };
+}
+
+// b95 tiles95: the same read for any item. `convert(compound)` turns an ItemStack compound into the port's { id, count, damage } (null when the port has no such item);
+// the legacy Record int is a one-item stack of that id (ids above a short are not items).
+export function readJukeboxStack(tag, convert) {
+  const item = tag.get('RecordItem');
+  if (item?.type === NBT.COMPOUND) return { record: convert(item.value) };
+  const legacy = nbtGet(tag, 'Record', NBT.INT, 0);
+  return { record: legacy > 0 && legacy <= 32767 ? convert(new Map([['id', { type: NBT.SHORT, value: legacy }], ['Count', { type: NBT.BYTE, value: 1 }], ['Damage', { type: NBT.SHORT, value: 0 }]])) : null };
 }
 
 // The comparator reading: ItemRecord id + 1 - record_13 id, so disc index + 1 (0 when empty or not a disc).
@@ -66,7 +81,7 @@ export function installJukeboxes(redstone, { play = () => {}, spawn = () => {}, 
     t.record = null;
     w.setBlockMetadataWithNotify(x, y, z, 0, 2);
     const [d0, d1, d2] = ejectOffsets(w.rand);
-    spawn({ ...stack }, x + d0, y + d1, z + d2);
+    if ((stack.count | 0) > 0) spawn({ ...stack }, x + d0, y + d1, z + d2); // b95 tiles95: a kept Count 0 stack has nothing to drop here (the port's item entity needs a count)
     changed();
     return true;
   };
@@ -97,7 +112,7 @@ export function installJukeboxes(redstone, { play = () => {}, spawn = () => {}, 
       return true;
     },
     save: () => [...tiles].filter(([k, v]) => v.record && (() => { const p = k.split(',').map(Number); return !redstone.loaded?.(...p) || redstone.getBlock(...p) === JUKEBOX_ID; })()).map(([k, v]) => { const [x, y, z] = k.split(',').map(Number); return { x, y, z, record: { ...v.record } }; }),
-    restore(records) { tiles.clear(); for (const e of records ?? []) if ([e.x, e.y, e.z].every(Number.isInteger) && e.record && isDisc(e.record.id)) tiles.set(key(e.x, e.y, e.z), { record: { id: canonicalDisc(e.record.id), count: 1, damage: 0 } }); },
+    restore(records) { tiles.clear(); for (const e of records ?? []) if ([e.x, e.y, e.z].every(Number.isInteger) && Number.isInteger(e.record?.id) && e.record.id > 0) tiles.set(key(e.x, e.y, e.z), { record: { id: isDisc(e.record.id) ? canonicalDisc(e.record.id) : e.record.id, count: Number.isInteger(e.record.count) ? e.record.count : 1, damage: Number.isInteger(e.record.damage) ? e.record.damage : 0 } }); }, // b95 tiles95: any stack, as the tile keeps
   };
 }
 
