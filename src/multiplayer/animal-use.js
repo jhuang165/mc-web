@@ -52,7 +52,7 @@ export function predictAnimalUse(mob, survival, { drop = () => {}, selfId = null
   if (!mob || !ANIMAL_TYPES.has(mob.type)) return { handled: false }; // b79 / b80: a corpse takes these uses too (wm.a(yz) has no health test either)
   const held = survival.held, id = held?.id ?? 0, adult = (mob.growingAge ?? 0) >= 0, creative = !!survival.creative;
   const spend = () => { if (!creative) survival.inventory.decr(survival.inventory.current, 1); };
-  const wear = () => { if (!creative && survival.count(SHEARS)) survival.wear(SHEARS, 1); };
+  const wear = () => { if (!creative && (held?.id === SHEARS || survival.count(SHEARS))) survival.wear(SHEARS, 1, 'held'); }; // b98 mpobjects98: as the server (EntityWorld.shear): a size-0 pair in the hand still wears and stays there
   if (mob.type === 'pig' && id === SADDLE) {
     if (!mob.saddled && adult) { mob.saddled = true; spend(); return { handled: true, sound: 'mob.horse.leather' }; }
     return { handled: true };
@@ -62,7 +62,7 @@ export function predictAnimalUse(mob, survival, { drop = () => {}, selfId = null
     if (use === 'bowl') return { handled: useBowl(survival, makeStack) };
     if (use === 'shear') { wear(); return { handled: true, sound: SHEAR_SOUND }; }
   }
-  if (mob.type === 'sheep' && id === SHEARS && !mob.sheared && adult && (creative || survival.count(id))) { mob.sheared = true; wear(); return { handled: true, sound: SHEAR_SOUND }; }
+  if (mob.type === 'sheep' && id === SHEARS && !mob.sheared && adult && (creative || held?.id === id || survival.count(id))) { mob.sheared = true; wear(); return { handled: true, sound: SHEAR_SOUND }; }
   if (isCow(mob.type) && milkCow(survival, { drop })) return { handled: true };
   if (id && isBreedingItem(mob.type, id) && (held || survival.count(id)) && mob.growingAge === 0 && !(mob.love > 0)) {
     mob.love = 600;
