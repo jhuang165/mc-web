@@ -101,7 +101,7 @@ export function ejectOffsets(rand) {
 
 // hooks: play(discItem | null, x, y, z) (RenderGlobal.playRecord: stops the record at x, y, z, then plays a disc and sets its HUD line),
 // spawn(stack, x, y, z) with the 10-tick pickup delay, changed().
-export function installJukeboxes(redstone, { play = () => {}, spawn = () => {}, changed = () => {} } = {}) {
+export function installJukeboxes(redstone, { play = () => {}, spawn = () => {}, spawnInert = () => {}, changed = () => {} } = {}) {
   const tiles = new Map(), key = (x, y, z) => `${x},${y},${z}`;
   const tile = (x, y, z) => {
     const k = key(x, y, z);
@@ -118,6 +118,7 @@ export function installJukeboxes(redstone, { play = () => {}, spawn = () => {}, 
     w.setBlockMetadataWithNotify(x, y, z, 0, 2);
     const [d0, d1, d2] = ejectOffsets(w.rand);
     if ((stack.count | 0) > 0 && stack.id > 0) spawn({ ...stack }, x + d0, y + d1, z + d2); // b95 tiles95: a kept Count 0 stack has nothing to drop here (the port's item entity needs a count); b96 tiles96: nor has a stack with no port item (rawId, ghost: unproven natively, bytecode not read)
+    else if (stack.ghost) spawnInert(x + d0, y + d1, z + d2, stack.count ?? 1); // b98 tiles98: a null-item stack still leaves an inert EntityItem (inert-drops.js)
     changed();
     return true;
   };

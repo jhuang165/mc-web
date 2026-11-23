@@ -167,7 +167,9 @@ export function armorPosition(s) {
 }
 const hasTag = (s) => !!s.enchantments?.length;
 // b71: a head's SkullOwner (item-tags.js skullOwner / skullRaw) survives on a mob's helmet so RenderBiped can draw the player's skin.
-export const skullFields = (s) => ({ ...(typeof s?.skullOwner === "string" ? { skullOwner: s.skullOwner } : {}), ...(s?.skullRaw ? { skullRaw: structuredClone(s.skullRaw) } : {}) });
+// b98 tiles98: also the raw unknown tag keys (extraRaw, displayExtraRaw) so a hand-built copy keeps them.
+export const skullFields = (s) => ({ ...(typeof s?.skullOwner === "string" ? { skullOwner: s.skullOwner } : {}), ...(s?.skullRaw ? { skullRaw: structuredClone(s.skullRaw) } : {}),
+  ...(s?.extraRaw ? { extraRaw: structuredClone(s.extraRaw) } : {}), ...(s?.displayExtraRaw ? { displayExtraRaw: structuredClone(s.displayExtraRaw) } : {}) });
 // Whether the mob swaps its stack in `slot` for the candidate (the flag of EntityLiving.onLivingUpdate's loop).
 export function prefersPickup(slot, current, candidate) {
   if (!current) return true;
