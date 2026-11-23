@@ -256,7 +256,7 @@ export class BedSleep {
   restore(data) {
     this.reset();
     if (Array.isArray(data?.spawn) && data.spawn.length === 3 && data.spawn.every(Number.isInteger)) this.spawn = data.spawn;
-    if (!Array.isArray(data?.bed) && Number.isInteger(data?.timer) && data.timer > 0 && data.timer < 32768) this.timer = data.timer; // an awake player keeps SleepTimer (EntityPlayer.onUpdate counts it up to 110, then 0); a saved sleeper is resumed by launch
+    if (!Array.isArray(data?.bed) && Number.isInteger(data?.timer) && data.timer !== 0 && data.timer >= -32768 && data.timer < 32768) this.timer = data.timer; // b97 entnbt97 (executed): a negative awake SleepTimer is kept as loaded (the count runs only above 0) // an awake player keeps SleepTimer (EntityPlayer.onUpdate counts it up to 110, then 0); a saved sleeper is resumed by launch
     return this;
   }
 }

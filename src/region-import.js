@@ -323,10 +323,12 @@ function levelRecord(record, { level, levelGen, javaPlayer: first, world, genera
       const spawn = [first.bedSpawn[0] - ox, first.bedSpawn[1], first.bedSpawn[2] - oz];
       if (first.spawnForced) out.playerSpawn = spawn; else out.bed = { spawn };
     }
-    if (first.sleepTimer > 0) out.bed = { ...out.bed, timer: first.sleepTimer }; // b96 entnbt96: an awake player's SleepTimer (bed.js restore counts it to 110)
-    if (first.motion?.some((v) => v)) out.playerState = { motion: first.motion }; // Entity.readFromNBT Motion, restored into the server copy (main.js launch)
+    if (first.sleepTimer !== 0) out.bed = { ...out.bed, timer: first.sleepTimer }; // b96 entnbt96: an awake player's SleepTimer (bed.js restore counts it to 110)
+    if (first.motion?.some((v) => v || Number.isNaN(v))) out.playerState = { motion: first.motion }; // Entity.readFromNBT Motion, restored into the server copy (main.js launch)
     // abilities.flying only means something in Creative (a Survival player's capabilities are reset by the game mode).
     if (first.flying && mode === 'creative') out.flying = true;
+    // PlayerCapabilities flySpeed/walkSpeed are kept as loaded (b97 entnbt97, executed) and written back; the port's movement still uses 0.05/0.1.
+    if (first.abilities && (first.abilities.flySpeed !== Math.fround(0.05) || first.abilities.walkSpeed !== Math.fround(0.1))) out.abilitySpeeds = { fly: first.abilities.flySpeed, walk: first.abilities.walkSpeed };
     if (first.uuid) {
       out.playerUuid = first.uuid;
       // Owners equal to the player need no stored string; a lead held by another UUID drops (native playerWrongUuid): owner-links.js.
