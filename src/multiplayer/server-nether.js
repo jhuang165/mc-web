@@ -221,5 +221,5 @@ function flushDimension(sim, n, beforeLit) {
     if (t) tiles.push(t);
   }
   n.dirtyTiles.clear();
-  return { changes, ...(chunks.length ? { chunks } : {}), ...(tiles.length ? { tiles } : {}) };
+  return { changes, ...(chunks.length ? { chunks } : {}), ...(tiles.length ? { tiles } : {}), lit: [...beforeLit] /* b97 mpobjects97: the lit set at the flush (dimensionLitDiff advanced beforeLit to it), what the S23 / S22 cells of this message show */ };
 }

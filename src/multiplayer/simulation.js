@@ -734,6 +734,7 @@ export class DedicatedSimulation {
     this.lightning.tick(); // b66 mplightning
     this.weather.drain();
     const flushed = this.flushChanges(beforeLit); // b95 mpobjects95: mt.b's mq.b() (PlayerManager.updatePlayerInstances: S23 / S22 / S35 of the dirty chunks) after tickBlocks, before the block events, the village tick and the entity pass
+    const flushedLit = [...beforeLit]; // b97 mpobjects97: flushChanges advanced beforeLit to the lit set at mq.b's place; the tick message's redstone.lit is that, as the S23 / S22 cells it goes with (the client meshes them with it)
     this.mobs.villageStep(); // b96 mpobjects96: mt.b's wc.a() / wb.a() (VillageCollection and VillageSiege ticks) follow mq.b and precede the block events and the entity pass
     tickBlockEvents({ redstone: this.redstone }); // b94 mpobjects94: WorldServer.sendQueuedBlockEvents ends mt.b, after the random ticks and the weather bolts (it ran before them)
     this.dispense.tick(); // b61: dispensed TNT, balls, arrows, rockets, potions (before the mobs, as tickEntitySimulation)
@@ -763,7 +764,7 @@ export class DedicatedSimulation {
     // b95 mpobjects95: what the entity pass, the block events and the tile entities changed waits for the NEXT tick's flush (mq.b); settle its light and tiles now, as the world does at once.
     this.litDiff(beforeLit);
     this.settleChanges();
-    return { type: 'tick', tick: this.ticks, time: this.time, ...flushed, players: this.presence(), weather: this.weather.save(), redstone: { lit: [...this.redstone.lit] }, ...this.itemsField(), ...this.serverItems.tickFields(), ...this.containers.actionsField() };
+    return { type: 'tick', tick: this.ticks, time: this.time, ...flushed, players: this.presence(), weather: this.weather.save(), redstone: { lit: flushedLit }, ...this.itemsField(), ...this.serverItems.tickFields(), ...this.containers.actionsField() };
   }
   // `items` rides in a tick while any exist, and once more (empty) after the last one is gone.
   itemsField() { const list = this.itemList(); for (const e of this.items.items) e.velocityChanged = false; /* b83 tracker83: EntityTrackerEntry clears it after its S12 (my.a(List) tail), once a tick */ if (!list.length && !this.itemsSent) return {}; this.itemsSent = list.length; return { items: list }; }
