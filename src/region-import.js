@@ -19,7 +19,7 @@ import { chunkFromNbt } from './chunk-nbt.js';
 import { nbtGet, hasNumber } from './nbt-get.js';
 import { readFireworkNbt } from './fireworks-nbt.js';
 import { readBookNbt } from './books-nbt.js';
-import { readItemTagsNbt } from './item-tags.js';
+import { readItemTagsNbt, readExtraRaw } from './item-tags.js';
 import { profileOfSkullTile, skullBytes } from './skull-profile.js';
 import { NBT } from './nbt.js';
 import { potFromNbt } from './stone-utility.js';
@@ -105,8 +105,9 @@ export function readItemTag(stack, nbt) {
   const unbreakable = get(nbt, 'Unbreakable', NBT.BYTE);
   if (unbreakable !== undefined) stack.unbreakable = unbreakable !== 0;
   const lost = [], recognized = new Set(['ench', 'StoredEnchantments', 'RepairCost', 'display', 'Unbreakable', ...readFireworkNbt(stack, nbt), ...readBookNbt(stack, nbt), ...readItemTagsNbt(stack, nbt, lost)]);
-  const ignored = [...nbt.keys()].filter((key) => !recognized.has(key));
-  if (display) ignored.push(...[...display.keys()].filter((key) => key !== 'Name' && key !== 'color' && !(key === 'Lore' && (stack.lore || stack.loreRaw))).map((key) => 'display.' + key));
+  readExtraRaw(stack, nbt, recognized); // b97 tiles97: unknown keys of tag and display stay raw (ItemStack keeps the whole tag), so nothing is reported ignored
+  const ignored = [];
+  if (display && display.has('Lore') && !(stack.lore || stack.loreRaw)) ignored.push('display.Lore');
   ignored.push(...lost); // SkullOwner.<key> of a profile compound (item-tags.js)
   return ignored;
 }

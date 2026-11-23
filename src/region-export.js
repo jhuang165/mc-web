@@ -69,7 +69,7 @@ export function stackNbt(s,slot,report,original=false) {
  if(Object.keys(display).length)tagEntries.display=comp(display);
  writeFireworkTags(s,tagEntries);writeBookTags(s,tagEntries);writeItemTags(s,tagEntries);
  if(typeof s.unbreakable==='boolean')tagEntries.Unbreakable=byte(s.unbreakable?1:0);
- if(Object.keys(tagEntries).length)entry.tag=comp(tagEntries);
+ if(Object.keys(tagEntries).length||s.extraRaw)entry.tag=comp(tagEntries); // b97 tiles97: s.extraRaw (even {}) keeps the tag compound
  return new Map(Object.entries(entry));
 }
 const inventory=(items,report)=>list(NBT.COMPOUND,(items??[]).flatMap((s,i)=>{const n=stackNbt(s,i,report);return n?[n]:[];}));

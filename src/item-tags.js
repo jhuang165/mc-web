@@ -49,6 +49,11 @@ const payloadFrom = (type, j) => {
 /** The NBT tag { type, value } of a raw JSON tag; throws for a malformed one. */
 export const tagOf = (r) => { if (!r || !Number.isInteger(r.t) || r.t < 1 || r.t > 11) throw new TypeError('raw tag'); return tag(r.t, payloadFrom(r.t, r.v)); };
 const validRaw = (r) => { try { tagOf(r); return true; } catch { return false; } };
+// b97 tiles97: ItemStack.readFromNBT keeps the whole `tag` compound. Keys the port does not model stay as raw NBT: stack.extraRaw {key: raw} for
+// unknown keys of `tag`, stack.displayExtraRaw {key: raw} for unknown keys of display (Name, color and Lore are modelled).
+const RAW_MAPS = ['extraRaw', 'displayExtraRaw'];
+const validRawMap = (m) => !!m && typeof m === 'object' && !Array.isArray(m) && Object.values(m).every(validRaw);
+const rawMapEntries = (m) => (m && typeof m === 'object' ? Object.entries(m) : []);
 const sameRaw = (a, b) => (a === undefined || b === undefined ? a === b : JSON.stringify(a) === JSON.stringify(b));
 const stringList = (t) => t?.type === NBT.LIST && (t.value.elementType === NBT.STRING ? t.value.items.length > 0 : t.value.elementType === NBT.END && !t.value.items.length);
 
@@ -64,6 +69,7 @@ export function readItemTags(s) {
       .map((e) => ({ id: e.id | 0, amplifier: signedByte(e.amplifier), duration: e.duration | 0, ambient: e.ambient === true }));
   }
   if (typeof s.mapScaling === 'boolean') out.mapScaling = s.mapScaling;
+  for (const f of RAW_MAPS) if (validRawMap(s[f])) out[f] = structuredClone(s[f]);
   return out;
 }
 /** Deep copy of the four fields onto `stack` (makeStack). */
@@ -72,20 +78,27 @@ export function cloneItemTags(stack) {
   if (Array.isArray(stack.customPotionEffects)) stack.customPotionEffects = stack.customPotionEffects.map((e) => ({ ...e }));
   if (stack.loreRaw) stack.loreRaw = structuredClone(stack.loreRaw);
   if (stack.skullRaw) stack.skullRaw = structuredClone(stack.skullRaw);
+  for (const f of RAW_MAPS) if (stack[f]) stack[f] = structuredClone(stack[f]);
 }
 const sameList = (a, b, eq) => Array.isArray(a) === Array.isArray(b) && (!Array.isArray(a) || (a.length === b.length && a.every((x, i) => eq(x, b[i]))));
 /** ItemStack.areItemStackTagsEqual over the four fields. */
 export function sameItemTags(a, b) {
-  return a.skullOwner === b.skullOwner && a.mapScaling === b.mapScaling && sameRaw(a.loreRaw, b.loreRaw) && sameRaw(a.skullRaw, b.skullRaw) && sameList(a.lore, b.lore, (x, y) => x === y)
+  return a.skullOwner === b.skullOwner && a.mapScaling === b.mapScaling && sameRaw(a.loreRaw, b.loreRaw) && sameRaw(a.skullRaw, b.skullRaw) && RAW_MAPS.every((f) => sameRaw(a[f], b[f])) && sameList(a.lore, b.lore, (x, y) => x === y)
     && sameList(a.customPotionEffects, b.customPotionEffects, (x, y) => x.id === y.id && x.amplifier === y.amplifier && x.duration === y.duration && !!x.ambient === !!y.ambient);
 }
 /** ItemStack.hasTagCompound over the four fields. */
-export const hasItemTags = (s) => !!s && (Array.isArray(s.lore) || !!s.loreRaw || !!s.skullRaw || typeof s.skullOwner === 'string' || Array.isArray(s.customPotionEffects) || typeof s.mapScaling === 'boolean');
+export const hasItemTags = (s) => !!s && (Array.isArray(s.lore) || !!s.loreRaw || !!s.skullRaw || !!s.extraRaw || rawMapEntries(s.displayExtraRaw).length > 0 || typeof s.skullOwner === 'string' || Array.isArray(s.customPotionEffects) || typeof s.mapScaling === 'boolean');
 
 // ---- NBT ----
 const effectTag = (e) => tag(NBT.COMPOUND, new Map([['Id', tag(NBT.BYTE, e.id)], ['Amplifier', tag(NBT.BYTE, e.amplifier)], ['Duration', tag(NBT.INT, e.duration)], ['Ambient', tag(NBT.BYTE, e.ambient ? 1 : 0)]]));
 /** Adds display.Lore (into entries.display when there is one), SkullOwner, CustomPotionEffects and map_is_scaling to a `tag` entries object. */
 export function writeItemTags(stack, entries) {
+  for (const [k, r] of rawMapEntries(stack.extraRaw)) if (!(k in entries)) entries[k] = tagOf(r);
+  const displayExtra = rawMapEntries(stack.displayExtraRaw);
+  if (displayExtra.length) {
+    const display = entries.display ?? (entries.display = tag(NBT.COMPOUND, new Map()));
+    for (const [k, r] of displayExtra) if (!display.value.has(k)) display.value.set(k, tagOf(r));
+  }
   if (stack.loreRaw || Array.isArray(stack.lore)) {
     const display = entries.display ?? (entries.display = tag(NBT.COMPOUND, new Map()));
     display.value.set('Lore', stack.loreRaw ? tagOf(stack.loreRaw) : tag(NBT.LIST, { elementType: stack.lore.length ? NBT.STRING : NBT.END, items: [...stack.lore] }));
@@ -131,6 +144,15 @@ export function readItemTagsNbt(stack, nbt, lost = []) {
   const scaling = nbt.get('map_is_scaling');
   if (scaling) { const v = nbtGet(nbt, 'map_is_scaling', NBT.BYTE); if (v !== undefined) stack.mapScaling = v !== 0; }
   return ['SkullOwner', 'CustomPotionEffects', 'map_is_scaling'];
+}
+/** b97 tiles97: the unknown keys of `tag` (not in `recognized`) and of display (not Name, color, Lore) kept raw on the stack. */
+export function readExtraRaw(stack, nbt, recognized) {
+  const extra = {}, dextra = {}, display = nbt.get('display')?.type === NBT.COMPOUND ? nbt.get('display').value : undefined;
+  for (const [k, t] of nbt) if (!recognized.has(k)) extra[k] = rawOf(t);
+  if (display) for (const [k, t] of display) if (k !== 'Name' && k !== 'color' && k !== 'Lore') dextra[k] = rawOf(t);
+  // An empty `tag` compound is kept too (executed: native writes `tag: {}` back, and it does not stack with a plain item): extraRaw = {}.
+  if (Object.keys(extra).length || nbt.size === 0) stack.extraRaw = extra; else delete stack.extraRaw;
+  if (Object.keys(dextra).length) stack.displayExtraRaw = dextra; else delete stack.displayExtraRaw;
 }
 
 // ---- use ----
