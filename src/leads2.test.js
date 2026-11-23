@@ -189,17 +189,17 @@ function click(r) {
   const o = ORIG[r.item], [oid, od] = Array.isArray(o) ? o : [o, 0], m = itemFromOriginal(oid, od);
   s.inventory.main[0] = makeStack(m.id, r.count, m.damage ?? od);
   s.inventory.current = 0;
-  let res = true;
+  let res = true, shearedNow = false;
   if (w.leashInteract(e, s)) { /* tied */ }
   else if (kind === "wolf" && w.wolfInteract(e, s)) { /* used */ }
   else if (kind === "ocelot" && w.ocelotInteract(e, s)) { /* used */ }
   else if (kind === "horse" && w.horseInteract(e, s, { sneak: false, open: () => {} })) { /* used */ }
-  else if (w.shear(e, s.held?.id, s)) { /* sheared */ }
+  else if (w.shear(e, s.held?.id, s)) { shearedNow = true; /* sheared: player-edit-simulation.js returns before the size <= 0 clean-up (b97 mobrec97, executed b97mr-sheep-shears-ghost-*: the size-0 stack stays) */ }
   else if (w.feed(e, s.held?.id, s)) { /* fed */ }
   else if (w.dye(e, s.held, s)) { /* dyed (the dispatcher then destroys a spent stack) */ }
   else res = false;
   // player-edit-simulation.js: a sheep click that fell through to the end of the entity branch empties a held stack of size <= 0 outside Creative
-  if (kind === "sheep" && res && !r.creative && s.held && s.held.count <= 0) s.inventory.main[0] = null;
+  if (kind === "sheep" && res && !shearedNow && !r.creative && s.held && s.held.count <= 0) s.inventory.main[0] = null;
   return s.inventory.main[0]?.count ?? null;
 }
 

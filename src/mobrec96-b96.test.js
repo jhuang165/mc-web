@@ -31,7 +31,7 @@ test("mobrec96 breeding: the baby spawn drops ONE experience orb of nextInt(7)+1
   assert.match(src("./multiplayer/server-mobs.js"), /xpWhole/);
 });
 test("mobrec96 shears: breaking the shears draws the break-sound pitch from the world Random (Executed shears 237/238)", () => {
-  assert.match(src("./entities.js"), /survival\.wear\(id,1\)\)\(this\.worldRandom\?\?=new JavaRandom/);
+  assert.match(src("./entities.js"), /survival\.wear\(id,1(,'held')?\)\)\(this\.worldRandom\?\?=new JavaRandom/);
   assert.match(src("./mooshroom-golem-live.js"), /worldRandom/);
 });
 test("mobrec96 growth: a calf, piglet or chick that grows up widens its box and nudges (Executed calf, piglet, chick growth)", () => {

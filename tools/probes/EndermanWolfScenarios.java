@@ -456,6 +456,38 @@ public class EndermanWolfScenarios {
     sc94("b96mr-sheep-shears-stack-9974", 9974, 120, "HH", new double[][] {{67.5, 64.5}, {70.5, 64.5}, {64.5, 64.5}}, none, "0 look 270 0", "0 color 0 3", "0 color 1 11", "0 holdd 359 3 100", "10 use 0", "20 use 1");
     sc94("b96mr-sheep-shears-dye-9975", 9975, 120, "H", hit1, none, "0 look 270 0", "0 holdd 359 1 0", "5 use 0", "10 holdn 351 5", "15 use 0", "20 shear 0 off", "25 use 0");
   }
+  // Batch 97 (mobrec97, b97mr): the b96mr harness with more bat records, a count-0 shears stack and villagers.
+  static void run97() throws Exception {
+    int[][] none = new int[0][0];
+    int[][] ceil = {{40, 6, 40, 90, 6, 90, 1, 0}};
+    int[][] room = {{40, 6, 40, 90, 6, 90, 1, 0}, {60, 0, 40, 60, 6, 90, 1, 0}, {80, 0, 40, 80, 6, 90, 1, 0}};
+    int[][] closet = {{66, 6, 40, 74, 6, 48, 1, 0}, {66, 0, 40, 66, 6, 48, 1, 0}, {74, 0, 40, 74, 6, 48, 1, 0}, {66, 0, 40, 74, 6, 40, 1, 0}, {66, 0, 48, 74, 6, 48, 1, 0}};
+    double[][] far = {{70.5, 64.5, 5.1}, {64.5, 64.5, 0}};
+    sc93("b97mr-bat-hang-long-9701", 9701, 1000, "b", far, false, ceil);
+    sc93("b97mr-bat-approach-9702", 9702, 400, "b", new double[][] {{70.5, 64.5, 5.1}, {50.5, 64.5, 4.0}}, false, ceil, "0 walk 1 0.15 0");
+    sc93("b97mr-bat-closet-9703", 9703, 700, "b", new double[][] {{70.5, 44.5, 5.1}, {64.5, 64.5, 0}}, false, closet, "0 move 0 70.5 44.5 5.1");
+    sc93("b97mr-bat-open-long-9704", 9704, 900, "b", new double[][] {{70.5, 64.5, 5.1}, {64.5, 64.5, 0}}, false, none);
+    sc93("b97mr-bat-zombie-hit-9706", 9706, 200, "bZ", new double[][] {{70.5, 64.5, 5.1}, {72.5, 64.5, 0}, {64.5, 64.5, 0}}, false, room, "20 hit 0 1 3", "21 hit 0 1 3", "60 hit 0 1 3");
+    sc93("b97mr-bat-creative-9707", 9707, 300, "b", new double[][] {{70.5, 64.5, 5.1}, {67.5, 64.5, 4.0}}, false, room, "0 creative 1 on");
+    sc93("b97mr-bat-invisible-9708", 9708, 300, "b", new double[][] {{70.5, 64.5, 5.1}, {67.5, 64.5, 4.0}}, false, room, "0 invisible 1 on");
+    sc93("b97mr-bat-arrow-hang-9709", 9709, 120, "b", far, false, room, "10 arrowkill 0 3", "30 arrowkill 0 100");
+    sc93("b97mr-bat-hit-hanging-9710", 9710, 200, "b", new double[][] {{67.5, 64.5, 5.1}, {64.5, 64.5, 0}}, false, room, "0 look 270 -60", "10 melee 0", "40 melee 0");
+    sc93("b97mr-bat-three-9711", 9711, 600, "bbb", new double[][] {{70.5, 64.5, 5.1}, {72.5, 64.5, 5.1}, {74.5, 66.5, 5.1}, {64.5, 64.5, 0}}, false, room);
+    sc93("b97mr-bat-kill-flying-9712", 9712, 300, "b", new double[][] {{70.5, 64.5, 5.1}, {67.5, 64.5, 4.0}}, false, room, "40 health 0 1", "60 melee 0", "61 melee 0", "62 melee 0");
+    sc93("b97mr-bat-stone-step-9713", 9713, 500, "b", new double[][] {{70.5, 64.5, 5.1}, {64.5, 64.5, 0}}, false, new int[][] {{40, 6, 40, 90, 6, 90, 1, 0}, {40, 4, 40, 70, 4, 90, 1, 0}});
+    sc93("b97mr-bat-glass-9714", 9714, 500, "b", new double[][] {{70.5, 64.5, 5.1}, {64.5, 64.5, 0}}, false, new int[][] {{40, 6, 40, 90, 6, 90, 20, 0}});
+    sc93("b97mr-bat-slab-9715", 9715, 500, "b", new double[][] {{70.5, 64.5, 5.1}, {64.5, 64.5, 0}}, false, new int[][] {{40, 6, 40, 90, 6, 90, 44, 8}});
+    sc93("b97mr-bat-fall-9716", 9716, 100, "b", new double[][] {{70.5, 64.5, 20.0}, {64.5, 64.5, 0}}, false, none);
+    // a shears stack that breaks leaves a size-0 stack in the hand (ItemStack.damageItem; the probe never runs the client's cleanup): a later use on a sheep, a lamb, a sheared sheep, a mooshroom, a blow, a drop of the slot
+    double[][] three = {{67.5, 64.5}, {70.5, 64.5}, {73.5, 64.5}, {64.5, 64.5}};
+    sc94("b97mr-sheep-shears-ghost-9751", 9751, 120, "HHH", three, none, "0 look 270 0", "0 color 0 4", "0 color 1 9", "0 color 2 13", "0 holdd 359 1 238", "10 use 0", "20 use 1", "30 use 2", "40 use 0");
+    sc94("b97mr-sheep-shears-ghost-lamb-9752", 9752, 100, "He", new double[][] {{67.5, 64.5}, {70.5, 64.5}, {64.5, 64.5}}, none, "0 look 270 0", "0 holdd 359 1 238", "10 use 0", "20 use 1");
+    sc94("b97mr-sheep-shears-ghost-melee-9753", 9753, 100, "HH", new double[][] {{67.5, 64.5}, {70.5, 64.5}, {64.5, 64.5}}, none, "0 look 270 0", "0 holdd 359 1 238", "10 use 0", "20 melee 1", "30 use 1");
+    sc94("b97mr-sheep-shears-ghost-wheat-9754", 9754, 100, "HH", new double[][] {{67.5, 64.5}, {70.5, 64.5}, {64.5, 64.5}}, none, "0 look 270 0", "0 holdd 359 1 238", "10 use 0", "20 holdn 296 5", "30 use 1");
+    sc94("b97mr-mooshroom-shears-ghost-9755", 9755, 120, "MM", new double[][] {{67.5, 64.5}, {70.5, 64.5}, {64.5, 64.5}}, none, "0 look 270 0", "0 holdd 359 1 238", "10 use 0", "20 use 1", "30 use 1");
+    sc94("b97mr-mixed-shears-ghost-9756", 9756, 120, "MH", new double[][] {{67.5, 64.5}, {70.5, 64.5}, {64.5, 64.5}}, none, "0 look 270 0", "0 color 1 6", "0 holdd 359 1 238", "10 use 1", "20 use 0", "30 use 1");
+    sc94("b97mr-sheep-shears-worn-ghost-9757", 9757, 160, "HHHH", new double[][] {{67.5, 64.5}, {70.5, 64.5}, {73.5, 64.5}, {76.5, 64.5}, {64.5, 64.5}}, none, "0 look 270 0", "0 holdd 359 1 237", "10 use 0", "20 use 1", "30 use 2", "40 use 3");
+  }
   // Batch 95 (mobrec95, b95mr): the b94mr harness. Part 1: long pigman and giant melee fights (600 ticks). Part 2 (sheep, squid) follows below.
   static String[] repeat95(String op, int from, int to, int step) { java.util.ArrayList<String> o = new java.util.ArrayList<>(); for (int t = from; t < to; t += step) o.add(t + " " + op); return o.toArray(new String[0]); }
   static String[] cat95(String[]... parts) { java.util.ArrayList<String> o = new java.util.ArrayList<>(); for (String[] p : parts) o.addAll(java.util.Arrays.asList(p)); return o.toArray(new String[0]); }

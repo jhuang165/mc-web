@@ -1756,6 +1756,8 @@ export class EntityWorld {
     // The reference shows no tool wear when the hit is refused by the hurt window.
     if (landed) {
       if (owned && !crystal && ["sword", "axe", "pickaxe", "shovel"].includes(item?.kind)) survival.wear(tool, item.kind === "sword" ? 1 : 2);
+      const hs = survival.inventory?.held; // b97 mobrec97 (executed b97mr-sheep-shears-ghost-melee-9753): attackTargetEntityWithCurrentItem destroys a size-0 held stack afterwards
+      if (hs && hs.count === 0 && !survival.creative) survival.inventory.setStack(survival.inventory.current, null);
       survival.exhaust(0.3);
     }
     if (weapon.fireAspect > 0 && landed) setMobFire(e, weapon.fireAspect * 4);
@@ -2157,12 +2159,12 @@ export class EntityWorld {
   // and the shears lose 1 durability (not in Creative).
   shear(e,id,survival){
     if(!this.entities.includes(e)||e.type!=='sheep'||id!==125||e.sheared||e.growingAge<0)return false;
-    if(!survival.creative&&!survival.count(id))return false;
+    if(!survival.creative&&survival.inventory.held?.id!==id&&!survival.count(id))return false; // b97 mobrec97 (executed b97mr-sheep-shears-ghost-*): EntitySheep.interact tests the held item, not its size, so the size-0 stack a broken pair leaves still shears
     const r=entityRandom(e),n=1+r.nextInt(3);e.sheared=true; // b95 mobrec95: EntitySheep.interact draws on the sheep's own Entity.rand (executed b95mr-sheep-shear-9817), not the world's
     for(let i=0;i<n;i++){const my=f(r.nextFloat()*f(0.05)),mx=f(f(r.nextFloat()-r.nextFloat())*f(0.1)),mz=f(f(r.nextFloat()-r.nextFloat())*f(0.1));
       this.emitLoot({drop:WOOL,count:1,damage:e.color,offsetY:1,kick:[mx,my,mz],position:{x:e.x,y:e.y,z:e.z}});}
     this.events.push({sound:'mob.sheep.shear',volume:1,position:{x:e.x,y:e.y,z:e.z}});
-    if(!survival.creative&&survival.wear(id,1))(this.worldRandom??=new JavaRandom(Math.floor(Math.random()*2**48))).nextFloat(); // b96 mobrec96 (Executed b96mr-sheep-shears-break-9976): ItemStack.damageItem past the maximum calls renderBrokenItemStack, which draws the break sound's pitch from World.rand
+    if(!survival.creative&&survival.wear(id,1,'held'))(this.worldRandom??=new JavaRandom(Math.floor(Math.random()*2**48))).nextFloat(); // b96 mobrec96 (Executed b96mr-sheep-shears-break-9976): ItemStack.damageItem past the maximum calls renderBrokenItemStack, which draws the break sound's pitch from World.rand
     return true;
   }
   // ItemDye.itemInteractionForEntity (acj.a(add, yz, sv)): after EntitySheep.interact
