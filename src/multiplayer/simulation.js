@@ -6,6 +6,8 @@ import { PlayerMotion } from '../player-movement.js';
 import { vectorOf } from '../mpperf83-fast.js'; // b83 mpperf83
 import { eachValue89 } from '../mpperf89-fast.js'; // b89 mpperf89
 import { fast97, fail97 } from '../mpperf97-fast.js'; // b97 mpperf97
+import { fast98 } from '../mpperf98-fast.js'; // b98 mpperf98
+const NO_BEACON_PLAYERS98 = Object.freeze([]);
 import { movePlayer } from '../player-physics.js';
 import { ServerStats } from './server-stats.js'; // b63 mpstats
 import { ServerScoreboard } from './server-scoreboard.js'; // b64 mpscoreboard
@@ -453,7 +455,10 @@ export class DedicatedSimulation {
   }
   // WorldManager.playSound / playSoundToNearExcept -> ServerConfigurationManager.sendToAllNearExcept: the players (but `except`) whose posX/Y/Z is within the range.
   deliverSounds() {
-    for (const s of this.soundsOut.splice(0)) {
+    const queue = fast98.mode === 'off' ? this.soundsOut.splice(0) : this.soundsOut;
+    if (!queue.length) return; // b98 mpperf98: nothing queued, nothing copied
+    for (let qi = 0; qi < queue.length; qi++) {
+      const s = queue[qi];
       const range = s.volume > 1 ? SOUND_RANGE * s.volume : SOUND_RANGE;
       for (const o of this.players.values()) {
         if (o.id === s.except || (o.dimension | 0) !== (s.dim ?? this.players.get(s.except)?.dimension ?? 0)) continue; // b61: the sound's dimension (the eater's, unless tagged)
@@ -461,6 +466,7 @@ export class DedicatedSimulation {
         if (dx * dx + dy * dy + dz * dz < range * range) (o.soundsOut ??= []).push({ name: s.name, x: s.x, y: s.y, z: s.z, volume: s.volume, pitch: s.pitch });
       }
     }
+    if (queue === this.soundsOut) queue.length = 0;
   }
   // b83 attack83: `air` is the C08 with direction 255 alone (nh.a(jo): tryUseItem = Item.onItemRightClick, no block click, no reach or height gate and no S23 resend).
   // The client sends it in place of the block C08 when its own ItemBlock canPlaceItemBlockOnSide refused (right-click-swing.js clientWithholdsPlace).
@@ -760,7 +766,7 @@ export class DedicatedSimulation {
       const p = pl.player;
       p.survival.effects.add(e);
       (p.effectsOut ??= []).push({ id: e.id, amplifier: e.amplifier, duration: e.duration, ambient: !!e.ambient });
-    }, players: [...this.players.values()].map(p => ({ x: p.position.x, y: p.position.y, z: p.position.z, width: PHYSICS.width, height: PHYSICS.height, player: p })) });
+    }, players: fast98.mode !== 'off' && !(this.tileEntities.beacons.tiles.size && this.ticks % 80 === 0) ? NO_BEACON_PLAYERS98 : [...this.players.values()].map(p => ({ x: p.position.x, y: p.position.y, z: p.position.z, width: PHYSICS.width, height: PHYSICS.height, player: p })) }); // b98 mpperf98: tickBeacons reads `players` only on an 80th tick with a beacon
     // b95 mpobjects95: what the entity pass, the block events and the tile entities changed waits for the NEXT tick's flush (mq.b); settle its light and tiles now, as the world does at once.
     this.litDiff(beforeLit);
     this.settleChanges();
