@@ -125,7 +125,7 @@ test("item physics: off, on and verify move every item the same (positions, moti
 test("seeded server scenes hash the same off / on / verify", () => {
   const hash = (m) => spawnSync(process.execPath, ["tools/bench-alloc81.mjs", "--scene=pen", "--state", "--ticks=100", "--mobs=60"], { env: { ...process.env, MC_MPPERF86: m, ...(m === "verify" ? { MC_MPPERF85: m, MC_MPPERF84: m, MC_MPPERF83: m } : {}) }, encoding: "utf8" }).stdout.trim();
   const off = hash("off");
-  assert.match(off, /mode86=off (mode87=\w+ )?(mode88=\w+ )?(mode89=\w+ )?(mode90=\w+ )?(mode91=\w+ )?(mode92=\w+ )?(mode93=\w+ )?(mode94=\w+ )?(mode95=\w+ )?(mode96=\w+ )?(mode97=\w+ )?mobs=\d+ \[/); // b87: the bench prints mode87 after mode86; b88: and mode88; b89: and mode89
+  assert.match(off, /mode86=off (mode87=\w+ )?(mode88=\w+ )?(mode89=\w+ )?(mode90=\w+ )?(mode91=\w+ )?(mode92=\w+ )?(mode93=\w+ )?(mode94=\w+ )?(mode95=\w+ )?(mode96=\w+ )?(mode97=\w+ )?(mode98=\w+ )?mobs=\d+ \[/); // b87: the bench prints mode87 after mode86; b88: and mode88; b89: and mode89
   const tail = (s) => s.split("mobs=").pop();
   assert.equal(tail(hash("on")), tail(off));
   assert.equal(tail(hash("verify")), tail(off));

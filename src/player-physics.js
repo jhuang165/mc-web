@@ -1,3 +1,4 @@
+import { fast98, fail98 } from "./mpperf98-fast.js"; // b98 mpperf98
 import { PHYSICS, SIZE, slipperiness, fallingVelocity, collides } from './world.js';
 import { webMove } from './webs.js';
 import { moveEntity, pushOutOfBlocks } from './entities.js';
@@ -11,7 +12,8 @@ import { SNEAK_YSIZE, moveWeights, groundAccel, airAccel, LIQUID_ACCEL, JUMP_MOT
 export function movePlayer(state, controls, toast = () => {}) {
   const { world, position, previous, velocity, motion, survival, yaw, eating } = state;
   let { grounded, collidedH, flying, fallDistance, landedFall } = state;
-  Object.assign(previous, { x: position.x, y: position.y, z: position.z });
+  if (fast98.mode === "off") Object.assign(previous, { x: position.x, y: position.y, z: position.z });
+  else { previous.x = position.x; previous.y = position.y; previous.z = position.z; } // b98 mpperf98: the same stores without the literal
   // EntityPlayer.sleepInBedAt shrinks the body to 0.2 x 0.2 on the mattress and isMovementBlocked holds it still,
   // so the standing 0.6-wide box is never pushed out of, or collided against, the walls round the bed.
   if (state.sleeping) {
@@ -129,8 +131,8 @@ export function movePlayer(state, controls, toast = () => {}) {
     landedFall = landed;
     fallDistance = body.fallDistance;
   }
-  Object.assign(position, { x: body.x, y: body.y, z: body.z });
-  Object.assign(velocity, { x: body.vx, y: body.vy, z: body.vz });
+  if (fast98.mode === "off") { Object.assign(position, { x: body.x, y: body.y, z: body.z }); Object.assign(velocity, { x: body.vx, y: body.vy, z: body.vz }); }
+  else { position.x = body.x; position.y = body.y; position.z = body.z; velocity.x = body.vx; velocity.y = body.vy; velocity.z = body.vz; } // b98 mpperf98
   collidedH = body.collidedH;
   // Stay inside resident terrain; streamed windows advance before movement.
   for (let ax = 0; ax < 2; ax++) { // b96 mpperf96: no array literal and iterator per step
