@@ -76,11 +76,16 @@ test("the player's own row gets his S1C too, and a spawn row carries the armour 
   const p1 = players.get(1);
   p1.survival.health = 10;
   assert.deepEqual(pw(step(1), 1), [[28, s1c(6)]]);
+});
+
+test("only the spawning row carries the armour, effect count and modifier count; a steadily tracked row carries none", () => {
+  const { players, step } = world();
   const p2 = players.get(2);
   p2.survival.inventory.armor = [null, null, { id: 307, count: 1, damage: 0 }, { id: 306, count: 1, damage: 0 }];
   p2.survival.effects.add({ id: 1, duration: 600, amplifier: 0 });
-  const row = step(2).find((r) => r.id === 2);
+  const row = step(0).find((r) => r.id === 2);
   assert.equal(row.arm.length, 2);
   assert.equal(row.fxn, 1);
   assert.equal(row.am, 1);
+  for (let t = 1; t < 5; t++) { const r = step(t).find((x) => x.id === 2); assert.ok(!("arm" in r) && !("fxn" in r) && !("am" in r), `tick ${t}`); }
 });

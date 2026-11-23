@@ -118,16 +118,17 @@ export class ServerPlayerTracker {
       else { const dx = pos.x - v.ref.x, dy = pos.y - v.ref.y, dz = pos.z - v.ref.z; if (dx * dx + dy * dy + dz * dz > 16) { v.ref = { x: pos.x, y: pos.y, z: pos.z }; moved = true; } }
       v.view.player = pos;
       for (const id of [...v.entries.keys()]) if (!here.has(id)) v.entries.delete(id);
-      const tracked = new Set();
+      const tracked = new Set(), entered = tracked.entered = new Set(); // b97: entered = the players this viewer's entry started tracking this tick (the spawn S0C goes out)
       for (const [tid, target] of here) {
         if (tid === vid) continue; // my.b(player) returns for the player's own entry
         const e = { id: tid, x: target.position.x, y: target.position.y, z: target.position.z, rotationYaw: target.yaw ?? 0, rotationPitch: target.pitch ?? 0, type: 'player' };
         let en = v.entries.get(tid);
+        const was = !!en?.tracked;
         if (!en) { v.entries.set(tid, en = new TrackerEntry(e, { range: PLAYER_RANGE, frequency: PLAYER_FREQUENCY, velocity: false, limit: this.limit }, v.view)); en.ticks = this.host.ticks ?? 0; }
         else { en.e = e; if (moved) en.tryStart(); }
         en.sendLocation(false, false); en.packets.length = 0; // membership only: the rows carry the positions
         if (en.tracked && !this.watches(vid, Math.floor(e.x / 16), Math.floor(e.z / 16))) { en.tracked = false; en.packets.length = 0; }
-        if (en.tracked) tracked.add(tid);
+        if (en.tracked) { tracked.add(tid); if (!was) entered.add(tid); }
       }
       out.set(vid, tracked);
     }
@@ -146,7 +147,8 @@ export class ServerPlayerTracker {
       const rel = r.riding ? null : this.released(dim, r.id);
       const pk = this.masters.get(dim)?.byId.get(r.id)?.kinds; // b96 console96
       const st = this.masters.get(dim)?.byId.get(r.id), arm = st?.armour?.length ? { arm: st.armour } : {}, wp = st?.wp?.length ? { pw: st.wp } : {};
-      const extra = st ? { ...arm, ...wp, ...(st.fxn ? { fxn: st.fxn } : {}), am: st.we.mods.maxHealth + st.we.mods.movementSpeed } : {}; // b97: what a spawn counts (armour S04s, one S1D per effect, the modifiers in the S20)
+      const spawn = tracked.entered?.has(r.id) && st, // b97: only the row that spawns the player for this viewer carries what spawnRecords reads (armour S04s, one S1D per effect, the modifiers in the S20)
+        extra = st ? { ...(spawn ? { ...arm, ...(st.fxn ? { fxn: st.fxn } : {}), am: st.we.mods.maxHealth + st.we.mods.movementSpeed } : {}), ...wp } : {};
       return rel || pk || st ? { ...r, ...rel, ...(pk ? { pk } : {}), ...extra } : r;
     });
   }

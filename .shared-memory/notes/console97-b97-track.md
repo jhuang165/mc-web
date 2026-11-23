@@ -24,6 +24,6 @@ Scope: dedicated server `/netstat` packet accounting for a player's spawn extras
 
 ## Follow-ups
 - `watcherSig` (b75) still forces the off-beat position block when an effect's amplifier changes though the real colour can stay equal; native only forces it when a watcher value differs. Left as is (cadence change, out of scope).
-- `arm` and `fxn` ride on every tracked row each tick (ignored by the client); a cheaper channel would need a connection hook.
+- `arm`, `fxn` and `am` now ride only on the row of the tick a viewer starts tracking a player (the tracker marks `tracked.entered`); `pw` only on change.
 - Attributes other than the Health Boost / Speed / Slowness / sprint modifiers (e.g. other potions, enchant or item modifiers on watched attributes) are not modelled. Profile texture properties at spawn (+1097) still not counted.
 - Browser-only: nothing visible changes.
