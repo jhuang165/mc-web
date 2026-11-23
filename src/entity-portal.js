@@ -55,6 +55,11 @@ export function travelRoute(source, arg) {
 // pitch is 0; the Nether and Overworld Teleporter keep the pitch, and the End exit (source 1, argument 1) copies the entity as it is.
 export const endArrival = (source, arg) => arg === END && !travelRoute(source, arg).spawn;
 
+// b98 portals98 (Executed Portals98Probe, bytecode-read sa.C): only `ridingEntity != null` stops the countdown from travelling (sa.C tests sa.m); BlockPortal and BlockEndPortal ignore an entity with
+// either link. So a mob that touched the portal and was mounted afterwards still travels at the threshold: the copy has no rider (World.removeEntity -> riddenBy.mountEntity(null), the rider
+// stays in the old world where the mount stood), and a mob that rides something never travels. Returns { riding, ridden } for a mob record.
+export const mobLinks = (e) => ({ riding: !!(e.vehicle || e.ridingEntity), ridden: !!(e.rider || e.riddenBy) });
+
 // Per-entity Entity.timeUntilPortal / portalCounter / inPortal. The cooldown is the saved PortalCooldown tag (record.portalCooldown).
 export class EntityPortals {
   constructor() { this.states = new WeakMap(); this.last = new WeakMap(); }

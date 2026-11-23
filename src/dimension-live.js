@@ -21,7 +21,8 @@ import { restoreImportedFortress } from "./fortress-restore.js";
 import { drain, runSteps } from "./steps.js";
 import { ExitPrewarm } from "./exit-prewarm.js";
 import { OVERWORLD, NETHER, END, PortalState, Teleporter, transferTarget, GAME_IDS, providerOf, actualHeight, portalCooldown, readPlayerPortalState } from "./dimensions.js";
-import { EntityPortals, entityDeparture, placeAfterTravel, POS_Y, mobYawToMc, mcToMobYaw } from "./entity-portal.js";
+import { EntityPortals, entityDeparture, placeAfterTravel, POS_Y, mobYawToMc, mcToMobYaw, mobLinks } from "./entity-portal.js";
+import { mountEntity as mobUnmount } from "./mob-riding.js"; // b98 portals98
 import { travelRoute, endArrival } from "./entity-portal.js"; // b89 entnbt89
 import { ringEntityActive } from "./streaming-ticks.js";
 import { LEAD_ITEM } from "./horse-gear.js";
@@ -251,16 +252,21 @@ export class DimensionLive {
       let gone = null;
       for (const e of list) {
         // BlockPortal and BlockEndPortal collide only with an entity that has no rider and no vehicle (mob jockeys too).
-        if (kind === "mob" && (e.rider || e.vehicle || e.ridingEntity || e.riddenBy)) { this.portals.step(e, kind, { ...at, riding: true }); continue; }
+        const links = kind === "mob" ? mobLinks(e) : null; // b98 portals98: only a mob that rides something is held back; a ridden one that already counted down travels and drops its rider
+        if (links?.riding) { this.portals.step(e, kind, { ...at, riding: true }); continue; }
         if (!ringEntityActive(world, e)) continue; // Entity.onEntityUpdate's portal step runs for every updated entity, ring ones too
         if ((kind === "cart" || kind === "boat" || kind === "arrow" || kind === "rocket") && e.dead) continue;
         // A vehicle with a rider: the collision ignores it (so a ridden vehicle never starts a countdown), but one already counting down (the player mounted it after it
         // touched the portal) still travels at the threshold; its player rider is dismounted where it stood and stays behind (World.removeEntity -> mountEntity(null)).
-        const r = this.portals.step(e, kind, kind === "cart" || kind === "boat" ? { ...at, ridden: !!(e.rider || e.passenger) } : kind === "arrow" || kind === "rocket" ? { ...at, counted: true, noCollide: kind === "arrow" && e.groundAtStart === true } : at);
+        const r = this.portals.step(e, kind, kind === "cart" || kind === "boat" ? { ...at, ridden: !!(e.rider || e.passenger) } : links?.ridden ? { ...at, ridden: true } : kind === "arrow" || kind === "rocket" ? { ...at, counted: true, noCollide: kind === "arrow" && e.groundAtStart === true } : at);
         if (!r) continue;
         if ((kind === "cart" || kind === "boat") && e.rider?.player) {
           const owner = kind === "cart" ? carts : boats;
           if (e.rider.vehicle === e) owner.dismount(world, e.rider); else e.rider = null;
+        }
+        if (links?.ridden) { // World.removeEntity (ahb.e): riddenBy.mountEntity(null) before the copy is written; the rider stays where the mount stood
+          if (e.rider) mobs.riderSneakOff?.(e); // the player is put down by dismountEntity, as the water / sneak let-go does (horse-live.js)
+          else if (e.riddenBy) mobUnmount(e.riddenBy, null, (m) => mobs.size(m)[1]);
         }
         (gone ??= new Set()).add(e);
         this.depart(root, dim, kind, e, r, { mob: mobs, item: items, orb: xpOrbs, cart: carts, boat: boats, arrow: arrows, rocket: rockets }[kind]);
