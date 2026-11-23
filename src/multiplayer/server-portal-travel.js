@@ -6,7 +6,8 @@
 // The walk, the departure record (entityDeparture) and the placement (ServerPortalShots.placed -> ServerDimensions.placeEntity) are shared; this file only knows where each kind lives
 // on the server and how a saved record joins the destination's list. The trackers see the list change: a mob's S13 / S0F come from the SharedMobTracker's entry diff, an item's and an
 // orb's from the object tracker's row diff, a cart's or a boat's from the vehicles message's del / set.
-import { EntityPortals, entityDeparture, POS_Y, mcToMobYaw, endArrival } from '../entity-portal.js';
+import { EntityPortals, entityDeparture, POS_Y, mcToMobYaw, endArrival, mobLinks } from '../entity-portal.js';
+import { mountEntity as mobUnmount } from '../mob-riding.js'; // b98 portals98
 import { ExperienceOrbs } from '../experience.js';
 import { Minecarts } from '../minecarts.js';
 import { Boats } from '../boats.js';
@@ -44,10 +45,12 @@ export class ServerPortalTravel {
         const e = list[ei];
         if (e.dead) continue;
         // BlockPortal and BlockEndPortal collide only with an entity that has no rider and no vehicle (mob jockeys and a mob a player rides too): the countdown still runs.
-        if (kind === 'mob' && (e.rider || e.vehicle || e.ridingEntity || e.riddenBy)) { this.portals.step(e, kind, { ...at, riding: true }); continue; }
+        const links = kind === 'mob' ? mobLinks(e) : null; // b98 portals98: only a mob that rides something is held back; a ridden one that already counted down travels and drops its rider
+        if (links?.riding) { this.portals.step(e, kind, { ...at, riding: true }); continue; }
         const vehicle = kind === 'cart' || kind === 'boat';
-        const r = this.portals.step(e, kind, vehicle ? { ...at, ridden: !!(e.rider || e.passenger) } : at);
+        const r = this.portals.step(e, kind, vehicle ? { ...at, ridden: !!(e.rider || e.passenger) } : links?.ridden ? { ...at, ridden: true } : at);
         if (!r || (!allow && !r.endPortal)) continue;
+        if (links?.ridden) this.unmount(p, e, owner); // World.removeEntity (ahb.e): riddenBy.mountEntity(null) before the copy is written
         if (vehicle && e.rider) this.unseat(p, e); // a rider is put down where the vehicle stood and stays behind (World.removeEntity -> mountEntity(null))
         const dep = entityDeparture(this.portals, kind, e, r, owner);
         if (vehicle && e.passenger) { if (e.passenger.ridingEntity === e) e.passenger.ridingEntity = null; e.passenger = null; } // a mob that mounted after the collision stays behind
@@ -57,6 +60,11 @@ export class ServerPortalTravel {
       if (gone) { const keep = list.filter(e => !gone.has(e)); list.length = 0; list.push(...keep); }
     }
     for (const t of departures) this.arrive(t);
+  }
+  // A mob that travelled with a rider: the player is put down beside it (ServerVehicles.dismount), a mob rider is let go at the mount's top (mountEntity(null)).
+  unmount(p, e, owner) {
+    if (e.rider) for (const pl of this.dims.sim.players.values()) if (pl.mount?.mob === e) { p.vehicles.dismount(pl); break; }
+    if (e.riddenBy) mobUnmount(e.riddenBy, null, (m) => owner.size(m)[1]);
   }
   unseat(p, v) {
     for (const pl of this.dims.sim.players.values()) if (pl.mount && !pl.mount.mob && pl.mount.rider === v.rider) { p.vehicles.dismount(pl); return; }
