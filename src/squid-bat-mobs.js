@@ -87,7 +87,8 @@ function batTick(m, e, t) {
   s.boxY = e.y; // the box's place after the move (the walk's moveEntity just set posY from it)
   batUpdate(e);
   s.hangY = e.y;
-  m.push(e, t);
+  // b97 mobrec97 (executed b97mr-bat-glass-9714): EntityBat overrides collideWithNearbyEntities (we.bo) and collideWithEntity (we.o) with empty bodies, so a bat pushes
+  // nothing and no cart or boat beside it pushes it either; the player's push already skips a bat (EntityBat.canBePushed is false).
   m.turnBody(e);
   m.swingLimbs(e);
 }

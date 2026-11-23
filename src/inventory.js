@@ -153,7 +153,7 @@ export class PlayerInventory {
       s.damage = 0;
       broke = true;
     }
-    if (s.count === 0 && !(keepEmpty && i >= 36 && i < 40)) this.setStack(i, null);
+    if (s.count === 0 && !(keepEmpty && (keepEmpty === 'held' || (i >= 36 && i < 40)))) this.setStack(i, null); // b97: 'held' leaves a broken sheep-shears stack in the hand (EntitySheep.interact returns false: nothing destroys it)
     return broke;
   }
   // Middle-click pick block (func_146030_a); `damage` is the block's metadata

@@ -932,9 +932,9 @@ export class Survival {
     return true;
   }
   // Damages the held stack (or the first of that item); `broken` names a break.
-  wear(id, amount = 1) {
+  wear(id, amount = 1, keepEmpty = false) {
     const inv = this.inventory, i = inv.held?.id === id ? inv.current : inv.find(id);
-    if (i < 0 || !inv.damage(i, amount)) return false;
+    if (i < 0 || !inv.damage(i, amount, keepEmpty)) return false;
     this.broken = id;
     return true;
   }
