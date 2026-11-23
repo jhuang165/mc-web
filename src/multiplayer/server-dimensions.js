@@ -253,14 +253,14 @@ export class ServerDimensions {
     if (ticked) this.swap(n, () => tickNether(sim, n, here)); /* b70 serverprops2: MinecraftServer.v (bytecode-read) ticks world i only if i == 0 || getAllowNether(): allow-nether false stops the Nether and the End ticking */ // b62: the world systems of the Nether (nobody there: nothing is loaded, so nothing runs)
     else { n.changes.clear(); n.dirtyTiles.clear(); n.settled?.clear(); n.flushed = null; }
     // b96 mpobjects96: the tick's changes / chunks / tiles are the flush tickNether ran at mq.b's place (server-nether.js flushDimension); later changes of the tick wait for the next one.
-    const { changes = [], chunks, tiles } = ticked ? n.flushed ?? {} : {};
+    const { changes = [], chunks, tiles, lit } = ticked ? n.flushed ?? {} : {}; // b97 mpobjects97: `lit` is the flush moment's set
     n.flushed = null;
     let out;
     this.swap(n, () => {
       const list = this.list(n.items), items = !list.length && !n.itemsSent ? {} : { items: list };
       for (const e of n.items.items) e.velocityChanged = false; // b83 tracker83: cleared once its S12 is decided (my.a(List) tail)
       n.itemsSent = list.length;
-      out = { type: 'tick', tick: base.tick, time: base.time, changes, ...(chunks?.length ? { chunks } : {}), ...(tiles?.length ? { tiles } : {}), players: sim.presence(dim), weather: this.clearWeather, redstone: { lit: [...n.redstone.lit] }, ...items, ...sim.serverItems.xpField(), ...(n.taken.length ? { taken: n.taken.splice(0) } : {}), ...n.containers.actionsField() }; // b63: this dimension's orbs and pickups (Nether or End)
+      out = { type: 'tick', tick: base.tick, time: base.time, changes, ...(chunks?.length ? { chunks } : {}), ...(tiles?.length ? { tiles } : {}), players: sim.presence(dim), weather: this.clearWeather, redstone: { lit: lit ?? [...n.redstone.lit] }, ...items, ...sim.serverItems.xpField(), ...(n.taken.length ? { taken: n.taken.splice(0) } : {}), ...n.containers.actionsField() }; // b63: this dimension's orbs and pickups (Nether or End)
     });
     if (ticked) this.travel.step(dim); // b92 portals92: this dimension's travellers leave after its tick and its message (the destroy and the spawn go out with the next one, as a native S13 follows the update that moved the entity)
     return out;
