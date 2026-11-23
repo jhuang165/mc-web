@@ -407,6 +407,12 @@ export function loadOwnerBody(d) {
   if (!o || !p || ![p.x, p.y, p.z].every(Number.isFinite)) return {};
   return { ownerBody: { corpseOf: "player", dead: true, position: { x: p.x, y: p.y, z: p.z }, ...(Number.isInteger(o.dimension) ? { dimension: o.dimension } : {}), survival: { creative: !!o.survival?.creative, held: o.survival?.held ? JSON.parse(JSON.stringify(o.survival.held)) : null, health: 0 } } };
 }
+// b97 credit97 (bytecode-read zk.b/zk.a): EntityThrowable saves only `ownerName` and looks the thrower up by name (the live player, a dead or missing one credits no one); an
+// arrow (zc) saves no owner at all. After a real world load the stashed dead body therefore goes: balls and potions credit the live player, loaded arrows credit no one.
+export function forgetOwnerBodies(projectiles, potions, arrows) {
+  for (const b of [...(projectiles?.balls ?? []), ...(potions?.projectiles?.balls ?? [])]) delete b.ownerBody;
+  for (const a of arrows?.list ?? []) if (a.ownerBody) { delete a.ownerBody; delete a.shooter; }
+}
 export function thrownHit(mobs, e, from, ball = from) {
   if (!mobs.entities.includes(e)) return false;
   // b92 credit92 (bytecode-read zk.j, zj.a, zm.a, ro.a(sa, sa)): a ball in flight keeps the EntityPlayerMP that threw it (the field `g`), also after respawnPlayer removed it; the hit's

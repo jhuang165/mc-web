@@ -200,7 +200,7 @@ import { namedTitle, pruneTableNames } from "./tile-names.js";
 import { ContainerScreen, makeStack, copyStack } from "./inventory.js";
 import { CreativeScreen, CREATIVE_TABS, SEARCH, SURVIVAL_TAB, tabArea, itemTab, GUI_WIDTH } from "./creative.js";
 import { ItemEntities } from "./item-entities.js";
-import { Projectiles, mobTargets, thrownHit } from "./projectiles.js";
+import { Projectiles, mobTargets, thrownHit, forgetOwnerBodies } from "./projectiles.js";
 import { EyesOfEnder, spawnEyeShatter, spawnEyeTrail } from "./eye-of-ender-live.js";
 import { MapsClock } from "./maps-clock-live.js";
 import { ITEM_FILLED_MAP, mapStore } from "./maps.js";
@@ -2076,6 +2076,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     if (genPrimed) { primed.push(...genPrimed); genPrimed = null; }
     tntRenderer?.clear();
     arrows.load(record.arrows);
+    if (realLoad) forgetOwnerBodies(projectiles, mobs.potions, arrows); // b97 credit97: zk saves only ownerName (looked up live), zc no owner: a real reload drops the stashed dead body
     restoreSavedOrder(mobs, orderGroups({ mobs, items, xpOrbs, primed, arrows, projectiles, falling, minecarts, boats, hanging, rockets }, record)); // b52so: the saved list order
     scene.setArrows(objectViews(objectTracker, arrows.list, "arrow"));
     velocity.set(0, 0, 0);
