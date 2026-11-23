@@ -149,7 +149,7 @@ export class ServerVehicles {
     return system.carts.find(c => c.id === id && !c.dead) ?? null;
   }
   addPlayer(p) { this.views.set(p.id, { known: new Map() }); this.hanging.addPlayer(p); }
-  removePlayer(p) { this.horses.logout(p); this.dismount(p); this.views.delete(p.id); this.hanging.removePlayer(p); }
+  removePlayer(p) { this.horses.logout(p); if (p.mount) p.mount.rider.released = false; /* b98: a logout is no mountEntity(null) packet */ this.dismount(p); this.views.delete(p.id); this.hanging.removePlayer(p); }
 
   // A vehicle placed at a position by something other than a player (a dispenser, a command): kind 'minecart' | 'chest_minecart' | 'furnace_minecart' | 'tnt_minecart' | 'hopper_minecart' | 'boat'.
   // Cart records are the rail cell centre as ItemMinecart makes them; a boat's `y` is its box bottom, as ItemBoat passes it. Returns the vehicle or null.
@@ -273,9 +273,14 @@ export class ServerVehicles {
   }
   // What movePlayer returns, for a player carried by a vehicle (no walked distance, no water or lava of its own).
   sit(p) { return { inWater: false, inLavaNow: false, sneakOnGround: true, riding: true /* b81 exhaust81: yz.k returns for a rider (no movement exhaustion) */, oldPosition: { x: p.position.x, y: p.position.y, z: p.position.z } }; }
-  dismount(p) {
+  // b98 horse98: a mountEntity(null) (the sneak, a horse's buck, a rider in water; `native`, or the rider's `released` mark) is mw.a(sa) on the server: S08 (sv.m's dismountEntity puts the
+  // player on the spot: setPlayerLocation), S1B(0, player, -1), then S08 again at the end (Executed: Kill97Probe dismount97, order bytecode-read). Every other let-go (a vanished mount,
+  // logout) sends none. `dismount` is the wire message, counted as the three native packets in that order by net-packet-ids.js.
+  dismount(p, native = false) {
     const m = p.mount;
     if (!m) return;
+    const mounted = native || !!m.rider.released;
+    m.rider.released = false;
     if (m.mob) this.pigs.leave(p); // b62: a pig's rider is put down beside it (horseSeats.dismount)
     const v = m.mob ? null : this.find(m.key) ?? m.rider.vehicle;
     if (!m.mob && m.rider.vehicle) { (v?.boat ? this.boats : this.carts).dismount(this.host.world, m.rider); }
@@ -283,6 +288,7 @@ export class ServerVehicles {
     Object.assign(p.previous, { x: m.rider.x, y: m.rider.y, z: m.rider.z });
     Object.assign(p.velocity, { x: 0, y: 0, z: 0 });
     Object.assign(p, { grounded: false, fallDistance: 0, landedFall: 0 });
+    if (mounted) (p.dimOut ??= []).push({ type: 'dismount', x: m.rider.x, y: m.rider.y, z: m.rider.z, vehicle: m.key ?? null });
     p.mount = null;
     this.host.achievements?.stopRiding(p);
   }
@@ -316,7 +322,7 @@ export class ServerVehicles {
       m.rider.sneakDismount = false;
       if (m.rider.sneakSeat) Object.assign(m.rider, m.rider.sneakSeat);
       m.rider.sneakSeat = null;
-      this.dismount(p);
+      this.dismount(p, true);
     }
   }
   // b90 horse90: the same for a cart or boat, right after its tick (structure-simulation.js riderSneakOff).
@@ -327,7 +333,7 @@ export class ServerVehicles {
       r.sneakDismount = false;
       if (r.sneakSeat) Object.assign(r, r.sneakSeat);
       r.sneakSeat = null;
-      this.dismount(p);
+      this.dismount(p, true);
     }
   }
   // Riders let go and the input they give (before the mobs tick too, so a pig steers on this tick's keys: b62).
