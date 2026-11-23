@@ -16,6 +16,7 @@ import { World, WATER, LAVA, FIRE } from "./world.js";
 import { blockBoxes as blockBoxes79 } from "./mpperf79-fast.js";
 import { waterAcceleration, entityWaterBox, inLava } from "./fluids.js";
 import { boundingBoxBurning, contract } from "./fire.js";
+import { smallList97, resetList97 } from "./mpperf97-fast.js"; // b97 mpperf97
 
 export const fast81 = { mode: (typeof process !== "undefined" && process.env?.MC_MPPERF81) || "on" };
 const fail = (what) => { throw new Error(`mpperf81 ${what} mismatch`); };
@@ -118,9 +119,9 @@ export function blockBoxes81(world, b, out, cellFn, pool = null) {
 // ---- 3. moveEntity's scratch ----
 // One set for the outermost moveEntity call; a nested call (a hook that moves another entity) finds it taken and allocates as before.
 export class MoveScratch {
-  constructor() { this.pool = new BoxPool(); this.list = []; this.bb = [0, 0, 0, 0, 0, 0]; this.start = [0, 0, 0, 0, 0, 0]; this.flat = [0, 0, 0, 0, 0, 0]; this.query = [0, 0, 0, 0, 0, 0]; this.busy = false; }
+  constructor() { this.pool = new BoxPool(); this.list = smallList97(); this.bb = [0, 0, 0, 0, 0, 0]; this.start = [0, 0, 0, 0, 0, 0]; this.flat = [0, 0, 0, 0, 0, 0]; this.query = [0, 0, 0, 0, 0, 0]; this.busy = false; }
   // The box list for one collisionBoxes call: the pool and the list are reused (the previous list is dead by then).
-  freshList() { this.pool.reset(); this.list.length = 0; return this.list; }
+  freshList() { this.pool.reset(); resetList97(this); return this.list; } // b97 mpperf97: the small backing store stays
 }
 const SCRATCH = new MoveScratch();
 export function takeMoveScratch() {
@@ -128,7 +129,7 @@ export function takeMoveScratch() {
   SCRATCH.busy = true;
   return SCRATCH;
 }
-export function releaseMoveScratch(s) { s.busy = false; s.list.length = 0; }
+export function releaseMoveScratch(s) { s.busy = false; resetList97(s); }
 export const copyBox = (to, from) => { to[0] = from[0]; to[1] = from[1]; to[2] = from[2]; to[3] = from[3]; to[4] = from[4]; to[5] = from[5]; return to; };
 // moveEntity's `grow` (AxisAlignedBB.addCoord) into `out`.
 export function growInto(out, box, gx, gy, gz) {
