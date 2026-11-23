@@ -215,6 +215,7 @@ export class ServerMobs {
       scaledDamage: (amount, name, opts = {}) => self.hurt(p, amount, { name, from: opts.from ?? null, call: () => p.survival.scaledDamage(amount, name, opts) }),
       damage: (amount, name, ...rest) => self.hurt(p, amount, { name, from: rest[2] ?? null, call: () => p.survival.damage(amount, name, ...rest) }),
       setFire() {},
+      thorns: (a) => p.survival.thorns(a), // b98 credit98: the wear and the broken-piece flag belong to the real survival, not this view
     });
     // b61: one SharedMobTracker for the world (one entry and one tick counter per mob, a watcher per player); the entry keeps its packets for the wire (the client half is remote-mobs.js)
     const watcher = this.tracker.addWatcher(p.id, () => p.position);

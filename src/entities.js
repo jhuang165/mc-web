@@ -1653,10 +1653,12 @@ export class EntityWorld {
     };
     // EntityMob.attackEntityAsMob: the attribute (the held weapon's modifier included) plus Sharpness (getEnchantmentModifierLiving), Fire Aspect after.
     const melee = e.equipment ? meleeEffects(e.equipment[0]) : null;
-    const hit = survival.scaledDamage(f(mobHitAmount(e) + (melee ? melee.damage : 0)), "a " + e.type, { attacker: NO_THORNS_ATTACKER.has(e.type) ? undefined : thorns, from: e });
+    const hit = survival.scaledDamage(f(mobHitAmount(e) + (melee ? melee.damage : 0)), "a " + e.type, { from: e });
     // EntityMob.attackEntityAsMob: Knockback on the held item pushes the player along the mob's facing and slows the mob (player-knockback.js).
     if (hit && melee?.knockback > 0) mobKnockbackKick(survival, e, melee.knockback);
     if (hit && melee?.fire > 0) survival.setFire(melee.fire);
+    // b98 credit98 (yg.n bytecode-read): afv.a(victim, attacker), the player's Thorns, runs after the knockback and Fire Aspect (it used to run inside scaledDamage, before them).
+    if (hit && !NO_THORNS_ATTACKER.has(e.type)) survival.thorns?.(thorns);
     // EntityLivingBase.setRevengeTarget on the player: its wolves defend it (EntityAIOwnerHurtByTarget).
     if (hit) this.ai.playerHurtBy(e);
     if (hit && e.type === "zombie") {
