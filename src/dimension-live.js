@@ -137,7 +137,7 @@ export class DimensionLive {
     const edits = to === OVERWORLD && !record.chunked ? null : new Map(await this.readEdits(record.id));
     const inbox = record.rootId ? record.pendingArrivals : record.portalArrivals?.[0];
     if (edits) for (const [x, y, z, id, meta] of inbox?.writes ?? []) edits.set(`${x},${y},${z}`, id | (meta << 8)); // portals built for travelling mobs
-    const world = prepared.streaming ? new TerrainPeek(prepared, edits ?? new Map()) : new LivePeek(prepared);
+    const world = prepared.streaming ? new TerrainPeek(prepared, edits ?? new Map()) : new FinitePeek(prepared); // b97 spcopy97: the Teleporter reads what it just wrote (peekFor and the early hint do)
     world.dimension = to; world.actualHeight = actualHeight(to);
     world.seed = javaSeed(record.seed);
     if (prepared.streaming && (record.wholeSave || record.rootId)) world.stored = await this.warmStored(record.rootId ? this.host.worlds?.().find((w) => w.id === record.rootId) ?? record : record, to);
@@ -523,8 +523,14 @@ export class DimensionLive {
   async armArrival(root, target) {
     const key = `${root.id}:${target}`;
     if (this.arrivalPre?.key === key) return this.arrivalPre.ready;
-    const pre = this.arrivalPre = { key, edits: null, stored: null };
+    const pre = this.arrivalPre = { key, edits: null, stored: null, finite: null };
     pre.ready = (async () => {
+      if (target === OVERWORLD && !root.chunked) { // b97 spcopy97: a finite Overworld root: its terrain is built here (as peekFor does for travelling mobs), after this tick, not inside it
+        await null;
+        const w = new World(root.seed, root.biome, root.generationVersion ?? 1, root.worldType, root.generatorOptions);
+        w.restore(root.edits ?? []);
+        pre.finite = w; pre.edits = new Map(); return;
+      }
       pre.edits = new Map(target === OVERWORLD ? (root.chunked ? await this.readEdits(root.id) : []) : await this.readEdits(viewId(root.id, target)));
       pre.stored = await this.warmStored(root, target);
     })().catch(() => { if (this.arrivalPre === pre) this.arrivalPre = null; });
@@ -550,7 +556,7 @@ export class DimensionLive {
       const from = dimensionOf(rec), tt = transferTarget(from, target, p.x, p.y, p.z, mcYaw(p.yaw ?? 0));
       const edits = new Map(pre.edits);
       for (const [x, y, z, id, meta] of root.portalArrivals?.[target]?.writes ?? []) edits.set(`${x},${y},${z}`, id | (meta << 8));
-      const peek = new TerrainPeek(this.arrivalTerrain(root, target), edits);
+      const peek = pre.finite ? new FinitePeek(pre.finite) : new TerrainPeek(this.arrivalTerrain(root, target), edits); // finite: arrive() does not read the inbox's writes for it either
       peek.stored = pre.stored; peek.dimension = target; peek.actualHeight = actualHeight(target); peek.seed = javaSeed(root.seed); peek.time = this.clock(root);
       const kept = this.sharedCache(`${root.id}:${target}`, peek.time, peek.seed), random = new JavaRandom(0);
       random.restore(kept.random.save());
@@ -585,6 +591,10 @@ export class DimensionLive {
       if (b === GAME_IDS.portal) inPortal = true; else if (b === GAME_IDS.endPortal) endPortal = true;
     }
     const remote = !!this.host.remote?.(); // b61 mpnether: on the dedicated server the server runs the portal timer and the trip; here only the overlay state
+    if (!remote && d !== END && !this.busy && (endPortal || (this.endScan = ((this.endScan ?? -1) + 1) % 10) === 0) && (endPortal || this.nearEndPortal(world, pos))) { // b97 spcopy97: the End portal has no wait, so the destination's edits are read when the player is close to one
+      const root = this.rootRecord();
+      if (root) this.armArrival(root, END);
+    }
     if (endPortal && !riding && !remote) { this.travel(d === END ? OVERWORLD : END, { exit: d === END }); return false; }
     if (inPortal && !riding) this.state.setInPortal(prev.x, prev.z, pos.x, pos.z);
     const shown = this.state.inPortal;
@@ -592,6 +602,11 @@ export class DimensionLive {
     if (go !== null && !remote) this.travel(go);
     else if (shown && !remote && !creative && !riding && this.prewarmEnabled && d !== END && this.state.portalCounter >= PREWARM_TICKS) this.warmExit(d, pos);
     return shown;
+  }
+  nearEndPortal(world, pos) {
+    const x0 = Math.floor(pos.x), y0 = Math.floor(pos.y), z0 = Math.floor(pos.z);
+    for (let x = x0 - 3; x <= x0 + 3; x++) for (let z = z0 - 3; z <= z0 + 3; z++) for (let y = y0 - 2; y <= y0 + 2; y++) if (world.get(x, y, z) === GAME_IDS.endPortal) return true;
+    return false;
   }
   // The player has stood in a portal for PREWARM_TICKS of its countdown: build the terrain round the exit now (exit-prewarm.js). The trip ends the request.
   warmExit(from, pos, yaw = 0) {

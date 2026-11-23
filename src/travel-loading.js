@@ -82,7 +82,9 @@ export function arrivalWarmer(world, { pause, createWorker = () => new Worker(ne
     window(x, z, spread = 0) {
       if (!Number.isFinite(x) || !Number.isFinite(z) || !world.streaming) return Promise.resolve(0);
       const square = (px, pz, into) => { const [c0, d0] = chunkRange(world, px, pz); for (let cx = c0; cx < c0 + WINDOW; cx++) for (let cz = d0; cz < d0 + WINDOW; cz++) into.push([cx, cz]); return into; };
-      const list = square(x, z, []), extra = [];
+      // b97 spcopy97: nearest the target first, so the unit holding the arrival's chunks leads every lane (the portal tick's early arrival needs only those, exit-prewarm.js)
+      const near = ([cx, cz]) => (cx * 16 + 8 - x) ** 2 + (cz * 16 + 8 - z) ** 2;
+      const list = square(x, z, []).sort((a, b) => near(a) - near(b)), extra = [];
       if (spread > 0) for (let px = Math.floor((x - spread) / 16); px <= Math.floor((x + spread) / 16); px++) for (let pz = Math.floor((z - spread) / 16); pz <= Math.floor((z + spread) / 16); pz++) square(px * 16, pz * 16, extra);
       return chunks(list, extra, [x, z]);
     },
