@@ -357,6 +357,7 @@ import { openBookUi } from "./book-ui.js";
 import { ITEM_WRITABLE_BOOK, applyBookEdit, applyBookSign } from "./books.js";
 import { applyHangingEdit } from "./hanging-interaction.js";
 import { createPlayerRider, captureVehicleAction, dispatchVehicleAction, moveRidingPlayer, finishVehicleTick, restorePlayerVehicle, detachPlayerVehicle, vehicleSystem } from "./vehicle-simulation.js";
+import { startDeathRide, tickDeathRide, releaseDeathRide } from "./death-ride.js"; // b97 horse97: the dying rider keeps its seat through the death ticks
 import { StreamPrefetch } from "./streaming-generator.js";
 import { createRing, attachRing, fullColumn } from "./headless-columns.js";
 import { seedRingChest } from "./ring-chests.js";
@@ -3040,9 +3041,7 @@ hitPoseSource.get = () => (multiplayer ? null : { x: position.x, z: position.z, 
 function die() {
   if (screen === "dead") return;
   if (bedSleep.sleeping) bedWake(true, false, false);
-  const vehicle = vehicleState();
-  detachPlayerVehicle(vehicle);
-  applyVehicleState(vehicle);
+  startDeathRide(vehicleState()); // b97 horse97 (Executed: Kill96Probe, Kill97Probe): onDeath does no dismount; the seat is let go the tick after deathTime 20 (tickDeathRide) or at the respawn
   playHurtSounds();
   statsLive.death();
   // EntityPlayerMP.onDeath broadcasts the death message to chat at the moment of death.
@@ -3109,6 +3108,7 @@ async function respawnPlayer() {
     // b92 credit92 (bytecode-read zk.j, oi.a(mw, int, boolean)): a snowball, egg or pearl in flight keeps the EntityPlayerMP that threw it; respawnPlayer removes that entity where it died.
     if (!multiplayer) { giveDeathBody(pendingDeathBody ?? deathBodyHere()); pendingDeathBody = null; }
     const time = survival.time;
+    { const v = vehicleState(); if (releaseDeathRide(v)) applyVehicleState(v); } // b97 horse97: the respawn's removal unlinks a rider still seated
     multiplayer?.respawn(); // C16 perform respawn; the server answers with the new health
     const kept = (ruleOn(active, "keepInventory") || multiplayer) && { slots: survival.inventory.serialize(), armor: survival.inventory.serializeArmor() };
     scoreboardLive.respawn(); // the new EntityPlayerMP re-sends its health criteria
@@ -4825,7 +4825,8 @@ function animate(now) {
     accumulator += dt;
     while (accumulator >= PHYSICS.tick) {
       gui.tick(); // GuiGameOver / GuiYesNo updateScreen: the 20-tick button delay counts these client ticks
-      if (!multiplayer) deadBodyTick(); // b74: the thrown body keeps moving (idle input) like the client player during GuiGameOver
+      { const v = vehicleState(); if (tickDeathRide(v, deathTime)) applyVehicleState(v); } // b97 horse97: ahb.h's unlink of the dead rider, the tick after deathTime 20
+      if (!multiplayer && !rider.vehicle) deadBodyTick(); // b97: a seated body does not move; b74: the thrown body keeps moving (idle input) like the client player during GuiGameOver
       survival.hurtTime = Math.max(0, survival.hurtTime - 1);
       { const feet = { x: position.x, y: position.y - motion.ySize, z: position.z }; playerBody.tick({ position: feet, previous: feet, yaw, pitch }); } // limb swing settles; the head and body stay put
       if (++deathTime === 20) burst(scene.fx, "explode", 20, { x: position.x, y: position.y + Math.fround(PHYSICS.eye), z: position.z, width: PHYSICS.width, height: PHYSICS.height }, playerRandom);

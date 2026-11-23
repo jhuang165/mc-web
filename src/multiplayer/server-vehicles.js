@@ -292,6 +292,7 @@ export class ServerVehicles {
     const m = p.mount;
     if (!m) return;
     if (m.mob) this.pigs.mobs.horseSeats.dismount(this.host.world, m.rider, false);
+    else { const v = this.find(m.key) ?? m.rider.vehicle; if (v?.rider === m.rider) v.rider = null; m.rider.vehicle = null; } // b97 horse97: a cart or boat lets go where the rider sat
     p.mount = null;
     this.host.achievements?.stopRiding(p);
   }
@@ -339,9 +340,11 @@ export class ServerVehicles {
       // moveForward / moveStrafing (applyRide); a tick without one keeps the old values and its sneak is the C0B's (the controls). An older client that never sent a C0C keeps the controls rule.
       const ride = p.ride ?? null;
       // b96 horse96 (Executed: Kill96Probe, kill96-reference.json): a killed rider (EntityPlayerMP.onDeath, mw.a(ro)) is not dismounted: it stays linked through the 20-tick death animation and ahb.h unlinks it
-      // the tick after deathTime 20 (or after the respawn's ahb.f), where it sat: no spot search, no teleport. Only mob mounts are probed; a cart or boat rider keeps the old immediate release.
-      if (p.dead && m.mob && this.pigs.keeps(p)) { if ((p.deathTime ?? 0) > 20) this.release(p); else Object.assign(m.rider, { moveForward: 0, moveStrafing: 0, sneakDismount: false }); continue; }
-      if (!(m.mob ? this.pigs.keeps(p) : this.find(m.key)) || p.dead) { this.dismount(p); continue; }
+      // the tick after deathTime 20 (or after the respawn's ahb.f), where it sat: no spot search, no teleport. b97 horse97 (Executed: Kill97Probe, kill97-reference.json): a boat or cart rider
+      // does the same; a boat still reads the dying rider's last moveForward on the kill tick itself (the zeroing is onLivingUpdate's, in the network phase after the world tick).
+      const alive = m.mob ? this.pigs.keeps(p) : this.find(m.key);
+      if (p.dead && alive) { if ((p.deathTime ?? 0) > 20) this.release(p); else if (m.mob || (p.deathTime ?? 0) > 0) Object.assign(m.rider, { moveForward: 0, moveStrafing: 0, sneakDismount: false }); else m.rider.sneakDismount = false; continue; }
+      if (!alive || p.dead) { this.dismount(p); continue; }
       // b90 horse90: the sneak (C0C) is read by the network tick, but EntityPlayer.updateRidden (yz.ab) lets the rider off in World.updateEntityWithOptionalForce right after the mount's own
       // update (ahb.a(sa, Z), bytecode-read; horse89-reference.json executed): this tick the mount still takes the rider's input, and the rider gets off after it (`sneakDismount`: the mob
       // tick's riderSneakOff, or finishSneak / afterRiders below). The first call of the tick (before the mobs) fixes the seat the spot search starts from.

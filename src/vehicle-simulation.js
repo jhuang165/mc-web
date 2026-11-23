@@ -106,7 +106,7 @@ function applySeat(state) {
 // (World.updateEntities: ridingEntity.isDead -> both links null; World.removeEntity -> rider.mountEntity(null), and EntityPlayer.mountEntity (yz.a(sa), bytecode-read) runs
 // dismountEntity only when !worldObj.isRemote), so the client player stays where its last seat put it and falls from there; no S08 follows (spcopy88: the server copy also stays).
 // The system's dismount still unlinks the record; its dismountSpot result is dropped.
-function releaseAtSeat(state, system = vehicleSystem(state)) {
+export function releaseAtSeat(state, system = vehicleSystem(state)) {
   const { rider, position } = state, seat = { x: position.x, y: position.y, z: position.z };
   system.dismount(state.world, rider);
   Object.assign(rider, seat);
