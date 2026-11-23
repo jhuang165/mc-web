@@ -78,7 +78,7 @@ function modifiersFor(e, javaId, name, base) {
   if (!stored.length) {
     if (name === N.F && Number.isFinite(e.followRange) && base > 0 && Math.abs(e.followRange - base) > 1e-9) out.push({ name: SPAWN_BONUS, amount: e.followRange / base - 1, operation: 1, uuid: deriveUuid(`followRange|${e.uuid ?? e.id ?? ""}`) });
     // The final value less the base (an imported base override already counts once).
-    if (name === N.K && Number.isFinite(e.knockbackResistance) && Math.abs(e.knockbackResistance - base) > 1e-12) out.push({ name: SPAWN_BONUS, amount: e.knockbackResistance - base, operation: 0, uuid: deriveUuid(`knockback|${e.uuid ?? e.id ?? ""}`) });
+    if (name === N.K && Number.isFinite(e.knockbackResistance) && Math.abs(e.knockbackResistance - Math.min(1, Math.max(0, base))) > 1e-12) /* the final value is the base clamped to 0..1 (b97: a saved base above 1 stays the base) */ out.push({ name: SPAWN_BONUS, amount: e.knockbackResistance - base, operation: 0, uuid: deriveUuid(`knockback|${e.uuid ?? e.id ?? ""}`) });
   }
   return out.sort((a, b) => a.operation - b.operation);
 }
@@ -121,17 +121,19 @@ export function livingAttributeFields(compound, record, javaId) {
   for (const a of list.items) {
     const name = nbtGet(a, "Name", NBT.STRING, "");
     if (!known.has(name)) continue;
-    const base = nbtGet(a, "Base", NBT.DOUBLE);
+    const base = nbtGet(a, "Base", NBT.DOUBLE, 0); // b97 entnbt97 (executed): an entry without Base is read as 0 (getDouble default), a maxHealth of 0 leaves the mob at Health 0
     if (Number.isFinite(base)) bases[name] = base;
     const mods = nbtGet(a, "Modifiers", NBT.LIST);
     for (const m of mods?.elementType === NBT.COMPOUND ? mods.items : []) {
       const amount = nbtGet(m, "Amount", NBT.DOUBLE), operation = nbtGet(m, "Operation", NBT.INT);
       if (!Number.isFinite(amount) || ![0, 1, 2].includes(operation) || modifiers.length >= 32) continue;
       const most = nbtGet(m, "UUIDMost", NBT.LONG), least = nbtGet(m, "UUIDLeast", NBT.LONG);
-      const uuid = most !== undefined && least !== undefined ? longsUuid(most, least) : newUuid();
+      const uuid = longsUuid(most ?? 0n, least ?? 0n); // b97 entnbt97 (executed): a missing UUIDMost / UUIDLeast reads as 0 (getLong default), so the modifier keeps the zero UUID
       // The child flag stands for the baby boost of a baby zombie or pigman; an adult keeps a saved one (EntityZombie.readEntityFromNBT calls setChild
       // only for IsBaby true, so the modifier stays: probed `babyBoost`, movementSpeed 0.345 on an adult zombie).
       if (uuid === BABY_BOOST.uuid && name === BABY_BOOST.attribute && amount === BABY_BOOST.amount && operation === BABY_BOOST.operation && isZombieLike(javaId) && (record.growingAge ?? 0) < 0) continue;
+      const at = modifiers.findIndex((x) => x.attribute === name && x.uuid === uuid);
+      if (at >= 0) modifiers.splice(at, 1); // b97 entnbt97 (executed): a second modifier with the same UUID on one attribute replaces the first
       modifiers.push({ attribute: name, name: nbtGet(m, "Name", NBT.STRING, ""), amount, operation, uuid });
     }
   }

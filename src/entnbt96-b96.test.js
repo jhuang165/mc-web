@@ -117,7 +117,7 @@ test('Motion: native keeps each component up to 10 (above: that component is 0) 
   assert.equal(row('motion-over', 'load').out.includes('Motion=[0:0.0d,1:0.5d,2:0.0d,]'), true);
   assert.deepEqual(loadedMotion([10, -10, 9.99]), [10, -10, 9.99]);
   assert.deepEqual(loadedMotion([10.5, 0.5, -10.01]), [0, 0.5, 0]);
-  assert.deepEqual(loadedMotion([NaN, 0, 0]), [0, 0, 0]); // native keeps NaN (executed); the port cannot hold it
+  assert.deepEqual(loadedMotion([NaN, 0, 0]), [NaN, 0, 0]); // native keeps NaN (executed in b97 entnbt97; b96 assumed it read as 0)
   assert.equal(loadedMotion([1, 2]), null);
   // executed: knockback leaves the server copy's motion and nothing decays it; only landing zeroes Y
   assert.equal(row('knockback', 'tick20').out, row('knockback', 'hit').out);
@@ -130,7 +130,7 @@ test('Motion: native keeps each component up to 10 (above: that component is 0) 
   const p = plain(levelNbt({ mode: 'survival', player: { health: 20 }, playerState: { motion: [-0.2828427215299509, 0.4000000059604645, 0.25] }, worldSpawn: [0, 64, 0] }, W).tag.value.get('Data').value.get('Player'));
   assert.deepEqual(p.Motion, [-0.2828427215299509, 0.4000000059604645, 0.25]);
   assert.deepEqual(savedMotion(undefined), [0, 0, 0]);
-  assert.deepEqual(savedMotion([0, NaN, 0]), [0, 0, 0]);
+  assert.deepEqual(savedMotion([0, NaN, 0]), [0, NaN, 0]); // b97: NaN is kept natively
   const none = plain(levelNbt({ mode: 'survival', player: { health: 20 }, worldSpawn: [0, 64, 0] }, W).tag.value.get('Data').value.get('Player'));
   assert.deepEqual(none.Motion, [0, 0, 0]);
 });

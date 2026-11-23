@@ -200,7 +200,7 @@ test("untrusted saved resources and stats are bounded", () => {
     furnaces: { "bad key": {} },
   });
   assert.equal(p.health, 0);
-  assert.equal(p.food, 20);
+  assert.equal(p.food, 900); // b97 entnbt97: FoodStats.readNBT keeps foodLevel raw (executed 500 -> 500); the old test expected a non-native clamp to 20
   assert.equal(p.count(301), 64);
   assert.equal(p.count(100), 1);
   assert.equal(p.count(666), 0);

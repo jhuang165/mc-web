@@ -17,9 +17,11 @@ export const ITEM_MODIFIER_UUID = Object.freeze({ most: -3801225194067177672n, l
 // explosions gave it (nothing decays it), so the saved Motion is the port's server copy motion (ai.js PlayerView.motion, blocks per tick like native).
 export function loadedMotion(values) {
   if (!Array.isArray(values) || values.length !== 3) return null;
-  return values.map((v) => (Number.isFinite(v) && Math.abs(v) <= 10 ? v : 0));
+  return values.map((v) => (Number.isNaN(v) || Math.abs(v) <= 10 ? v : 0)); // b97 entnbt97 (executed): NaN passes the limit test (the comparison is false) and is kept; infinity is above 10 and reads as 0
 }
-export function savedMotion(values) { return Array.isArray(values) && values.length === 3 && values.every(Number.isFinite) ? values : [0, 0, 0]; }
+// JSON turns NaN into null; a stored Motion with null reads back as the NaN it was. Not an array of three numbers (or nulls): null.
+export function restoredMotion(values) { return Array.isArray(values) && values.length === 3 && values.every((v) => v === null || typeof v === "number") ? values.map((v) => (v === null ? NaN : v)) : null; }
+export function savedMotion(values) { return restoredMotion(values) ?? [0, 0, 0]; }
 
 // PotionEffect modifiers on EntityPlayerMP: applied (and saved with the attribute, AttributeModifier.isSaved) when the effect is added in the session; an effect read from NBT
 // comes without them unless the saved Attributes carry them (`bare` effects, status-effects.js). ModifiableAttributeInstance.func_111122_c collects every modifier in a

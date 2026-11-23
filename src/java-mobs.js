@@ -330,6 +330,7 @@ export function javaMobFromNbt(entity, options) {
     if (Number.isFinite(record.maxHealth) && !OWN_MAX_HEALTH.has(record.type)) {
       const healF = tagValue(entity, 'HealF', NBT.FLOAT, tagValue(entity, 'Health', NBT.SHORT));
       if (Number.isFinite(healF)) record.health = Math.max(0, Math.min(healF, record.maxHealth));
+      else if (!entity.has('HealF') && !entity.has('Health')) record.health = Math.max(0, record.maxHealth); // b97 entnbt97 (executed): no HealF and no Health tag sets health to the modified maximum (readEntityFromNBT)
     }
     // Wolves, slimes and horses: HealF is clamped to the maximum read from the list, then setTamed / setSlimeSize may reset the base; a slime is
     // healed to its full modified maximum (probed attributes2 `maxHealth`). mob-riding.js maxHealthOf is the live maximum afterwards.

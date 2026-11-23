@@ -631,10 +631,12 @@ export class Survival {
     data = data && typeof data === "object" ? data : {};
     this.mode = gameModeOf(mode);
     this.health = clamp(data.health, 0, 100, 20);
-    this.food = Math.floor(clamp(data.food, 0, 20, 20));
-    this.saturation = clamp(data.saturation, 0, this.food, 5);
-    this.exhaustion = clamp(data.exhaustion, 0, 40, 0);
-    this.timer = Math.floor(clamp(data.timer, 0, 80, 0));
+    // FoodStats.readNBT keeps foodLevel, foodTickTimer, foodSaturationLevel and foodExhaustionLevel as loaded, whatever their range (b97 entnbt97, executed:
+    // -5, 500, 99, -3 and 40 all write back unchanged); only the int fields' 32 bits and a non-finite value are bounded here.
+    this.food = Math.floor(clamp(data.food, -2147483648, 2147483647, 20));
+    this.saturation = clamp(Math.fround(data.saturation), -3.4028234663852886e38, 3.4028234663852886e38, 5);
+    this.exhaustion = clamp(Math.fround(data.exhaustion), -3.4028234663852886e38, 3.4028234663852886e38, 0);
+    this.timer = Math.floor(clamp(data.timer, -2147483648, 2147483647, 0));
     this.air = Math.floor(clamp(data.air, -20, 300, 300));
     this.time = Math.floor(clamp(data.time, 0, Number.MAX_SAFE_INTEGER, 0));
     this.effects = new Effects(data.effects);
