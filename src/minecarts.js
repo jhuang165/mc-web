@@ -79,7 +79,9 @@ function itemTagsNbt(stack) {
   const display = {};
   if (typeof stack.displayName === 'string') display.Name = [8, stack.displayName];
   if (stack.loreRaw) display.Lore = cartTag(tagOf(stack.loreRaw)); else if (Array.isArray(stack.lore)) display.Lore = [9, 8, [...stack.lore]];
+  for (const [k, r] of Object.entries(stack.displayExtraRaw ?? {})) if (!(k in display)) display[k] = cartTag(tagOf(r)); // b98 tiles98
   if (Object.keys(display).length) tag.display = [10, display];
+  for (const [k, r] of Object.entries(stack.extraRaw ?? {})) if (!(k in tag)) tag[k] = cartTag(tagOf(r)); // b98 tiles98: raw unknown keys
   if (typeof stack.unbreakable === 'boolean') tag.Unbreakable = [1, stack.unbreakable ? 1 : 0];
   if (stack.skullRaw) tag.SkullOwner = cartTag(tagOf(stack.skullRaw)); else if (typeof stack.skullOwner === 'string') tag.SkullOwner = [8, stack.skullOwner];
   if (Array.isArray(stack.customPotionEffects)) tag.CustomPotionEffects = [9, 10, stack.customPotionEffects.map((e) => ({ Id: [1, e.id], Amplifier: [1, e.amplifier], Duration: [3, e.duration], Ambient: [1, e.ambient ? 1 : 0] }))];
@@ -672,7 +674,7 @@ export class Minecarts {
       if (!o?.id) continue;
       const item = { Slot: [1, i], id: [2, o.id], Count: [1, o.count], Damage: [2, o.damage ?? 0] };
       const nbt = itemTagsNbt(s ? { ...o, ...s } : o);
-      if (Object.keys(nbt).length) item.tag = [10, nbt];
+      if (Object.keys(nbt).length || (s ?? o).extraRaw) item.tag = [10, nbt];
       items.push(item);
     }
     const out = {
