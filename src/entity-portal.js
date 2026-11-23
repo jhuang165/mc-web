@@ -51,6 +51,10 @@ export function travelRoute(source, arg) {
   return { to: exit ? OVERWORLD : arg, spawn: exit, teleporter: source !== END };
 }
 
+// b97 portals97 (bytecode-read oi.a(sa, int, mt, mt), Executed Portals97Probe): a destination of the End puts the entity at (100, 49, 0) with yaw 90 and pitch 0 BEFORE copyDataFrom, so the copy's Rotation
+// pitch is 0; the Nether and Overworld Teleporter keep the pitch, and the End exit (source 1, argument 1) copies the entity as it is.
+export const endArrival = (source, arg) => arg === END && !travelRoute(source, arg).spawn;
+
 // Per-entity Entity.timeUntilPortal / portalCounter / inPortal. The cooldown is the saved PortalCooldown tag (record.portalCooldown).
 export class EntityPortals {
   constructor() { this.states = new WeakMap(); this.last = new WeakMap(); }

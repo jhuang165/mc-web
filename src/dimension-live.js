@@ -22,7 +22,7 @@ import { drain, runSteps } from "./steps.js";
 import { ExitPrewarm } from "./exit-prewarm.js";
 import { OVERWORLD, NETHER, END, PortalState, Teleporter, transferTarget, GAME_IDS, providerOf, actualHeight, portalCooldown, readPlayerPortalState } from "./dimensions.js";
 import { EntityPortals, entityDeparture, placeAfterTravel, POS_Y, mobYawToMc, mcToMobYaw } from "./entity-portal.js";
-import { travelRoute } from "./entity-portal.js"; // b89 entnbt89
+import { travelRoute, endArrival } from "./entity-portal.js"; // b89 entnbt89
 import { ringEntityActive } from "./streaming-ticks.js";
 import { LEAD_ITEM } from "./horse-gear.js";
 
@@ -361,6 +361,7 @@ export class DimensionLive {
       delete rec.id;
       for (const k of TRANSIENT_MOB) delete rec[k]; // b94 lead: copyDataFrom moves NBT only, as the server's arrive does (portals93)
       Object.assign(rec, { x: e.x, y, z: e.z, yaw: mcToMobYaw(e.yaw), portalMotion: { vx: e.vx, vy: e.vy, vz: e.vz } });
+      if (endArrival(from, arg)) delete rec.rotationPitch; // b97 portals97: a trip into the End sets pitch 0 before the copy is made
       if (leashed && !same) { delete rec.leash; inbox.drops.push({ stack: { id: LEAD_ITEM, count: 1, damage: 0 }, x: e.x, y, z: e.z, mx: Math.random() * 0.2 - 0.1, my: 0.2, mz: Math.random() * 0.2 - 0.1, age: 0, delay: 10, hover: 0 }); } // b94 portals94: a holder in another world cannot be found by sw.bP (UUID lookup in the destination), so the lead drops; when the player IS in the destination the record keeps { holder: 'player' } and the copy's first leashed tick (leashRestore = sw.bP) keeps or drops it by the 10-block box. EntityItem's constructor motion
       inbox.entities.push(rec);
     } else if (kind === "cart" || kind === "boat") {
