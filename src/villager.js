@@ -213,8 +213,9 @@ function tradePlayerClass(Task) {
     }
   };
 }
-// EntityAILookAtTradePlayer (uo, an EntityAIWatchClosest2 of the customer, range 8): while trading it looks at
-// the player; nothing is drawn from Random.
+// EntityAILookAtTradePlayer (uo, an EntityAIWatchClosest of the customer, range 8, bytecode-read `un`/`uo`, Executed b98-trade-look): only shouldExecute is its own
+// (the villager has a customer: no random draw). The inherited rest runs a look timer: start draws 40 + nextInt(40) from Entity.rand, the task goes on while the
+// customer lives, is within 8 blocks and the timer is above 0 (a closed screen does not end it), and each update looks at the customer and counts the timer down.
 function lookAtTradePlayerClass(Task) {
   return class LookAtTradePlayer extends Task {
     constructor(m) {
@@ -231,10 +232,11 @@ function lookAtTradePlayerClass(Task) {
     }
     continueExecuting() {
       const m = this.m;
-      return isTrading(m.e) && !!this.target && m.distSq(this.target) <= f(8 * 8);
+      if (!this.target || this.target.alive === false) return false;
+      return m.distSq(this.target) <= f(f(8) * f(8)) && this.timer > 0;
     }
     startExecuting() {
-      this.timer = 0;
+      this.timer = 40 + this.m.rand.nextInt(40);
     }
     resetTask() {
       this.target = null;
@@ -242,6 +244,7 @@ function lookAtTradePlayerClass(Task) {
     updateTask() {
       const m = this.m, t = this.target;
       m.lookHelper.setLookPosition(t.x, t.y + t.eyeHeight, t.z, 10, m.verticalFaceSpeed);
+      this.timer--;
     }
   };
 }
