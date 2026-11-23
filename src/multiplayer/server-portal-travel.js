@@ -6,7 +6,7 @@
 // The walk, the departure record (entityDeparture) and the placement (ServerPortalShots.placed -> ServerDimensions.placeEntity) are shared; this file only knows where each kind lives
 // on the server and how a saved record joins the destination's list. The trackers see the list change: a mob's S13 / S0F come from the SharedMobTracker's entry diff, an item's and an
 // orb's from the object tracker's row diff, a cart's or a boat's from the vehicles message's del / set.
-import { EntityPortals, entityDeparture, POS_Y, mcToMobYaw } from '../entity-portal.js';
+import { EntityPortals, entityDeparture, POS_Y, mcToMobYaw, endArrival } from '../entity-portal.js';
 import { ExperienceOrbs } from '../experience.js';
 import { Minecarts } from '../minecarts.js';
 import { Boats } from '../boats.js';
@@ -74,6 +74,7 @@ export class ServerPortalTravel {
       delete rec.id;
       for (const k of TRANSIENT_MOB) delete rec[k];
       Object.assign(rec, { x: e.x, y, z: e.z, yaw: mcToMobYaw(e.yaw), portalMotion: { vx: e.vx, vy: e.vy, vz: e.vz } });
+      if (endArrival(t.source ?? t.dim, t.arg)) delete rec.rotationPitch; // b97 portals97: a trip into the End sets pitch 0 before the copy is made
       // A player holder: sw.bP (the first leashed tick of the copy) looks the UUID up among the living entities in the 10-block box around the copy, so a holder who stands in the destination
       // within reach keeps the lead; otherwise the first updateLeashedState drops it (b93). A knot or mob holder stays on the record: the knot is found or made at the saved X/Y/Z of the NEW world.
       if (t.leashed && !this.holderThere(to, rec.leash?.holderId, e.x, y, e.z, mobs.size(rec))) { delete rec.leash; this.lead(p, e.x, y, e.z); }
