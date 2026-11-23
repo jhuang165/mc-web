@@ -1,4 +1,5 @@
 import { TrackerEntry, encodeAxis, encodeY, sizeClass } from '../entity-tracker.js';
+import { potionColor } from '../fx.js';
 
 // Batch 73 streamfix73: remote players are tracked per viewer on the dedicated server, as EntityTracker does for EntityPlayerMP.
 // Bytecode-read (javap -c -p on `mn` = EntityTracker and `my` = EntityTrackerEntry, the unchanged 1.7.10 jar): `mn.a(sa)` for an `mw` (EntityPlayerMP) calls
@@ -31,6 +32,22 @@ export function watcherSig(p) {
   const colour = fx?.ordered ? [...fx.ordered()].map(e => `${e.id}.${e.amplifier}.${e.ambient ? 1 : 0}`).join('+') : '';
   return [p.input?.sneak ? 1 : 0, p.motion?.sprinting ? 1 : 0, p.itemInUse ? 1 : 0, s.fire > 0 ? 1 : 0, fx?.has?.(14) ? 1 : 0, s.health, s.absorption || 0, s.air, s.arrowCount || 0, colour, p.experience?.score ?? 0, p.hideCape ? 1 : 0].join('|'); // b76: + the score (watcher 18, EntityPlayer.addScore from addExperience); b77: + the cape-hidden bit (watcher 16 bit 1, C15 showCape via setCapeShow); sleeping and riding are NOT watched values
 }
+// b97 console97: the DataWatcher entries of an EntityPlayer as [bytes (header + value), value] by index (executed, public/research/console97-reference.json: flag 0 byte 2, air 1 short 3, health 6 float 5, potion
+// colour 7 int 5, ambient 8 byte 2, arrows 9 byte 2, cape 16 byte 2, absorption 17 float 5, score 18 int 5; the sum of the nine is the whole S1C's 31) and the modifier counts of the two watched attributes
+// (maxHealth: Health Boost; movementSpeed: sprinting, Speed, Slowness; each modifier is 25 bytes in the S20). DataWatcher.updateObject marks an entry changed only when the value differs.
+export function watcherEntries(p) {
+  const s = p.survival ?? {}, fx = s.effects, list = fx?.ordered ? [...fx.ordered()] : [];
+  const flags = (s.fire > 0 ? 1 : 0) | (p.input?.sneak ? 2 : 0) | (p.motion?.sprinting ? 8 : 0) | (p.itemInUse ? 16 : 0) | (fx?.has?.(14) ? 32 : 0);
+  const speed = list.find(e => e.id === 1), slow = list.find(e => e.id === 2), boost = list.find(e => e.id === 21);
+  return {
+    v: { 0: [2, flags], 1: [3, s.air], 6: [5, s.health], 7: [5, list.length ? potionColor(list) : 0], 8: [2, list.length && list.every(e => e.ambient === true) ? 1 : 0], 9: [2, s.arrowCount || 0], 16: [2, p.hideCape ? 2 : 0], 17: [5, s.absorption || 0], 18: [5, p.experience?.score ?? 0] },
+    a: { maxHealth: boost ? `b${boost.amplifier}` : '', movementSpeed: `${p.motion?.sprinting ? 's' : ''}${speed ? `f${speed.amplifier}` : ''}${slow ? `w${slow.amplifier}` : ''}` },
+    mods: { maxHealth: boost ? 1 : 0, movementSpeed: (p.motion?.sprinting ? 1 : 0) + (speed ? 1 : 0) + (slow ? 1 : 0) },
+  };
+}
+// slots 1 to 4 of tryStartWatching (boots, leggings, chestplate, helmet = InventoryPlayer.armorInventory 0 to 3): the non-empty stacks
+const armourOf = (p) => (p.survival?.inventory?.armor ?? []).filter(Boolean);
+const ATTRIBUTE_BYTES = { maxHealth: 28, movementSpeed: 32 }; // string "generic.maxHealth" (1 + 17) + double 8 + short 2; "generic.movementSpeed" (1 + 21) + 8 + 2
 const spawnByte = deg => (Math.trunc(Math.fround(Math.fround(Math.fround(deg) * 256) / 360)) << 24) >> 24; // S0C: (byte)(int)(angle * 256 / 360)
 
 export class ServerPlayerTracker {
@@ -55,11 +72,17 @@ export class ServerPlayerTracker {
       if (!st) {
         const entry = new TrackerEntry(e, { range: PLAYER_RANGE, frequency: PLAYER_FREQUENCY, velocity: false, limit: this.limit }, { player: null, watches: () => false });
         entry.tracked = true; // the shared entry: the viewers' own entries decide who is in the list
-        m.byId.set(id, st = { entry, e, cx: encodeAxis(sizeClass(0.6), e.x), cy: encodeY(e.y), cz: encodeAxis(sizeClass(0.6), e.z), yaw: spawnByte(e.rotationYaw), pitch: spawnByte(e.rotationPitch), head: spawnByte(e.rotationYawHead), lift: 0, sig, grounded: !!target.grounded, py: target.position.y }); // S0C: the spawn packet's position
+        m.byId.set(id, st = { entry, e, cx: encodeAxis(sizeClass(0.6), e.x), cy: encodeY(e.y), cz: encodeAxis(sizeClass(0.6), e.z), yaw: spawnByte(e.rotationYaw), pitch: spawnByte(e.rotationPitch), head: spawnByte(e.rotationYawHead), lift: 0, sig, grounded: !!target.grounded, py: target.position.y, we: watcherEntries(target) }); // S0C: the spawn packet's position
       } else Object.assign(st.e, e);
       // b75: isAirBorne (a jump: on the ground before, off it now and higher) and a changed watched value force the off-beat send
       const jumped = !!st.grounded && !target.grounded && target.position.y > st.py, changed = sig !== st.sig;
       st.grounded = !!target.grounded; st.py = target.position.y; st.sig = sig;
+      // b97 console97: EntityTrackerEntry.b() (end of the location block) sends an S1C of the changed watcher entries and an S20 of the dirty attributes to every viewer and to the player himself
+      const now = watcherEntries(target), was = st.we;
+      let s1c = 0, s20 = 0;
+      for (const i in now.v) if (now.v[i][1] !== was.v[i][1]) s1c += now.v[i][0];
+      for (const k in now.a) if (now.a[k] !== was.a[k]) s20 += ATTRIBUTE_BYTES[k] + 25 * now.mods[k];
+      st.we = now; st.wp = [...(s1c ? [[28, 6 + s1c]] : []), ...(s20 ? [[32, 9 + s20]] : [])];
       st.entry.packets.length = 0;
       st.entry.sendLocation(jumped, changed);
       for (const q of st.entry.packets) {
@@ -68,6 +91,7 @@ export class ServerPlayerTracker {
         if (q.type === 'look' || q.type === 'moveLook' || q.type === 'teleport') { st.yaw = q.yaw; st.pitch = q.pitch; }
         if (q.type === 'head') st.head = q.head;
       }
+      st.armour = armourOf(target); st.fxn = target.survival?.effects?.ordered ? [...target.survival.effects.ordered()].length : 0; // b97
       st.kinds = st.entry.packets.map(q => q.type); // b96 console96: the kinds the entry sent this tick, carried by the viewers' rows (`pk`) for /netstat
       st.entry.packets.length = 0;
     }
@@ -94,16 +118,17 @@ export class ServerPlayerTracker {
       else { const dx = pos.x - v.ref.x, dy = pos.y - v.ref.y, dz = pos.z - v.ref.z; if (dx * dx + dy * dy + dz * dz > 16) { v.ref = { x: pos.x, y: pos.y, z: pos.z }; moved = true; } }
       v.view.player = pos;
       for (const id of [...v.entries.keys()]) if (!here.has(id)) v.entries.delete(id);
-      const tracked = new Set();
+      const tracked = new Set(), entered = tracked.entered = new Set(); // b97: entered = the players this viewer's entry started tracking this tick (the spawn S0C goes out)
       for (const [tid, target] of here) {
         if (tid === vid) continue; // my.b(player) returns for the player's own entry
         const e = { id: tid, x: target.position.x, y: target.position.y, z: target.position.z, rotationYaw: target.yaw ?? 0, rotationPitch: target.pitch ?? 0, type: 'player' };
         let en = v.entries.get(tid);
+        const was = !!en?.tracked;
         if (!en) { v.entries.set(tid, en = new TrackerEntry(e, { range: PLAYER_RANGE, frequency: PLAYER_FREQUENCY, velocity: false, limit: this.limit }, v.view)); en.ticks = this.host.ticks ?? 0; }
         else { en.e = e; if (moved) en.tryStart(); }
         en.sendLocation(false, false); en.packets.length = 0; // membership only: the rows carry the positions
         if (en.tracked && !this.watches(vid, Math.floor(e.x / 16), Math.floor(e.z / 16))) { en.tracked = false; en.packets.length = 0; }
-        if (en.tracked) tracked.add(tid);
+        if (en.tracked) { tracked.add(tid); if (!was) entered.add(tid); }
       }
       out.set(vid, tracked);
     }
@@ -116,12 +141,15 @@ export class ServerPlayerTracker {
   // b74: a tracked player's row carries the position the shared entry last released (not his live one); a rider keeps his live row.
   rowsFor(pid, rows, tracked, dim = 0) {
     return rows.map(r => {
-      if (r.id === pid) return r;
+      if (r.id === pid) { const wp = this.masters.get(dim)?.byId.get(r.id)?.wp; return wp?.length ? { ...r, pw: wp } : r; } // b97: the player's own S1C / S20 go to him too
       if (!tracked?.has(r.id)) return { id: r.id, name: r.name, far: true };
       if (r.vel) { const { vel, ...rest } = r; r = rest; } // b77 mpvelocity77: S12 of another player moves nothing on the copy; only the owner's row keeps `vel`
       const rel = r.riding ? null : this.released(dim, r.id);
       const pk = this.masters.get(dim)?.byId.get(r.id)?.kinds; // b96 console96
-      return rel || pk ? { ...r, ...rel, ...(pk ? { pk } : {}) } : r;
+      const st = this.masters.get(dim)?.byId.get(r.id), arm = st?.armour?.length ? { arm: st.armour } : {}, wp = st?.wp?.length ? { pw: st.wp } : {};
+      const spawn = tracked.entered?.has(r.id) && st, // b97: only the row that spawns the player for this viewer carries what spawnRecords reads (armour S04s, one S1D per effect, the modifiers in the S20)
+        extra = st ? { ...(spawn ? { ...arm, ...(st.fxn ? { fxn: st.fxn } : {}), am: st.we.mods.maxHealth + st.we.mods.movementSpeed } : {}), ...wp } : {};
+      return rel || pk || st ? { ...r, ...rel, ...(pk ? { pk } : {}), ...extra } : r;
     });
   }
   messageFor(pid, message, dim = 0, key = message) {
