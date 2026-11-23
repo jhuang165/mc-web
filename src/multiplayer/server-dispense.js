@@ -203,12 +203,14 @@ export class ServerDispense {
   // b92 credit92 (bytecode-read zc.h 1065-1088, afv.a(sv, sa), agj.b): a player's landed arrow on a mob wearing Thorns hurts the shooter: damagePlayer with the mob as the source (a dead old body takes
   // none, sv.a: health <= 0, but the sound plays at it); the mob's Random rolls (thornsOfVictim).
   mobThornsOnShooter(a, ref, lane, mobs) {
-    const who = this.ownerOf(a), body = a.ownerBody;
+    // b97 credit97 (bytecode-read zc.h, zc has no removal hook): an arrow keeps the EntityPlayerMP that shot it after the player logged out (ownerOf is then null, `a.owner` is the
+    // stale record), so afv.a(victim, shooter) still rolls the mob's Thorns (Random, armour wear) and plays the sound at the removed body; its damage reaches nobody online.
+    const who = this.ownerOf(a) ?? (a.shooter === 'player' && a.owner?.survival ? a.owner : null), body = a.ownerBody, gone = who !== null && this.sim.players.get(who.id) !== who;
     if (!who) return;
     const at = (body ?? who).position;
     mobs.thornsOfVictim(ref, {
       byPlayer: true,
-      hurt: (n) => { if (body || who.dead) return false; return this.sim.damagePlayer(who, n, { name: 'thorns', from: ref, call: () => who.survival.damage(n, 'thorns', true, 'thorns', ref) }); },
+      hurt: (n) => { if (body || gone || who.dead) return false; return this.sim.damagePlayer(who, n, { name: 'thorns', from: ref, call: () => who.survival.damage(n, 'thorns', true, 'thorns', ref) }); },
       sound: () => this.fx.push({ k: 'sound', name: 'damage.thorns', x: at.x, y: at.y, z: at.z, volume: 0.5, pitch: 1, dim: lane.dim }),
     });
   }
