@@ -5,6 +5,7 @@ import { Survival, ITEMS, GAME_MODE_IDS } from '../survival.js';
 import { PlayerMotion } from '../player-movement.js';
 import { vectorOf } from '../mpperf83-fast.js'; // b83 mpperf83
 import { eachValue89 } from '../mpperf89-fast.js'; // b89 mpperf89
+import { fast97, fail97 } from '../mpperf97-fast.js'; // b97 mpperf97
 import { movePlayer } from '../player-physics.js';
 import { ServerStats } from './server-stats.js'; // b63 mpstats
 import { ServerScoreboard } from './server-scoreboard.js'; // b64 mpscoreboard
@@ -320,7 +321,15 @@ export class DedicatedSimulation {
   // player's box grown by 1 / 0.5 / 1) is repeated here with the server's position; each item that passes goes to the player as a `collect` stack. Survival only.
   pickup(id, eids, fits) { return this.serverItems.pickup(this.players.get(id), eids, fits); }
   // b82 fireext82: `b` the fire flag (Entity.isBurning, flag 0 natively) the cadence-off rows lacked; the client draws the flames from it (main.js syncMultiplayerItems)
-  itemList() { return this.items.items.filter(e => !e.dead).map(e => ({ i: e.eid, stack: e.stack, x: e.x, y: e.y, z: e.z, age: e.age, hover: e.hover, delay: e.delay, mx: e.mx, my: e.my, mz: e.mz, ...(e.fire > 0 ? { b: 1 } : {}), ...(e.velocityChanged ? { vc: 1 } : {}) })); } // b83 tracker83: `vc` Entity.velocityChanged (setBeenAttacked: a blast, fire or cactus hurt), the entry's tail S12 (server-object-tracker.js)
+  itemList() {
+    const mode = fast97.mode;
+    if (mode === 'off') return this.itemListRef();
+    const list = [], a = this.items.items; // b97 mpperf97: one index loop for filter().map() (no closures)
+    for (let i = 0; i < a.length; i++) { const e = a[i]; if (!e.dead) list.push({ i: e.eid, stack: e.stack, x: e.x, y: e.y, z: e.z, age: e.age, hover: e.hover, delay: e.delay, mx: e.mx, my: e.my, mz: e.mz, ...(e.fire > 0 ? { b: 1 } : {}), ...(e.velocityChanged ? { vc: 1 } : {}) }); }
+    if (mode === 'verify' && JSON.stringify(list) !== JSON.stringify(this.itemListRef())) fail97('itemList');
+    return list;
+  }
+  itemListRef() { return this.items.items.filter(e => !e.dead).map(e => ({ i: e.eid, stack: e.stack, x: e.x, y: e.y, z: e.z, age: e.age, hover: e.hover, delay: e.delay, mx: e.mx, my: e.my, mz: e.mz, ...(e.fire > 0 ? { b: 1 } : {}), ...(e.velocityChanged ? { vc: 1 } : {}) })); } // b83 tracker83: `vc` Entity.velocityChanged (setBeenAttacked: a blast, fire or cactus hurt), the entry's tail S12 (server-object-tracker.js)
   // C07 status 0 / 1 / 2 (`dig`) and the item-in-use start / stop (`use`): queued like an edit and handled in the network tick, after the player's own update.
   queueDig(id, status) {
     if (!this.players.has(id) || ![0, 1, 2].includes(status) || this.actions.filter(a => a.id === id).length >= 4) return false;
@@ -758,7 +767,18 @@ export class DedicatedSimulation {
   }
   // `items` rides in a tick while any exist, and once more (empty) after the last one is gone.
   itemsField() { const list = this.itemList(); for (const e of this.items.items) e.velocityChanged = false; /* b83 tracker83: EntityTrackerEntry clears it after its S12 (my.a(List) tail), once a tick */ if (!list.length && !this.itemsSent) return {}; this.itemsSent = list.length; return { items: list }; }
-  presence(dimension = 0) { return [...this.players.values()].filter(p => (p.dimension | 0) === dimension).map(p => ({ id: p.id, name: p.name, x: p.position.x, y: p.position.y, z: p.position.z,
+  presence(dimension = 0) {
+    const mode = fast97.mode;
+    if (mode === 'off') return this.presenceRef(dimension);
+    const out = []; // b97 mpperf97: one walk of the players for the spread, filter and map
+    this.players.forEach((p) => { if ((p.dimension | 0) === dimension) out.push(this.presenceOf97(p)); });
+    if (mode === 'verify' && JSON.stringify(out) !== JSON.stringify(this.presenceRef(dimension))) fail97('presence');
+    return out;
+  }
+  presenceOf97(p) { return ({ id: p.id, name: p.name, x: p.position.x, y: p.position.y, z: p.position.z,
+    yaw: p.yaw, pitch: p.pitch, flying: p.flying, grounded: p.grounded, sneak: p.input.sneak, sprinting: p.motion.sprinting, swing: p.swing,
+    held: p.survival.held, ySize: p.motion.ySize, skin: p.skin, ...capeFields(p), using: !!p.itemInUse, ...(p.mount ? { riding: p.mount.key } : {}), ...(p.dead ? { dead: true } : {}), ...this.sleep.field(p), ...(p.vitals?.hurt ? { hurt: true } : {}), ...velocityField(p, this.ticks), ...(p.survival.effects?.has?.(14) ? { invisible: true } : {}) }); }
+  presenceRef(dimension = 0) { return [...this.players.values()].filter(p => (p.dimension | 0) === dimension).map(p => ({ id: p.id, name: p.name, x: p.position.x, y: p.position.y, z: p.position.z,
     yaw: p.yaw, pitch: p.pitch, flying: p.flying, grounded: p.grounded, sneak: p.input.sneak, sprinting: p.motion.sprinting, swing: p.swing,
     held: p.survival.held, ySize: p.motion.ySize, skin: p.skin, ...capeFields(p), using: !!p.itemInUse, ...(p.mount ? { riding: p.mount.key } : {}), ...(p.dead ? { dead: true } : {}), ...this.sleep.field(p), ...(p.vitals?.hurt ? { hurt: true } : {}), ...velocityField(p, this.ticks), ...(p.survival.effects?.has?.(14) ? { invisible: true } : {}) })); } // b65 mpinvis: entity flag 0 bit 5 (Invisibility effect) // b61: `hurt` = S19 status 2 for the other players' copies
   snapshot(playerId) { const other = this.dimensions.snapshotFor(playerId); if (other) return other; /* b61: a Nether player's world */ const w = this.world; return { gameMode: this.gameMode, ...(w.mapFeatures === false ? { mapFeatures: false } : {}), ...(this.hardcore ? { hardcore: true } : {}), /* b77: S01PacketJoinGame's hardcore bit (game-type byte & 8) */ ...(this.worldSpawn ? { worldSpawn: this.worldSpawn } : {}), items: this.itemList(), seed: w.seed, biome: w.biome, generationVersion: w.generationVersion,
