@@ -268,11 +268,12 @@ const dispEntRecords = (m, ctx) => {
  * counted in the tick message that stops carrying his full row, never through `ctx.destroyed`. `ctx.peers` is the connection's set of tracked player ids; without it nothing is counted.
  * b96 console96: a player who ENTERS the set costs what EntityTrackerEntry.b(mw) sends (executed, console96-reference.json, tools/probes/Console96Probe.java): S0C (87 + the entity id
  * VarInt + the name string, with no profile properties; 32 of it the whole DataWatcher), the whole-watcher S1C (37), S20 (69, +25 for the sprint modifier), the S1B attach of a rider,
- * S04 for a held item (the armour is not on the wire row, so its S04s are not counted), S0A for a sleeper and S1D for the invisibility effect, in that native order.
+ * S04 for a held item (the armour S04s follow, from the row field `arm` (b97)), S0A for a sleeper and S1D for the invisibility effect, in that native order.
  */
 const S0C_FIXED = 87, S1C_WHOLE = 37, S20_PLAYER = 69, S20_SPRINT = 25; // executed: S0C = 87 + VarInt(id) + stringSize(name) for id 0 / name "A" = 90
-const spawnRecords = (p) => [[12, S0C_FIXED + varIntSize(p.id | 0) + stringSize(p.name ?? '')], [28, S1C_WHOLE - 1 + varIntSize(p.id | 0)], [32, S20_PLAYER + (p.sprinting ? S20_SPRINT : 0)],
-  ...(p.riding !== undefined && p.riding !== null ? [[27, C[27]]] : []), ...(p.held?.id ? [[4, C[4] - 2 + itemSize(p.held)]] : []), ...(p.sleep ? [[10, C[10]]] : []), ...(p.invisible ? [[29, C[29]]] : [])];
+const spawnRecords = (p) => [[12, S0C_FIXED + varIntSize(p.id | 0) + stringSize(p.name ?? '')], [28, S1C_WHOLE], [32, S20_PLAYER + S20_SPRINT * (p.am ?? (p.sprinting ? 1 : 0))],
+  ...(p.riding !== undefined && p.riding !== null ? [[27, C[27]]] : []), ...(p.held?.id ? [[4, C[4] - 2 + itemSize(p.held)]] : []), ...list(p.arm).map((a) => [4, C[4] - 2 + itemSize(a)]), ...(p.sleep ? [[10, C[10]]] : []),
+  ...(p.fxn !== undefined ? Array.from({ length: p.fxn }, () => [29, C[29]]) : p.invisible ? [[29, C[29]]] : [])]; // b97: armour S04s after the held one; one S1D per active effect
 const peerRemovals = (m, ctx) => {
   const mem = ctx?.peers; if (!mem || !Array.isArray(m.players)) return [];
   const rows = m.players.filter((p) => p && p.id !== ctx.self && !p.far), now = new Set(rows.map((p) => p.id)), out = [];
@@ -287,7 +288,7 @@ const peerRemovals = (m, ctx) => {
  * bypasses the tracker) keeps the old one S18 per tick.
  */
 const PLAYER_KIND = { move: 21, look: 22, moveLook: 23, teleport: 24, head: 25, attach: 27, velocity: 18 };
-const playerPackets = (p) => !Array.isArray(p.pk) ? [[24, C[24]]] : p.pk.filter((k) => PLAYER_KIND[k] !== undefined).map((k) => [PLAYER_KIND[k], C[PLAYER_KIND[k]]]);
+const playerPackets = (p) => [...(!Array.isArray(p.pk) ? [[24, C[24]]] : p.pk.filter((k) => PLAYER_KIND[k] !== undefined).map((k) => [PLAYER_KIND[k], C[PLAYER_KIND[k]]])), ...list(p.pw)]; // b97: then the S1C / S20 of EntityTrackerEntry.b()
 /**
  * b93 console93: the S13s a connection queued (`ctx.destroyed = { n }`, the player's destroyedItemsNetCache) go out in the player's next onUpdate (mw.h): the ids in packets of at most 127
  * (`Math.min(size, 127)`, the loop repeats until the list is empty), bytecode-read. Returns the records and empties the queue.
@@ -343,7 +344,7 @@ const CLIENT_PACKETS = {
   dimRespawn: (m, ctx) => [[7, C[7]], ...bulks(m.world?.columns, ctx)],
   // S03 every 20 ticks (MinecraftServer.v: tickCounter % 20; `ctx.tick` is the server's counter, from 0 at launch, else the world's tick count); an S18 per pose of another
   // player (the tracker sends nobody their own); the cells; the S21 resends (partial, the changed sections)
-  tick: (m, ctx) => { const t = ctx?.tick ?? m.tick; return [...(Number.isInteger(t) && t % 20 === 0 ? [[3, C[3]]] : []), ...peerRemovals(m, ctx), ...list(m.players).filter((p) => !p?.far && (ctx?.self === undefined || p?.id !== ctx.self)).flatMap(playerPackets),
+  tick: (m, ctx) => { const t = ctx?.tick ?? m.tick; return [...(Number.isInteger(t) && t % 20 === 0 ? [[3, C[3]]] : []), ...peerRemovals(m, ctx), ...list(m.players).filter((p) => !p?.far && (ctx?.self === undefined || p?.id !== ctx.self)).flatMap(playerPackets), ...list(m.players).filter((p) => ctx?.self !== undefined && p?.id === ctx.self).flatMap((p) => list(p.pw)),
     ...cellRecords(m.changes), ...objectRecords(m.itrack, ctx), ...list(m.chunks).map((c) => [33, s21(c, ctx, false, Number.isInteger(c?.mask) ? c.mask : 0xffff)])]; },
   blocks: (m) => cellRecords(m.changes),
   chunkUnload: (m, ctx) => list(m.columns).map((c) => [33, unload(c, ctx)]),
