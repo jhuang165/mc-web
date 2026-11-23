@@ -570,13 +570,30 @@ export class DimensionLive {
       return true;
     } catch (error) { if (!/not built|no prewarmed/.test(String(error?.message))) console.warn("arrival preview failed:", error); return false; }
   }
+  // b98 spcopy98: waits (bounded, as ExitPrewarm.adopt does) for the exit prewarm's window round the target; starts it when the portal wait never did. The window is the whole
+  // 8 x 8 chunk square round the Teleporter's focus (every cell it touches, so a target near a cell border has its neighbour cell too), built by workers, never on this thread.
+  async waitExitWindow(root, from, to, p, ms = 15000) {
+    const id = `${root.id}:${to}`;
+    if (this.exitWarm.id !== id) {
+      const tt = transferTarget(from, to, p.x, p.y, p.z, mcYaw(p.yaw ?? 0));
+      const list = await this.savedPortals(root, to, [Math.floor(tt.x) - 160, Math.floor(tt.x) + 160], [Math.floor(tt.z) - 160, Math.floor(tt.z) + 160]).catch(() => []);
+      if (!this.busy || !this.exitWarm.start(root, to, tt, list, this.cachedExit(root, to, tt))) return;
+    }
+    const need = this.exitWarm.need;
+    if (!need) return;
+    let t;
+    await Promise.race([need, new Promise((r) => { t = setTimeout(r, ms); })]); clearTimeout(t);
+  }
   async announceArrival(rec, p, target) {
     if (typeof this.host.arrivalHint !== "function") return;
     try {
       const root = this.host.worlds().find((w) => w.id === rootIdOf(rec));
       if (!root) return;
       await this.armArrival(root, target);
-      this.announceNow(rec, p, target);
+      if (!this.announceNow(rec, p, target) && target === OVERWORLD && this.prewarmEnabled) { // b98 spcopy98: the wait ended before the window was built (or a scripted trip had no wait): ask for it and give the hint when the worker has delivered it (no generation here)
+        await this.waitExitWindow(root, dimensionOf(rec), target, p);
+        this.announceNow(rec, p, target);
+      }
     } catch (error) { console.warn("arrival preview failed:", error); }
   }
   // Per physics tick (EntityPlayerSP.onLivingUpdate / Entity.onEntityUpdate / BlockPortal / BlockEndPortal). `prev`/`pos`: feet
