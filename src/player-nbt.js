@@ -23,6 +23,17 @@ export function loadedMotion(values) {
 export function restoredMotion(values) { return Array.isArray(values) && values.length === 3 && values.every((v) => v === null || typeof v === "number") ? values.map((v) => (v === null ? NaN : v)) : null; }
 export function savedMotion(values) { return restoredMotion(values) ?? [0, 0, 0]; }
 
+// b98 entnbt98 (executed, entnbt97-reference.json healf-NaN, food-sat-nan): the real player keeps a NaN HealF (Health writes 0s) and a NaN or infinite saturation as loaded, and
+// writes them back. JSON has no NaN: a saved record holds them as strings ("NaN", "Infinity", "-Infinity"; null also reads as NaN). `fallback` is for anything else.
+export function rawFloat(v, fallback) {
+  if (typeof v === "number") return v;
+  if (v === null || v === "NaN") return NaN;
+  if (v === "Infinity") return Infinity;
+  if (v === "-Infinity") return -Infinity;
+  return fallback;
+}
+export const jsonFloat = (v) => (typeof v === "number" && !Number.isFinite(v) ? String(v) : v);
+
 // PotionEffect modifiers on EntityPlayerMP: applied (and saved with the attribute, AttributeModifier.isSaved) when the effect is added in the session; an effect read from NBT
 // comes without them unless the saved Attributes carry them (`bare` effects, status-effects.js). ModifiableAttributeInstance.func_111122_c collects every modifier in a
 // HashSet, so the saved Modifiers list is in Java HashMap bucket order of the UUID hash (16 buckets), ties in operation then insertion order.

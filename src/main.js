@@ -261,7 +261,7 @@ import { buildWindow, wireClicks, wireStation, applyWindow, applyBlockActions, i
 const finishDrinking = (player) => finishDrinkingItem(player, finishBucketDrinking);
 import { captureBucketTarget } from "./buckets-simulation.js";
 import { HUNGER, POISON } from "./status-effects.js";
-import { PlayerMotion, fovMultiplier } from "./player-movement.js";
+import { PlayerMotion, fovMultiplier, setAbilitySpeeds } from "./player-movement.js";
 import { drainKnockback } from "./player-knockback.js";
 import { deathThrow, hitPoseSource } from "./death-throw.js";
 import { hurtNonLiving } from "./falling-hurt.js";
@@ -2083,6 +2083,7 @@ async function launch(record, prepared, { slice = false } = {}) {
     scene.setArrows(objectViews(objectTracker, arrows.list, "arrow"));
     velocity.set(0, 0, 0);
     flying = record.flying === true && survival.creative; // level.dat abilities.flying (import)
+    setAbilitySpeeds(record.abilitySpeeds); // b98 entnbt98: abilities.walkSpeed / flySpeed drive the movement speed (code-read only)
     grounded = false;
     motion.reset();
     collidedH = false;

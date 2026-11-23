@@ -164,7 +164,13 @@ export class PlayerMotion {
 export const MOVE_SPEED = 0.10000000149011612;
 export const SPRINT_BOOST = 0.30000001192092896;
 // `potion` is the product of the Speed/Slowness operation-2 modifiers (status-effects.js moveSpeedMultiplier), 1 without them.
-export const moveSpeed = (sprinting, potion = 1) => (sprinting ? MOVE_SPEED * (1 + SPRINT_BOOST) * potion : MOVE_SPEED * potion);
+// b98 entnbt98 (bytecode-read yz.e, EntityPlayer.onLivingUpdate): on the server the movementSpeed base value is set to capabilities.walkSpeed every tick (ti.a(D) of yw.b()), clamped
+// to the attribute's 0..max range; EntityPlayer.moveEntityWithHeading uses capabilities.flySpeed as jumpMovementFactor while flying. A level.dat / region import carries both floats
+// (record.abilitySpeeds); a non-finite one is ignored here (native NaN would poison the position).
+const speeds = { fly: f(0.05), walk: f(0.1) };
+export function setAbilitySpeeds(s) { speeds.fly = Number.isFinite(s?.fly) ? f(s.fly) : f(0.05); speeds.walk = Number.isFinite(s?.walk) ? Math.max(0, f(s.walk)) : f(0.1); }
+export const flySpeed = () => speeds.fly;
+export const moveSpeed = (sprinting, potion = 1) => (sprinting ? speeds.walk * (1 + SPRINT_BOOST) * potion : speeds.walk * potion);
 // EntityLivingBase.moveEntityWithHeading (sv.e(FF)V) on the ground: aiMoveSpeed times
 // 0.16277136F / friction³ with friction = slipperiness * 0.91F, all in floats.
 export function groundAccel(sprinting, friction, potion = 1) {
@@ -204,7 +210,7 @@ export function flyVertical(motionY, { jump = false, sneak = false } = {}) {
 export function fovMultiplier({ flying = false, sprinting = false, bow = 1, potion = 1 } = {}) {
   let m = 1;
   if (flying) m = f(m * f(1.1));
-  m = f(m * ((moveSpeed(sprinting, potion) / WALK_SPEED + 1) / 2)); // EntityPlayerSP.getFOVMultiplier reads the full attribute value, Speed and Slowness included
+  m = f(m * ((moveSpeed(sprinting, potion) / (speeds.walk > 0 ? speeds.walk : WALK_SPEED) + 1) / 2)); // EntityPlayerSP.getFOVMultiplier reads the full attribute value, Speed and Slowness included
   return bow === 1 ? m : f(m * bow);
 }
 
