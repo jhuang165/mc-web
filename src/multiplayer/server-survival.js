@@ -68,6 +68,20 @@ export class ServerSurvival {
     if (killer === p.id) this.sim.stats?.add(p, STAT.playerKills); // b88 blast88 (bytecode-read mw.a(ro), yz.b(sa, int)): aX() is the player himself after his own TNT, and addToPlayerScore has no self test
   }
   /**
+   * b98 credit98 (bytecode-read mw.a(ro, F), yz.a(ro, F), sv.a(ro, F), mw.a(ro)): an EntityPlayerMP that logged out is still the shooter (zc.c) of its arrow, and neither attackEntityFrom
+   * nor the player list tests whether it is online: a Thorns hit takes its health like any other (spawn protection `bU` and Creative refuse, as they froze at logout). A lethal one runs
+   * onDeath: the CombatTracker message goes to the whole server (oi.a(fj)) and dropAllItems throws the body's inventory where it was removed (the file saved at logout keeps the same
+   * stacks). Not modelled because the removed entity never ticks: no S19 view, no death throw, no XP orbs (onDeathUpdate), no stat or kill credit (the mob is no player).
+   */
+  dieGone(p) {
+    if (p.dead || p.survival.health > 0) return false;
+    p.dead = true; p.survival.hurtSounds.length = 0;
+    this.dropOnDeath(p); p.deathXp = null;
+    const component = deathComponent(p.survival.combat, this.sim.scoreboard?.formatName(p.name) ?? p.name, { rawName: p.name });
+    (this.sim.events ??= []).push({ type: 'death', id: p.id, component });
+    return true;
+  }
+  /**
    * b89 credit89: the player id EntityPlayerMP.onDeath (mw.a(ro), bytecode-read) credits through func_94060_bK (sv.aX: rn.c(), else aR, else i; combat-tracker.js `fighter`), or undefined.
    * A killing hit empties the tracker first (rn.g sees the victim dead), so a fatal fall or fire after a player's hit credits him through attackingPlayer while recentlyHit lasts
    * (100 of the victim's ticks), though the message is the plain one. The tracker entity is the DamageSource entity: pvpRules.fromOf's record (playerId), or the self entity.
