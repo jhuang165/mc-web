@@ -145,6 +145,22 @@ Batch 79 (2026-11-16/18, ten tracks in `../wt79-<name>` on `batch79-<name>`, cut
 - Verification: the first full run hung on those two files; after the fix one full `npm test` on 536376793: 8964 tests, 8964 pass. Build and bridge tests ok. No browser checks.
 - Open: "Still open from batch 79" in `public/research/remaining-gaps.md`.
 
+Batch 97 (2026-11-22, ten tracks in `../wt97-<name>` on `batch97-<track>97`, cut from b5fa6dc3d, merged --no-ff on `batch97-lead`; track agents ran on Sonnet, by request; shared rules `../artifacts/b97-lead/track-rules.md`; lead note `b97-lead-track.md`; no browser checks or full test runs in tracks, by request):
+- 0.126.0, by track (details in the `*-b97-track.md` notes and "Done in batch 97" in `public/research/remaining-gaps.md`):
+  - horse97: a dying rider keeps its seat on any mount in single player (`death-ride.js`) and in boats and carts on the server (`Kill97Probe`); water-dismount spots executed.
+  - mpobjects97: `redstone.lit` is the set at the flush in all three lanes.
+  - credit97: a real reload drops the stashed thrower body; mob Thorns on a logged-out shooter's arrow.
+  - console97: armour S04s, per-effect S1D, changed-watcher S1C and dirty-attribute S20 counted (`Console97Probe`).
+  - mpperf97: scratch list keeps its store, closure-free tick lists, behind `MC_MPPERF97=on|off|verify`; hashes unchanged.
+  - spcopy97: End portal trips and finite Overworld roots get the early arrival; nearest-first prewarm.
+  - portals97: mobs entering the End arrive with pitch 0 (`Portals97Probe`).
+  - tiles97: unknown item tag keys are kept raw everywhere (`Tiles97Probe`).
+  - entnbt97: player and mob NBT edge cases from the real classes (`Entnbt97Probe`, `Entnbt97MobProbe`).
+  - mobrec97: 22 executed bat and shears records; no bat push; count-0 shears keep shearing.
+- Lead: ten clean merges; console97 sent back once to keep spawn-only fields off steady rows.
+- Verification: one full `npm test` on the merged tree: 10774/10774. Build and bridge tests ok. No browser checks.
+- Open: "Still open from batch 97" in `public/research/remaining-gaps.md`.
+
 Batch 96 (2026-11-22, ten tracks in `../wt96-<name>` on `batch96-<track>96`, cut from 0e2854338, merged --no-ff on `batch96-lead`; track agents ran on Sonnet, by request; shared rules `../artifacts/b96-lead/track-rules.md`; lead note `b96-lead-track.md`; no browser checks or full test runs in tracks, by request):
 - 0.125.0, by track (details in the `*-b96-track.md` notes and "Done in batch 96" in `public/research/remaining-gaps.md`):
   - horse96: a killed player rider keeps its mount through the death ticks (`Kill96Probe`), on the server and in single player; a lead on a ridden horse was already native (`Horse96Probe`).

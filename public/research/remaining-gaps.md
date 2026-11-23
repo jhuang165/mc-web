@@ -2,6 +2,48 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 97
+
+Batch 97 covered these areas (track agents ran on Sonnet):
+- **Horses.** A player who dies on any mount keeps the seat through the 20 death ticks and is let go where they sat the tick after, or at the respawn. Single player now matches the server (`death-ride.js`); the old `die()` detached at once and searched a landing spot, which native never does. `Kill97Probe` (real `mw`, `xi` boat, `xs` cart) shows boats and carts work the same, and the server's cart and boat path follows it. The water-dismount spot for a horse, pig, boat and cart matches executed `mountEntity(null)` records.
+- **Multiplayer objects.** The tick message's `redstone.lit` is the lit set at the `mq.b` flush in all three lanes, not the end-of-tick set (Port-read against the bytecode-read `mt.b` order). Portal-arriving orb ids were shown not to collide (pinned). S22/S23 go out before S24 in every lane (code-read).
+- **Kill credit.** A real reload drops a stashed thrower's dead body (`EntityThrowable` saves only `ownerName`; `EntityArrow` saves no owner). Balls and potions thrown before the save now credit the living player, and arrows credit no one. On the server, a mob's Thorns now hits an arrow whose shooter logged out. Fire Aspect, Smite and Bane on mob weapons were audited and already native.
+- **The dedicated server.** `Console97Probe`: a spawning player's armour S04s, one S1D per active effect and the S20's modifier bytes are counted; a changed watcher's S1C (changed entries only) and a dirty attribute's S20 are counted each tick for viewers and the player. The spawn-only row fields ride only on the tick a viewer starts tracking.
+- **Server speed.** Behind `MC_MPPERF97=on|off|verify`: the move scratch list keeps its backing store (`blockBoxesFast` 6 to 0.05 MB per 150 travel ticks); `itemList` and `presence` lost their closures. Sampled heap 255.6 to 250.0 MB, bench heap per tick 2.5% lower, tick time unchanged, hashes unchanged.
+- **The single-player copy.** Standing in or near an End portal arms the early arrival, so End trips compute it in the portal tick (the `SpCopy97Probe` `overToEnd` case executed that native does it all in the one tick). Finite Overworld roots now get a hint. The exit prewarm builds the arrival's chunks first.
+- **Portals.** A mob arriving in the End has pitch 0 (bytecode-read `oi.a`; `Portals97Probe` ran the real `travelToDimension` for 25 mobs). Leashes and the other copied fields were already native.
+- **Tiles.** Unknown item tag keys (in `tag` and `display`) are kept raw through saves, Java import and export, container moves and jukeboxes; an empty `tag` compound is kept and does not stack with a plain item. Offline player-head ExtraType was already native (`Tiles97Probe`).
+- **Entity NBT.** `Entnbt97Probe` and `Entnbt97MobProbe`: player NaN Motion and negative awake SleepTimer are kept, food fields are no longer clamped, Score may be negative, fly and walk speeds pass through export. Mob attributes: no Health tags give the modified maximum, a missing UUID is zero, duplicate UUIDs replace, a missing Base is 0. An unticked lost lead writes `Leashed` with no `Leash` compound.
+- **Mob records.** 22 new executed records (15 bat, 7 shears) replay with no divergence. Fixes: bats no longer push or get pushed, and broken shears stay in the hand at count 0 and keep shearing a sheep until a melee blow clears them.
+
+Found wrong in the batch 96 list:
+- Single-player `die()` also searched a landing spot.
+- Natively, S1D/S1E for an effect added or removed while tracked go only to the player; and the whole-watcher S1C is 37 bytes for any id.
+- `blockBoxesFast`'s cost was the scratch list's backing store, not box arrays.
+- Count-0 shears are not empty, and NaN Motion is not 0.
+- A batch 29 claim: an unusable Leash tag is not written back.
+- The finite real arrival used the wrong peek and disagreed with its hint.
+
+Still open from batch 97:
+- **Multiplayer.**
+  - Horses: the dismount's S08, S1B, S08 order is recorded but not sent as packets; a pig in water is still port-read.
+  - Objects: a joining client's snapshot carries the live lit set.
+  - The dedicated server: only the Health Boost, Speed, Slowness and sprint modifiers are modelled; profile texture properties at spawn are not counted.
+  - Kill credit: natively, Thorns damage reaches the removed body of a logged-out shooter and a lethal hit would broadcast a death and drop items.
+  - Speed: `movePlayer` and `moveEntityBody` number boxing, the `next` iterator tail, entity-portal `step`, `bb.slice()` at `entities.js:645`.
+  - Server commands: /publish stays off. End island tails past 128 blocks are cut on some seeds (left for the user's decision). WebSocket compression stays off.
+  - The multiplayer client does not predict a shear with count-0 shears (the server decides).
+  - Not seen in a browser: a repeater lit by an entity-pass change lighting a tick later, plus the batch 67 to 96 lists.
+- **Single player.**
+  - The copy: a Nether-to-Overworld wait shorter than the first cell's build gets no hint.
+  - Portals: a rider mounting after its mount touched a portal.
+  - Tiles: a null-item jukebox stack ejects nothing (native drops an inert id-0 item); hand-built stack copies (mob helmets, cart items) do not carry raw tags; sign and command-block edge cases not checked.
+  - Entity NBT: out-of-range XpP, XpLevel and XpTotal; NaN HealF, saturation and exhaustion; loaded fly and walk speeds do not change movement; `playerState` is not in the `world-import.js` whitelist; generic entity Fire, Air, PortalCooldown, Invulnerable and Dimension not audited.
+  - Mob records: villagers (trading, breeding, doors) are still not recorded; a bat in water.
+  - Not seen in a browser: the seated death on every mount, the finite-root hint's build stall, plus the batch 96 list.
+- **Rendering.** No native pixel capture.
+- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+
 ## Done in batch 96
 
 Batch 96 covered these areas (track agents ran on Sonnet):
@@ -23,25 +65,7 @@ Found wrong in the batch 95 list:
 - The batch 95 arrival guard skipped every Overworld trip.
 - Session effects did write empty Modifiers, and loaded effects wrongly acted.
 
-Still open from batch 96:
-- **Multiplayer.**
-  - Horses: the water dismount's spot and S08 are not compared against a probe; a pig in water is port-read; dying cart and boat riders are unprobed.
-  - Objects: the tick message's `redstone.lit` is end-of-tick state.
-  - The dedicated server: armour S04s at spawn, changed-watcher S1C/S20, effect S1D other than invisibility and online-mode profile properties are not counted.
-  - Speed: `simulation.js` map closures, `blockBoxesFast`, `tickMobs` shapes, the rest of the iterator tail.
-  - Portals: portal-arriving orbs take ids from the module counter.
-  - Server commands: /publish stays off. End island tails past 128 blocks are cut on some seeds (left for the user's decision). WebSocket compression stays off.
-  - Not seen in a browser: Nether and End pistons and falling blocks one tick later, custom cart blocks on client copies, plus the batch 67 to 95 lists.
-- **Single player.**
-  - Horses: `die()` still detaches the vehicle at once.
-  - The copy: trips with no portal wait (End portal, scripted) still get the hint after settle; a wait that ends before the cells are built gets no Overworld hint; finite Overworld roots get none.
-  - Kill credit: after a reload a stashed ball keeps the dead body where native looks the thrower up by name.
-  - Tiles: skull ExtraType needs a server; unknown jukebox stack tag keys are dropped.
-  - Entity NBT: NaN Motion is stored as 0; a negative awake SleepTimer is not imported.
-  - Mob records: villagers (trading, breeding, doors); bats have 2 records; native leaves a count-0 shears stack that still shears.
-  - Not seen in a browser: tagged or damaged disc ejection, type 7 skulls, baby growth nudges, plus the batch 95 list.
-- **Rendering.** No native pixel capture.
-- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+Still open from batch 96: carried into the batch 97 list above, less what batch 97 fixed or found wrong.
 
 ## Done in batch 95
 
