@@ -94,7 +94,7 @@ export function stackTagCompound(stack) {
   writeItemTags(stack, entries);
   for (const [k, v] of Object.entries(entries)) e.set(k, v);
   if (typeof stack.unbreakable === "boolean") e.set("Unbreakable", tag(T.BYTE, stack.unbreakable ? 1 : 0));
-  return e.size ? tag(T.COMPOUND, e) : null;
+  return e.size || stack.extraRaw ? tag(T.COMPOUND, e) : null; // b97 tiles97: an empty tag compound is kept
 }
 export function stackNbtText(stack) {
   const { id, damage } = originalStack(stack);

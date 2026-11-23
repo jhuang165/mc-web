@@ -9,6 +9,7 @@ import { NBT } from './nbt.js';
 import { nbtGet } from './nbt-get.js';
 import { ITEM_KEYS } from './item-keys-data.js';
 import { ORIGINAL_ITEMS } from './original-items.js';
+import { rawOf, tagOf } from './item-tags.js';
 import { isDisc, canonicalDisc, discIndex, discOriginal, DISC_ORIGINAL_FIRST, DISC_FIRST, DISC_COUNT, nowPlaying } from './note-jukebox-content.js';
 
 export const JUKEBOX_ID = 84;
@@ -37,6 +38,7 @@ export function writeJukeboxTile(tile, x, y, z, original = jukeboxOriginal, entr
     const raw = Number.isInteger(record.rawDamage) && record.rawDamage > 0 ? record.rawDamage : 0;
     map.set('Record', t(NBT.INT, record.rawId));
     map.set('RecordItem', t(NBT.COMPOUND, new Map([['id', t(NBT.SHORT, record.rawId)], ['Count', t(NBT.BYTE, record.count ?? 1)], ['Damage', t(NBT.SHORT, raw)]])));
+    if (record.rawTag) { try { map.get('RecordItem').value.set('tag', tagOf(record.rawTag)); } catch { /* malformed raw tag: left out */ } }
     return map;
   }
   const o = record ? original(record.id) : null, id = typeof o === 'number' ? o : o?.id;
@@ -71,7 +73,12 @@ export function readJukeboxStack(tag, convert) {
     const record = convert(item.value);
     if (record) return { record };
     const raw = nbtGet(item.value, 'id', NBT.SHORT, 0);
-    return { record: registered(raw) ? { id: 0, rawId: raw, count: nbtGet(item.value, 'Count', NBT.BYTE, 0), damage: 0 } : null };
+    if (!registered(raw)) return { record: null };
+    // b97 tiles97: the stack's whole tag compound and a positive Damage stay raw too (ItemStack.readFromNBT keeps both)
+    const rec = { id: 0, rawId: raw, count: nbtGet(item.value, 'Count', NBT.BYTE, 0), damage: 0 }, damage = nbtGet(item.value, 'Damage', NBT.SHORT, 0), tg = item.value.get('tag');
+    if (damage > 0) rec.rawDamage = damage;
+    if (tg?.type === NBT.COMPOUND) rec.rawTag = rawOf(tg);
+    return { record: rec };
   }
   const legacy = nbtGet(tag, 'Record', NBT.INT, 0);
   if (legacy <= 0) return { record: null };
