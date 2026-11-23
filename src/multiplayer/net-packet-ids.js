@@ -14,6 +14,7 @@ import { watchState, stringExtra, watchDiff } from './net-watch-bytes.js'; // b9
 import { vehicleInfo } from './server-cart-track.js';
 import { rowInfo } from './net-row-info.js'; // b92 console92: what a dispEnts row's S0E / S1C / S12 hold // b91 console91: the packets a cart or boat entry released
 import { columnsDeflated, itemTagBytes } from './net-native-bytes.js'; // b89 console89: deflated chunk data, item tags (node:zlib: server-only)
+import { profilePropertyBytes } from './profile-properties.js'; // b98 console98: the textures property of a spawning player's S0C
 export const STATUS_IDS = { pingStatus: 0, pingProbe: 1, pingStatusReply: 0, pingProbeReply: 1 }; // STATUS: C00ServerQuery / C01Ping, S00ServerInfo / S01Pong
 
 // Client to server (PLAY unless noted). Values are ids or (message) => id.
@@ -271,7 +272,7 @@ const dispEntRecords = (m, ctx) => {
  * S04 for a held item (the armour S04s follow, from the row field `arm` (b97)), S0A for a sleeper and S1D for the invisibility effect, in that native order.
  */
 const S0C_FIXED = 87, S1C_WHOLE = 37, S20_PLAYER = 69, S20_SPRINT = 25; // executed: S0C = 87 + VarInt(id) + stringSize(name) for id 0 / name "A" = 90
-const spawnRecords = (p) => [[12, S0C_FIXED + varIntSize(p.id | 0) + stringSize(p.name ?? '')], [28, S1C_WHOLE], [32, S20_PLAYER + S20_SPRINT * (p.am ?? (p.sprinting ? 1 : 0))],
+const spawnRecords = (p) => [[12, S0C_FIXED + varIntSize(p.id | 0) + stringSize(p.name ?? '') + profilePropertyBytes(p)], [28, S1C_WHOLE], [32, S20_PLAYER + S20_SPRINT * (p.am ?? (p.sprinting ? 1 : 0))],
   ...(p.riding !== undefined && p.riding !== null ? [[27, C[27]]] : []), ...(p.held?.id ? [[4, C[4] - 2 + itemSize(p.held)]] : []), ...list(p.arm).map((a) => [4, C[4] - 2 + itemSize(a)]), ...(p.sleep ? [[10, C[10]]] : []),
   ...(p.fxn !== undefined ? Array.from({ length: p.fxn }, () => [29, C[29]]) : p.invisible ? [[29, C[29]]] : [])]; // b97: armour S04s after the held one; one S1D per active effect
 const peerRemovals = (m, ctx) => {

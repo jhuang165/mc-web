@@ -28,9 +28,11 @@ const everywhere = () => true;
 const javaYawDeg = yaw => 180 - yaw * 180 / Math.PI, javaPitchDeg = pitch => -pitch * 180 / Math.PI;
 // The data watcher values that mark it changed (b75): a different signature than last tick means hasChanges() is true at this tick's sendLocationToAllClients.
 export function watcherSig(p) {
-  const s = p.survival ?? {}, fx = s.effects;
-  const colour = fx?.ordered ? [...fx.ordered()].map(e => `${e.id}.${e.amplifier}.${e.ambient ? 1 : 0}`).join('+') : '';
-  return [p.input?.sneak ? 1 : 0, p.motion?.sprinting ? 1 : 0, p.itemInUse ? 1 : 0, s.fire > 0 ? 1 : 0, fx?.has?.(14) ? 1 : 0, s.health, s.absorption || 0, s.air, s.arrowCount || 0, colour, p.experience?.score ?? 0, p.hideCape ? 1 : 0].join('|'); // b76: + the score (watcher 18, EntityPlayer.addScore from addExperience); b77: + the cape-hidden bit (watcher 16 bit 1, C15 showCape via setCapeShow); sleeping and riding are NOT watched values
+  // b98 console98: the signature is the nine watcher values themselves (watcherEntries), so an effect whose amplifier changes but whose potion colour stays equal no longer forces the off-beat send:
+  // DataWatcher.updateObject marks an entry changed only when the value differs (executed, console97-reference.json: "unchanged": hasChanges false). b76: the score (watcher 18); b77: the cape-hidden bit (16);
+  // sleeping and riding are NOT watched values
+  const v = watcherEntries(p).v;
+  return Object.keys(v).map(i => v[i][1]).join('|');
 }
 // b97 console97: the DataWatcher entries of an EntityPlayer as [bytes (header + value), value] by index (executed, public/research/console97-reference.json: flag 0 byte 2, air 1 short 3, health 6 float 5, potion
 // colour 7 int 5, ambient 8 byte 2, arrows 9 byte 2, cape 16 byte 2, absorption 17 float 5, score 18 int 5; the sum of the nine is the whole S1C's 31) and the modifier counts of the two watched attributes
