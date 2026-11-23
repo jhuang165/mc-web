@@ -1968,9 +1968,12 @@ export class EntityWorld {
   // World.rand.nextInt(5) for the profession; the child (growing age -24000) stands where the parent does.
   spawnVillagerChild(parent) {
     const baby = this.create("villager", parent.x, parent.y, parent.z);
+    this.entitySeed?.(baby, "born"); // replay hook: the child's Entity.rand
+    // yv.b(rx) is `new EntityVillager` then onSpawnWithEgg(null): the follow-range bonus draws nextGaussian on the child's own Entity.rand, then the profession is World.rand.nextInt(5) (bytecode-read yv.a(sy), Executed b98-breed-three-9819)
+    this.addSpawnBonus(baby, spawnBonus(entityRandom(baby))[0]);
     baby.growingAge = -24000;
     baby.profession = (this.worldRandom ??= new JavaRandom(Math.floor(Math.random() * 2 ** 48))).nextInt(5);
-    baby.rotationYaw = baby.rotationYawHead = parent.rotationYaw ?? 0;
+    baby.rotationYaw = 0; // up.g: setLocationAndAngles(parent x, y, z, 0, 0) (the head keeps what create() gave it)
     this.entities.push(baby);
     return baby;
   }

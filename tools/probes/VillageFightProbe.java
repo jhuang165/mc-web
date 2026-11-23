@@ -60,7 +60,23 @@ public class VillageFightProbe {
   static boolean b35or36(String name) { return name.startsWith("b35-") || b36up(name); }
   static boolean b36up(String name) { return name.startsWith("b36-") || b37up(name); }
   static boolean b37up(String name) { return name.startsWith("b37-") || name.startsWith("b85-") || name.startsWith("b86-") || b38up(name); }
-  static boolean b38up(String name) { return name.startsWith("b38-") || name.startsWith("b39-") || name.startsWith("b41-") || name.startsWith("b86-") || name.startsWith("b87-") || name.startsWith("b90-"); } // batch 87: b87-; batch 90: b90-* too (mobrec87: pigmen, baby and villager zombie kills); batch 86: b86-* too (the pigman fight); batch 39: b39-* records use the b38 legacy-row layout
+  static boolean b38up(String name) { return name.startsWith("b38-") || name.startsWith("b39-") || name.startsWith("b41-") || name.startsWith("b86-") || name.startsWith("b87-") || name.startsWith("b90-") || name.startsWith("b98-"); } // batch 98: b98-* (mobrec98: villagers); batch 87: b87-; batch 90: b90-* too (mobrec87: pigmen, baby and villager zombie kills); batch 86: b86-* too (the pigman fight); batch 39: b39-* records use the b38 legacy-row layout
+  // batch 98: [growingAge, isMating (br), isPlaying (bs), has customer (bt), timeUntilReset (bv), needsInitilization (bw), riches (bx), offers, uses of each offer, max uses of each offer, Regeneration duration left, randomTickDivider (bq)]
+  static String villagerState(yv v) throws Exception {
+    StringBuilder b = new StringBuilder("[").append(v.d()).append(",").append(MobMoveProbe.field(yv.class, "br").getBoolean(v) ? 1 : 0).append(",").append(MobMoveProbe.field(yv.class, "bs").getBoolean(v) ? 1 : 0)
+      .append(",").append(MobMoveProbe.field(yv.class, "bt").get(v) != null ? 1 : 0).append(",").append(MobMoveProbe.field(yv.class, "bv").getInt(v)).append(",").append(MobMoveProbe.field(yv.class, "bw").getBoolean(v) ? 1 : 0)
+      .append(",").append(MobMoveProbe.field(yv.class, "bx").getInt(v));
+    ago list = (ago) MobMoveProbe.field(yv.class, "bu").get(v);
+    b.append(",").append(list == null ? -1 : list.size());
+    StringBuilder uses = new StringBuilder("["), max = new StringBuilder("[");
+    if (list != null) for (int i = 0; i < list.size(); i++) {
+      agn r = (agn) list.get(i);
+      uses.append(i > 0 ? "," : "").append(MobMoveProbe.field(agn.class, "d").getInt(r)); max.append(i > 0 ? "," : "").append(MobMoveProbe.field(agn.class, "e").getInt(r));
+    }
+    rw regen = v.b(rv.a[10]);
+    b.append(",").append(uses).append("],").append(max).append("],").append(regen == null ? 0 : regen.b()).append(",").append(MobMoveProbe.field(yv.class, "bq").getInt(v)).append("]");
+    return b.toString();
+  }
   static String pname(yz p) { return p instanceof P ? ((P) p).n : ((ServerPlayerProbe.PM) p).n; }
   static String q(String s) { return "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\""; }
 
@@ -117,6 +133,12 @@ public class VillageFightProbe {
     wc c = VillageLiveProbe.newCollection(seed);
     VillageLiveProbe.W.players.clear();
     VillageLiveProbe.W.day = false;
+    if (name.startsWith("b98-")) { // batch 98: EntityVillager.addDefaultEquipmentAndRecipies shuffles with Collections.shuffle(list) (the shared static Random): reseeded per record, as VillagerTradeLiveProbe does
+      Field shuffle = java.util.Collections.class.getDeclaredField("r"); shuffle.setAccessible(true);
+      Random shared = (Random) shuffle.get(null);
+      if (shared == null) { shared = new Random(0); shuffle.set(null, shared); }
+      shared.setSeed(987654321L + seed * 7919L);
+    }
     VillageLiveProbe.door(50, 0, 50, 0);
     VillageLiveProbe.W.roofs.add(new int[] {40, 0, 49, 100});
     for (int[] b : blocks) for (int x = b[0]; x <= b[3]; x++) for (int y = b[1]; y <= b[4]; y++) for (int z = b[2]; z <= b[5]; z++) VillageLiveProbe.put(x, y, z, b[6], b[7]);
@@ -233,6 +255,15 @@ public class VillageFightProbe {
           case "sneak": player.b(p[3].equals("on")); break; // Entity.setSneaking (flag 1)
           case "adventure": ServerPlayerProbe.gameType((ServerPlayerProbe.PM) player, p[3].equals("on") ? ahk.d : ahk.b); break; // batch 39: "t creative 7 on|off" the probe player's PlayerCapabilities.disableDamage and isCreativeMode (the player has the index types.length)
           case "zvillager": ((yq) ents[Integer.parseInt(p[2])]).j(true); break;
+          // batch 98 (mobrec98): villager-only ops. day on|off (World.isDaytime), babyv k (EntityAgeable.setGrowingAge(-24000)), agev k n, trade k (EntityVillager.setCustomer(the probe player) then getRecipes: offers on first
+          // access), untrade k (setCustomer(null)), buy k (useRecipe on the last offer: the trade that arms the restock timer), door x z meta (a wooden door placed mid-run).
+          case "day": VillageLiveProbe.W.day = p[2].equals("on"); break;
+          case "babyv": ((yv) ents[Integer.parseInt(p[2])]).c(-24000); break;
+          case "agev": ((yv) ents[Integer.parseInt(p[2])]).c(Integer.parseInt(p[3])); break;
+          case "trade": { yv v = (yv) ents[Integer.parseInt(p[2])]; v.a_(player); v.b(player); break; }
+          case "untrade": ((yv) ents[Integer.parseInt(p[2])]).a_((yz) null); break;
+          case "buy": { yv v = (yv) ents[Integer.parseInt(p[2])]; ago list = v.b(player); v.a((agn) list.get(list.size() - 1)); break; }
+          case "door": VillageLiveProbe.door(Integer.parseInt(p[2]), 0, Integer.parseInt(p[3]), Integer.parseInt(p[4])); break;
           case "baby": ((yq) ents[Integer.parseInt(p[2])]).i(true); break; // batch 87: "t baby k" EntityZombie.setChild(true): data watcher 12, the baby speed boost modifier (+0.5, operation 1), the half-size box // batch 85: "t zvillager k" EntityZombie.setVillager(true)
           case "convert": MobMoveProbe.method(yq.class, "a", int.class).invoke(ents[Integer.parseInt(p[2])], Integer.parseInt(p[3])); break; // batch 85: "t convert k ticks" EntityZombie.startConversion (yq.a(int)): the timer, Weakness off, Strength on
           case "fire": ((sa) ents[Integer.parseInt(p[2])]).e(Integer.parseInt(p[3])); break; // batch 85: "t fire k seconds" Entity.setFire
@@ -393,6 +424,15 @@ public class VillageFightProbe {
           for (int k = 0; k < n; k++) if (ents[k] instanceof wg) { row.append(firstFlag ? "" : ",").append(((wg) ents[k]).bZ() ? 1 : 0); firstFlag = false; } // IsChickenJockey of the chickens the record starts with
           row.append("]");
         }
+      }
+      if (name.startsWith("b98-")) { // batch 98: the villagers' own state, the starting ones then the ones born during the run
+        row.append(",[");
+        boolean firstV = true;
+        List<yv> vs = new ArrayList<>();
+        for (int k = 0; k < n; k++) if (ents[k] instanceof yv) vs.add((yv) ents[k]);
+        for (sv m : extraMobs) if (m instanceof yv) vs.add((yv) m);
+        for (yv v : vs) { row.append(firstV ? "" : ",").append(villagerState(v)); firstV = false; }
+        row.append("]");
       }
       row.append("]");
       rows.add(row.toString());
@@ -1012,6 +1052,40 @@ public class VillageFightProbe {
     blocks = ring3j;
     for (int sd : new int[] {47, 2231, 1713, 972, 1003}) scenario("b90-jockey-ring-3-" + sd, sd, 400, "VVG", jockeyArena, new String[] {"3 spawnspider 58.5 60.5 0 90"});
     blocks = new int[][] {};
+    difficulty = 2;
+    // Batch 98 mobrec98 (names b98-*, the b90 layout plus a row element 8: every villager's state, see villagerState). Villager-only runs in the village of the arena: a door at (50, 0, 50), a roof over x 40 to 49
+    // (the inside of the village), the probe player a plain double far away unless the record talks to a villager. Day and night are switched by the `day` op (the arena starts at night).
+    local = 0; eggTimer = 6000; bright = 15; patches = new int[][] {};
+    double[][] pair98 = {{58.5, 52.5}, {60.5, 56.5}, {30.5, 30.5}};
+    double[][] trio98 = {{58.5, 52.5}, {60.5, 56.5}, {55.5, 60.5}, {30.5, 30.5}};
+    for (int sd : new int[] {9801, 9802, 9803}) scenario("b98-night-indoors-" + sd, sd, 500, "VV", pair98, new String[] {});
+    for (int sd : new int[] {9804, 9805}) scenario("b98-day-wander-" + sd, sd, 500, "VVV", trio98, new String[] {"0 day on"});
+    for (int sd : new int[] {9806, 9807}) scenario("b98-dusk-" + sd, sd, 700, "VV", pair98, new String[] {"0 day on", "250 day off"});
+    double[][] doorSide98 = {{52.5, 51.5}, {51.5, 49.5}, {30.5, 30.5}};
+    for (int sd : new int[] {9808, 9809}) scenario("b98-door-walk-" + sd, sd, 400, "VV", doorSide98, new String[] {"0 day on"});
+    // zombies: a night chase98 (the AvoidEntity task, then MoveIndoors) and a day chase98
+    double[][] chase98 = {{52.5, 52.5}, {54.5, 52.5}, {64.5, 51.5}, {30.5, 30.5}};
+    scenario("b98-flee-night-9810", 9810, 300, "VVZ", chase98, new String[] {});
+    scenario("b98-flee-day-9811", 9811, 300, "VVZ", chase98, new String[] {"0 day on"});
+    // breeding: a village of 12 doors (x 50, z 50 + 3 i), two adults, then two adults and a third; the births, the 300-tick run, the 6000-tick parent age
+    java.util.ArrayList<int[]> doors1298 = new java.util.ArrayList<>();
+    for (int i = 1; i < 12; i++) { doors1298.add(new int[] {50, 0, 50 + 3 * i, 50, 0, 50 + 3 * i, 64, 0}); doors1298.add(new int[] {50, 1, 50 + 3 * i, 50, 1, 50 + 3 * i, 64, 8}); }
+    blocks = doors1298.toArray(new int[0][]);
+    for (int sd : new int[] {9812, 9813, 9814, 9815, 9816, 9817}) scenario("b98-breed-" + sd, sd, 1800, "VV", pair98, new String[] {"0 day on"});
+    scenario("b98-breed-birth-9902", 9902, 2400, "VV", pair98, new String[] {"0 day on"});
+    for (int sd : new int[] {9818, 9819}) scenario("b98-breed-three-" + sd, sd, 1800, "VVV", trio98, new String[] {"0 day on"});
+    for (int sd : new int[] {9820, 9821}) scenario("b98-child-play-" + sd, sd, 700, "VVV", trio98, new String[] {"0 day on", "0 babyv 2"});
+    for (int sd : new int[] {9822}) scenario("b98-child-night-" + sd, sd, 500, "VVV", trio98, new String[] {"0 babyv 2"});
+    blocks = new int[][] {};
+    // trading: the customer stands still and looks at the player (EntityAITradePlayer, EntityAILookAtTradePlayer), released when the player walks away or the screen closes; then a trade, the 40-tick timer,
+    // the restock (max uses, one more offer, Regeneration) and the +1 reputation of the remembered buyer
+    double[][] talk98 = {{52.5, 54.5}, {49.5, 54.5}};
+    for (int sd : new int[] {9830, 9831}) scenario("b98-trade-look-" + sd, sd, 260, "V", talk98, new String[] {"0 day on", "5 trade 0", "100 untrade 0"});
+    scenario("b98-trade-walk-away-9832", 9832, 260, "V", talk98, new String[] {"0 day on", "5 trade 0", "60 walk 1 0.2 0"});
+    for (int sd : new int[] {9833, 9834, 9835}) scenario("b98-trade-restock-" + sd, sd, 300, "V", talk98, new String[] {"0 day on", "5 trade 0", "10 buy 0", "15 untrade 0"});
+    scenario("b98-trade-restock-open-9836", 9836, 300, "V", talk98, new String[] {"0 day on", "5 trade 0", "10 buy 0", "60 untrade 0"}); // closed after the timer would have run: it waits for the screen
+    scenario("b98-trade-night-9837", 9837, 300, "VV", new double[][] {{52.5, 54.5}, {56.5, 56.5}, {49.5, 54.5}}, new String[] {"5 trade 0", "10 buy 0", "40 untrade 0"});
+    scenario("b98-trade-child-9838", 9838, 120, "V", talk98, new String[] {"0 babyv 0", "5 trade 0"}); // a trade call on a child (the port's interact refuses it; setCustomer itself does not)
     difficulty = 2;
   }
 }

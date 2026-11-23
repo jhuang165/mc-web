@@ -12,6 +12,7 @@ import { mobTargets } from "./projectiles.js";
 import { candidateOrder } from "./candidate-order.js";
 import { reinforcementBase } from "./difficulty.js";
 import { setPathNodeCap } from "./pathfinding.js";
+import { villagerOffers, villagerUseRecipe, villagerClearCustomer } from "./villager.js"; // b98 mobrec98
 
 // Replays one VillageFightProbe record (public/research/village-fight-reference.json) through the port's ticked mobs: the same village, the same
 // positions, entity Randoms seeded like the probe's (seed * 10 + index) and logging their draws as the probe's Log does (nextInt(bound) "i<bound>", nextFloat
@@ -52,6 +53,9 @@ export const fightReference86 = JSON.parse(readFileSync(new URL("../public/resea
 // killed by a baby zombie (script op `baby k`: EntityZombie.setChild(true)) and by a zombie villager, on Easy, Normal and Hard).
 export const fightReference87 = JSON.parse(readFileSync(new URL("../public/research/village-fight-b87-reference.json", import.meta.url)));
 // Batch 90: village-fight-b90-reference.json (a skeleton jockey on a spider climbing a stone ring; mathRandom records the knockback nudge of the rider's own arrow).
+// Batch 98: village-fight-b98-reference.json (villager-only runs: night and day wandering, doors, dusk, fleeing, breeding, a child at play, trading with the look and the restock; row element 8 holds every villager's state).
+const reference98Parts = ["", "-trade", "-breed1", "-breed2", "-breed3"].map((s) => JSON.parse(readFileSync(new URL(`../public/research/village-fight-b98${s}-reference.json`, import.meta.url))));
+export const fightReference98 = { ...reference98Parts[0], records: reference98Parts.flatMap((p) => p.records) }; // the files split by size (< 2 MB each); see tools/verify-villagers98.mjs
 export const fightReference90 = JSON.parse(readFileSync(new URL("../public/research/village-fight-b90-reference.json", import.meta.url)));
 class LogRandom extends JavaRandom {
   log = [];
@@ -84,6 +88,12 @@ function plain(blocks = []) {
     set: () => {}, put: (x, y, z, b, m) => cells.set(key(x, y, z), [b, m]), solid: (x, y, z) => (cells.has(key(x, y, z)) ? ![0, WATER, LAVA, WEB].includes(cells.get(key(x, y, z))[0]) : y < 0), surface: () => 1, spawn: () => ({ x: 5.5, y: 0, z: 5.5 }) };
 }
 
+// b98: one villager as VillageFightProbe.villagerState lists it: [growingAge, mating, playing, customer, timeUntilReset, needsInit, riches, offers (-1 none), uses, max uses, Regeneration ticks, randomTickDivider]
+function villagerRow(ew, e) {
+  const o = e.offers;
+  return [e.growingAge, e.mating ? 1 : 0, e.playing ? 1 : 0, e.customer ? 1 : 0, e.timeUntilReset ?? 0, e.needsInit ? 1 : 0, e.riches ?? 0, o ? o.length : -1, o ? o.map((x) => x.uses) : [], o ? o.map((x) => x.maxUses) : [],
+    (e.effects ?? []).find((x) => x.id === 10)?.duration ?? 0, ew.ai.brain(e).randomTickDivider];
+}
 export function replayFight(r, hooks = {}) {
   const was = setPathNodeCap(Infinity); // natively a path search has no node cap (the live port stops at 30000 expanded points)
   const flat = candidateOrder.flat; candidateOrder.flat = true; // b72 lead: VillagerProbe's world double keeps one flat entity list (World.entities), not chunk lists (candidate-order.js)
@@ -96,7 +106,9 @@ function replayFightUncapped(r, hooks) {
   ew.difficulty = difficulty;
   if (r.local) ew.localDifficulty = () => r.local; // the probe's World.func_147462_b answers a constant (record field `local`, 0 when absent)
   ew.worldRandom = new JavaRandom(r.seed);
-  ew.isDaytime = () => false;
+  const shuffleRandom = new JavaRandom(BigInt(987654321 + r.seed * 7919)); // b98: Collections.shuffle's shared Random, reseeded per record as the probe does
+  let day = false; // b98: the `day` script op (the arena starts at night)
+  ew.isDaytime = () => day;
   // batch 38: the probe's getLightBrightness answers the record's `bright` level (13 + dark patches, 3 at night, 15 by day); older records are 15 everywhere
   ew.brightnessLevel = r.bright === undefined ? () => 15 : (x, y, z) => { for (const [x0, z0, x1, z1, level] of r.patches ?? []) if (x >= x0 && z >= z0 && x <= x1 && z <= z1) return level; return r.bright; };
   // natively the probe's World.getLightBrightness is 1.0 whatever k() answers
@@ -258,6 +270,16 @@ function replayFightUncapped(r, hooks) {
         e.growingAge = -1;
         e.spawnBox = anchoredShrunkBox(e, w, h, w * 0.5, h * 0.5); e.spawnBoxTick = (ew.worldTicks ?? -1) + 1; e.anchorBox = e.spawnBox.slice();
       }
+      else if (p[1] === "day") day = p[2] === "on"; // b98: World.isDaytime
+      else if (p[1] === "babyv" || p[1] === "agev") { // b98: EntityAgeable.setGrowingAge: setScaleForAge resizes the box from its minimum corner
+        const e = ents[Number(p[2])], was = e.growingAge, w = ENTITY_TYPES[e.type].width, h = ENTITY_TYPES[e.type].height;
+        e.growingAge = p[1] === "babyv" ? -24000 : Number(p[3]);
+        if (was >= 0 && e.growingAge < 0) { e.spawnBox = anchoredShrunkBox(e, w, h, w * 0.5, h * 0.5); e.spawnBoxTick = (ew.worldTicks ?? -1) + 1; e.anchorBox = e.spawnBox.slice(); } // Entity.setSize keeps the minimum corner (as the b87 baby zombie)
+      }
+      else if (p[1] === "trade") { const e = ents[Number(p[2])]; e.customer = true; e.customerName = "probe"; ew.ai.brain(e).shuffleRandom = shuffleRandom; villagerOffers(ew.ai.brain(e)); } // b98: setCustomer(player), getRecipes
+      else if (p[1] === "untrade") villagerClearCustomer(ents[Number(p[2])]);
+      else if (p[1] === "buy") { const m = ew.ai.brain(ents[Number(p[2])]), offers = villagerOffers(m); villagerUseRecipe(m, offers[offers.length - 1]); }
+      else if (p[1] === "door") { ew.world.put(Number(p[2]), 0, Number(p[3]), WOODEN_DOOR, Number(p[4])); ew.world.put(Number(p[2]), 1, Number(p[3]), WOODEN_DOOR, 8); }
       else if (p[1] === "fire") setMobFire(ents[Number(p[2])], Number(p[3])); // Entity.setFire
       else if (p[1] === "convert") ew.startZombieConversion(ents[Number(p[2])], Number(p[3]));
       else if (p[1] === "equip") equip(Number(p[2]), p[3] === "0" ? 0 : p[3]);
@@ -291,8 +313,9 @@ function replayFightUncapped(r, hooks) {
     states[states.length - 1].mobs = extraMobs.map((m, k) => [m.x, m.y, m.z, gone.has(m) ? gone.get(m) : m.removedHealth ?? m.health, idx(legacyRows && LEGACY.has(m.type) ? ew.silverfishState(m).target : ew.ai.brain(m).attackTarget), (m.revenge ? (revengeOf(m) === "player" ? n : index(revengeOf(m))) : -1), mobLogs[k].log.slice()]);
     states[states.length - 1].jockeys = ents.flatMap((e) => (e.type === "chicken" ? [e.chickenJockey ? 1 : 0] : []));
     states[states.length - 1].extras = extra.map((z, k) => [z.x, z.y, z.z, gone.has(z) ? gone.get(z) : z.removedHealth ?? z.health, idx(ew.ai.brain(z).attackTarget), (z.revenge ? (revengeOf(z) === "player" ? n : index(revengeOf(z))) : -1), extraLogs[k].log.slice()]);
+    if (r.name?.startsWith("b98-")) states[states.length - 1].villagers = [...ents, ...extraMobs].filter((e) => e.type === "villager").map((e) => villagerRow(ew, e));
     hooks.onTick?.(t, ew, ents);
-    rows.push([agg, village.playerReputation(name === "alt" ? "Player" : "Player")]);
+    rows.push([agg, village.playerReputation(name === "alt" ? "Player" : "Player"), village.playerReputation("probe")]);
   }
   return { ew, mathCalls, extraMobs, spawnLog, extraChickens, hits, rows, states, conversions: made.filter((m) => m[1] === "convert").map(([t, , x, y, z]) => [t, x, y, z]), made, extra, playerDamage, shotLog, shots: mine };
 }
@@ -321,6 +344,7 @@ export function firstDivergence(r, got) {
       const kinds = (r.mobs ?? []).map((m) => m[1]);
       if (JSON.stringify(view(r.rows[t][7], kinds)) !== JSON.stringify(view(got.states[t].mobs, kinds))) return [t, "extra mobs", r.rows[t][7], got.states[t].mobs];
     }
+    if (r.rows[t][8] !== undefined && JSON.stringify(r.rows[t][8]) !== JSON.stringify(got.states[t].villagers)) return [t, "villagers", r.rows[t][8], got.states[t].villagers]; // b98
     if (r.poison && r.poison[t] !== got.states[t].poison) return [t, "poison", r.poison[t], got.states[t].poison];
     if (r.mathRandom && JSON.stringify(r.mathRandom.filter((m) => m[0] === t).map((m) => m[1])) !== JSON.stringify(got.mathCalls.filter((m) => m[0] === t).map((m) => m[1]))) return [t, "Math.random calls", r.mathRandom.filter((m) => m[0] === t).length, got.mathCalls.filter((m) => m[0] === t).length];
     const before = t ? r.rows[t - 1][0][n][3] : 1000;
