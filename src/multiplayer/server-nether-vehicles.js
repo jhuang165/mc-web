@@ -39,7 +39,7 @@ export function pinOverworldVehicles(sim, dims) {
   const dismount = v.dismount.bind(v);
   const logout = v.horses.logout.bind(v.horses);
   v.horses.logout = p => { const other = p?.dimension ? dims.vehiclesOf(p) : null; return other && other !== v ? other.horses.logout(p) : logout(p); }; // b78 mphorse78: a Nether / End rider's horse is that dimension's
-  v.dismount = p => { const other = p?.dimension === NETHER ? dims.nether?.vehicles : p?.dimension ? dims.end?.n?.vehicles : null; return other ? other.dismount(p) : dismount(p); }; // b63 lead: the End's vehicles too
+  v.dismount = (p, native) => { const other = p?.dimension === NETHER ? dims.nether?.vehicles : p?.dimension ? dims.end?.n?.vehicles : null; return other ? other.dismount(p, native) : dismount(p, native); }; // b63 lead: the End's vehicles too
 }
 
 // Inside the Nether's swap, after n.mobs and n.dispense exist (server-nether.js buildNetherInside). `host` is the same kind of view the Nether's ServerMobs has.

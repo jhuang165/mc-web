@@ -62,6 +62,7 @@ export const CLIENTBOUND = {
   tick: 24, // S18PacketEntityTeleport: each tick's absolute player poses (with the bundled S03, S22/S23 and weather)
   healthHurt: 26, useDone: 26, mobStatus: 26, // S19PacketEntityStatus (2 hurt, 3 dead, 9 item use finished)
   attach: 27, // S1BPacketEntityAttach
+  dismount: 8, // b98 horse98: S08, S1B, S08 of EntityPlayerMP.mountEntity(null) (CLIENT_PACKETS)
   effect: 29, healthEffect: 29, // S1DPacketEntityEffect
   healthEffectEnd: 30, // S1EPacketRemoveEntityEffect
   playerOp: 31, // S1FPacketSetExperience (addExperience / addLevels)
@@ -346,6 +347,7 @@ const CLIENT_PACKETS = {
   // player (the tracker sends nobody their own); the cells; the S21 resends (partial, the changed sections)
   tick: (m, ctx) => { const t = ctx?.tick ?? m.tick; return [...(Number.isInteger(t) && t % 20 === 0 ? [[3, C[3]]] : []), ...peerRemovals(m, ctx), ...list(m.players).filter((p) => !p?.far && (ctx?.self === undefined || p?.id !== ctx.self)).flatMap(playerPackets), ...list(m.players).filter((p) => ctx?.self !== undefined && p?.id === ctx.self).flatMap((p) => list(p.pw)),
     ...cellRecords(m.changes), ...objectRecords(m.itrack, ctx), ...list(m.chunks).map((c) => [33, s21(c, ctx, false, Number.isInteger(c?.mask) ? c.mask : 0xffff)])]; },
+  dismount: () => [[8, C[8]], [27, C[27]], [8, C[8]]], // b98 horse98: yz.a(sa)'s S08 (setPlayerLocation), hx's S1B(0, player, -1), then mw.a(sa)'s own S08
   blocks: (m) => cellRecords(m.changes),
   chunkUnload: (m, ctx) => list(m.columns).map((c) => [33, unload(c, ctx)]),
   chunkBulk: (m, ctx) => bulks(m.columns, ctx),
