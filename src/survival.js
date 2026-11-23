@@ -1,3 +1,4 @@
+import { rawFloat, jsonFloat } from "./player-nbt.js"; // b98 entnbt98
 import {miningState,blockWear} from "./mining.js";
 import { BLOCKS, HOTBAR, WOOL, WOOL_COLORS, DYE, DYES, RED_FLOWER, RED_FLOWERS, YELLOW_FLOWER, SAPLING, WEB, LADDER, SNOW_LAYER, WATER, LAVA, CARROTS, POTATOES, CACTUS, REEDS, TNT, FENCE, RAIL, MOB_SPAWNER, FIRE } from "./world.js";
 import { SPAWNER_HARDNESS, spawnerXp } from "./spawner-block.js";
@@ -630,12 +631,13 @@ export class Survival {
   constructor(data = {}, mode = "survival") {
     data = data && typeof data === "object" ? data : {};
     this.mode = gameModeOf(mode);
-    this.health = clamp(data.health, 0, 100, 20);
+    const loadedHealth = rawFloat(data.health, 20);
+    this.health = Number.isNaN(loadedHealth) ? NaN : clamp(Math.max(0, Math.min(100, loadedHealth)), 0, 100, 20); // b98 entnbt98 (executed): a NaN HealF is kept (setHealth's clamp_float passes NaN through)
     // FoodStats.readNBT keeps foodLevel, foodTickTimer, foodSaturationLevel and foodExhaustionLevel as loaded, whatever their range (b97 entnbt97, executed:
     // -5, 500, 99, -3 and 40 all write back unchanged); only the int fields' 32 bits and a non-finite value are bounded here.
     this.food = Math.floor(clamp(data.food, -2147483648, 2147483647, 20));
-    this.saturation = clamp(Math.fround(data.saturation), -3.4028234663852886e38, 3.4028234663852886e38, 5);
-    this.exhaustion = clamp(Math.fround(data.exhaustion), -3.4028234663852886e38, 3.4028234663852886e38, 0);
+    this.saturation = Math.fround(rawFloat(data.saturation, 5)); // b98 entnbt98: NaN and infinity are kept as loaded too (executed food-sat-nan)
+    this.exhaustion = Math.fround(rawFloat(data.exhaustion, 0));
     this.timer = Math.floor(clamp(data.timer, -2147483648, 2147483647, 0));
     this.air = Math.floor(clamp(data.air, -20, 300, 300));
     this.time = Math.floor(clamp(data.time, 0, Number.MAX_SAFE_INTEGER, 0));
@@ -1081,10 +1083,10 @@ export class Survival {
   serialize() {
     const { health, food, saturation, exhaustion, timer, air, time, fire, furnaces, chests, dispensers } = this;
     return {
-      health,
+      health: jsonFloat(health),
       food,
-      saturation,
-      exhaustion,
+      saturation: jsonFloat(saturation),
+      exhaustion: jsonFloat(exhaustion),
       timer,
       air,
       time,

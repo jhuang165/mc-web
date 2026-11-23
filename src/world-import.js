@@ -2,6 +2,7 @@ import { readItemTags } from './item-tags.js';
 import { isSupportedType } from "./cart-variants.js";
 import { readPlayerPortalState } from "./dimensions.js";
 import { Weather } from "./weather.js";
+import { restoredMotion } from "./player-nbt.js";
 // Keep the runtime payload shared between local saves and imported exports.
 // Each subsystem validates its own payload on launch. Identity and the validated
 // world/player fields are built by the caller rather than copied from the file.
@@ -17,6 +18,8 @@ const RUNTIME_FIELDS = [
   "gameRules", "bed", "stats", "achievements", "mapFeatures", "hardcore", "totalTime",
   // Player abilities.flying (Creative only), a forced spawn (/spawnpoint) and a bed to free after a saved Sleeping player wakes.
   "flying", "playerSpawn", "wakeFromBed",
+  // b98 entnbt98: region-import.js puts the loaded player's Motion in `playerState` and abilities.flySpeed/walkSpeed in `abilitySpeeds`; both were dropped here before.
+  "playerState", "abilitySpeeds",
   // Live redstone save (redstone-live.js): pending scheduled ticks, lit repeaters, comparator signals, moving pistons (sanitised below).
   "redstone",
 ];
@@ -59,6 +62,19 @@ function sanitizeForeignTicks(v) {
     .map((e) => (e.air === true ? { i: 0, x: e.x, y: e.y, z: e.z, p: int(e.p) ? e.p : 0, air: true } : { i: e.i, x: e.x, y: e.y, z: e.z, t: e.t, p: int(e.p) ? e.p : 0 }));
   return entries.length ? { version: 1, time: int(v.time) && v.time >= 0 ? v.time : 0, entries } : undefined;
 }
+// region-export.js levelNbt reads these: onGround, fallDistance, hurtTime, deathTime, sprinting and the server copy's Motion (null = NaN, player-nbt.js restoredMotion).
+function sanitizePlayerState(v) {
+  if (!v || typeof v !== "object") return undefined;
+  const out = {};
+  if (typeof v.onGround === "boolean") out.onGround = v.onGround;
+  if (finite(v.fallDistance)) out.fallDistance = v.fallDistance;
+  if (int(v.hurtTime)) out.hurtTime = v.hurtTime;
+  if (int(v.deathTime)) out.deathTime = v.deathTime;
+  if (typeof v.sprinting === "boolean") out.sprinting = v.sprinting;
+  const motion = restoredMotion(v.motion);
+  if (motion) out.motion = v.motion;
+  return out;
+}
 const SANITIZE = {
   foreignTicks: sanitizeForeignTicks,
   worldRandom: simulationStream, simulation: simulationStream,
@@ -92,6 +108,7 @@ const SANITIZE = {
   mapFeatures: (v) => (typeof v === "boolean" ? v : undefined),
   hardcore: (v) => (typeof v === "boolean" ? v : undefined),
   flying: (v) => (v === true ? true : undefined),
+  playerState: sanitizePlayerState, abilitySpeeds: (v) => (v && typeof v === "object" && typeof v.fly === "number" && typeof v.walk === "number" ? { fly: v.fly, walk: v.walk } : undefined),
   playerSpawn: (v) => (triple(v) ? [...v] : undefined),
   wakeFromBed: (v) => (triple(v) ? [...v] : undefined),
   totalTime: (v) => (Number.isSafeInteger(v) && v >= 0 ? v : undefined),

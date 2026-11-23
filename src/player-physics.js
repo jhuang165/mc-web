@@ -4,7 +4,7 @@ import { moveEntity, pushOutOfBlocks } from './entities.js';
 import { entityWaterBox, waterAcceleration, inLava, liquidInBox } from './fluids.js';
 import { isOnLadder, ladderClamp, LADDER_CLIMB } from './ladders.js';
 import { SNEAK_YSIZE, moveWeights, groundAccel, airAccel, LIQUID_ACCEL, JUMP_MOTION,
-  jumpExhaustion, sprintJumpPush, FLY_SPEED, FLY_Y_DRAG, flyVertical } from './player-movement.js';
+  jumpExhaustion, sprintJumpPush, flySpeed, FLY_Y_DRAG, flyVertical } from './player-movement.js';
 
 // One player movement step, excluding subsequent survival, world and visual work.
 // Position and velocity are mutable {x,y,z}; motion and survival own their state.
@@ -96,7 +96,7 @@ export function movePlayer(state, controls, toast = () => {}) {
   const accel = swimming
     ? LIQUID_ACCEL
     : flying
-      ? FLY_SPEED
+      ? flySpeed()
       : onGroundMove
         ? groundAccel(sprint, friction, survival.effects?.moveSpeedMultiplier?.() ?? 1)
         : airAccel(sprint);

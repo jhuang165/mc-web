@@ -12,9 +12,13 @@ import { NETHER_SMELT_EXPERIENCE } from "./nether-blocks.js";
 import { keptBaseRestore } from "./entity-base-nbt.js"; import { ensureUuid } from "./entity-uuid.js"; // b88 entnbt88
 export const levelCost = level => level >= 30 ? 62+(level-30)*7 : level >= 15 ? 17+(level-15)*3 : 17;
 export class Experience {
- constructor(data={}){data=data&&typeof data==='object'?data:{};this.total=Number.isFinite(data.total)?Math.max(0,Math.min(1000000,Math.floor(data.total))):0;this.score=Number.isFinite(data.score)?Math.max(-2147483648,Math.min(2147483647,Math.floor(data.score))):this.total;this.update();if(Number.isInteger(data.level)&&data.level>=0&&data.level<=1000000&&Number.isFinite(data.progress)&&data.progress>=0&&data.progress<1){this.level=data.level;this.progress=Math.fround(data.progress);this.points=Math.floor(this.progress*levelCost(this.level));this.levelState=true;}}
- update(){let points=this.total;this.level=0;while(points>=levelCost(this.level)){points-=levelCost(this.level++);}this.points=points;this.progress=points/levelCost(this.level);}
- add(n){n=Number.isFinite(n)?Math.max(0,Math.floor(n)):0;this.total=Math.min(1000000,this.total+n);this.score=Math.min(2147483647,this.score+n);if(!this.levelState){this.update();return;}const f=Math.fround;this.progress=f(this.progress+f(n/levelCost(this.level)));while(this.progress>=1){this.progress=f(f(this.progress-1)*levelCost(this.level));this.level++;this.progress=f(this.progress/levelCost(this.level));}this.points=Math.floor(this.progress*levelCost(this.level));}
+ constructor(data={}){data=data&&typeof data==='object'?data:{};const i32=v=>Math.max(-2147483648,Math.min(2147483647,Math.trunc(v)));this.total=Number.isFinite(data.total)?i32(data.total):0;this.score=Number.isFinite(data.score)?Math.max(-2147483648,Math.min(2147483647,Math.floor(data.score))):Math.max(0,this.total);this.update();
+  // b98 entnbt98 (executed, entnbt97-reference.json xp rows): EntityPlayer.readEntityFromNBT keeps XpLevel and XpTotal as raw ints and XpP as a raw float (negative, above 1, NaN, infinite), and writeEntityToNBT writes them back; only a record that carries level and progress keeps them apart from the total
+  const bar=Experience.readProgress(data.progress);if(Number.isInteger(data.level)&&data.level>=-2147483648&&data.level<=2147483647&&bar!==undefined){this.level=data.level;this.progress=bar;this.points=Math.floor(this.progress*levelCost(this.level));this.levelState=true;}}
+ // JSON has no NaN or infinity: serialize() writes them as strings.
+ static readProgress(v){if(typeof v==='number')return Math.fround(v);if(v==='NaN'||v===null)return NaN;if(v==='Infinity')return Infinity;if(v==='-Infinity')return -Infinity;return undefined;}
+ update(){let points=Math.max(0,this.total);this.level=0;while(points>=levelCost(this.level)){points-=levelCost(this.level++);}this.points=points;this.progress=points/levelCost(this.level);}
+ add(n){n=Number.isFinite(n)?Math.max(0,Math.floor(n)):0;this.total=(this.total+n)|0;this.score=Math.min(2147483647,this.score+n);if(!this.levelState){this.update();return;}const f=Math.fround;this.progress=f(this.progress+f(n/levelCost(this.level)));for(let guard=0;this.progress>=1&&Number.isFinite(this.progress)&&guard<1000000;guard++){this.progress=f(f(this.progress-1)*levelCost(this.level));this.level++;this.progress=f(this.progress/levelCost(this.level));}this.points=Math.floor(this.progress*levelCost(this.level));}
  // EntityPlayer.addExperienceLevel: paying an anvil cost changes the level, retaining
  // experienceTotal and the fractional bar. Those fields no longer derive from total.
  addLevels(n){if(!Number.isInteger(n))return;this.level+=n;if(this.level<0){this.level=0;this.progress=0;this.total=0;}this.levelState=true;this.points=Math.floor(this.progress*levelCost(this.level));}
@@ -23,7 +27,7 @@ export class Experience {
  // (field_82249_h, not saved) is within 100 ticks of ticksExisted. Returns the volume or 0.
  levelUp(oldLevel,ticks){const f=Math.fround;for(let l=oldLevel+1;l<=this.level;l++)if(l%5===0&&f(this.lastLevelUp||0)<f(ticks)-100){this.lastLevelUp=ticks;return f(f(l>30?1:f(l/30))*f(0.75));}return 0;}
  death(){const dropped=Math.min(this.level*7,100);this.total=0;this.levelState=false;this.update();return dropped;}
- serialize(){return{total:this.total,score:this.score,...(this.levelState?{level:this.level,progress:this.progress}:{})};}
+ serialize(){return{total:this.total,score:this.score,...(this.levelState?{level:this.level,progress:Number.isFinite(this.progress)?this.progress:String(this.progress)}:{})};}
 }
 export const splitExperience=n=>{const out=[];for(const size of [2477,1237,617,307,149,73,37,17,7,3,1])while(n>=size){out.push(size);n-=size;}return out;};
 export function oreExperience(block,random=Math.random){return block===15?Math.floor(random()*3):block===17?3+Math.floor(random()*5):0;}

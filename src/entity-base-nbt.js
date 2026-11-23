@@ -67,6 +67,7 @@ export function keptBaseSave(e) {
   if (Number.isInteger(e.air)) o.air = e.air;
   if (Number.isInteger(e.portalCooldown) && e.portalCooldown !== 0) o.portalCooldown = e.portalCooldown;
   if (Number.isInteger(e.nbtDimension)) o.nbtDimension = e.nbtDimension;
+  if (e.invulnerable === true) o.invulnerable = true; // b98 entnbt98: Entity.invulnerable (sa.i) is read and written for every kind, projectiles included (entnbt98-reference.json)
   return o;
 }
 export function keptBaseRestore(d) {
@@ -76,6 +77,7 @@ export function keptBaseRestore(d) {
   if (isUuid(d.uuid)) o.uuid = d.uuid.toLowerCase();
   if (Number.isInteger(d.portalCooldown) && d.portalCooldown !== 0) o.portalCooldown = int(d.portalCooldown);
   if (Number.isInteger(d.nbtDimension)) o.nbtDimension = int(d.nbtDimension);
+  if (d.invulnerable === true) o.invulnerable = true;
   return o;
 }
 // The countdown of Entity.onEntityUpdate for the kinds that run it without the port's portal walk (projectiles).
@@ -124,5 +126,6 @@ export function mobBaseOf(tag) {
 export function keptBaseImport(tag) {
   const b = keptBaseOf(tag), o = { ...(b.air === 300 ? {} : { air: b.air }), ...uuidFields(tag), nbtDimension: b.nbtDimension };
   if (b.portalCooldown !== 0) o.portalCooldown = b.portalCooldown;
+  if (nbtGet(tag, "Invulnerable", NBT.BYTE, 0) !== 0) o.invulnerable = true;
   return o;
 }
