@@ -21,9 +21,17 @@ export class InertDrops {
   }
 }
 const list = (items) => t(NBT.LIST, { elementType: NBT.DOUBLE, items });
-/** Entity.writeToNBT of the inert item: id "Item", Pos, Item {id 0, Count, Damage 0}, Age, PickupDelay. */
+/** The `Item` compound of the inert drop: {id 0, Count, Damage 0} (a Map, as region-export's stackNbt returns). */
+export function inertItemNbt(d) { return new Map([['id', t(NBT.SHORT, 0)], ['Count', t(NBT.BYTE, d.count | 0)], ['Damage', t(NBT.SHORT, 0)]]); }
+/** Entity.writeToNBT of the inert item: id "Item", Pos, Health, Age, Item {id 0, Count, Damage 0}. 1.7.10 (xk.b, bytecode-read) writes no PickupDelay. */
 export function inertDropNbt(d, ox = 0, oz = 0) {
-  return new Map([['id', t(NBT.STRING, 'Item')], ['Pos', list([d.x + ox, d.y, d.z + oz])],
-    ['Item', t(NBT.COMPOUND, new Map([['id', t(NBT.SHORT, 0)], ['Count', t(NBT.BYTE, d.count | 0)], ['Damage', t(NBT.SHORT, 0)]]))],
-    ['Age', t(NBT.SHORT, d.age)], ['PickupDelay', t(NBT.SHORT, d.pickupDelay)]]);
+  return new Map([['id', t(NBT.STRING, 'Item')], ['Pos', list([d.x + ox, d.y, d.z + oz])], ['Health', t(NBT.SHORT, 5)],
+    ['Item', t(NBT.COMPOUND, inertItemNbt(d))], ['Age', t(NBT.SHORT, d.age)]]);
 }
+/** A saved `Item` entity whose stack has id 0 (EntityItem.readEntityFromNBT keeps it; the pickup delay is not saved, so it restarts at 0): the port's inert record, or null. */
+export function inertFromNbt(x, y, z, itemId, count, age) {
+  if (itemId !== 0 || !Number.isFinite(x + y + z) || age >= INERT_DESPAWN_AGE) return null;
+  return { kind: 'inert', x, y, z, count, age, pickupDelay: 0 };
+}
+/** The music-tile save list carries the inert drops as `{ kind: 'inert', ... }` records, so every store that keeps `musicTiles` keeps them. */
+export const inertRecords = (inert) => inert.save().map((d) => ({ kind: 'inert', ...d }));
