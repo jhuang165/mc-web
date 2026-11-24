@@ -60,6 +60,7 @@ export class DedicatedClient {
   // falls behind or holds an unbounded queue. Chat keeps the latest 100 lines.
   buffer(message) {
     if (message.type === 'dragonCredits') { this.messages.push(message); return; } // b64 mpdragon: S2B state 4
+    if (message.type === 'dismount') { this.flushPending(); this.dismountQueued = true; this.messages.push(message); return; } // b100 horse100: S08/S1B/S08 keep their place after the ticks that came before them
     if (message.type === 'dimRespawn') { this.messages = this.messages.filter(m => m.type !== 'chunkBulk' && m.type !== 'chunkUnload'); this.messages.push(message); this.pending = null; return; } /* b72 mpstream72: columns of the old world are void */ // b61 mpnether: the world swap keeps its place in the queue
     if (SLEEP_TYPES.has(message.type)) { this.messages.push(message); return; } // b66 mpsleep: S0A / S0B / bed messages, in order
     if (message.type === 'sb') { this.messages.push(message); return; } // b64 mpscoreboard: S3B-S3E, all must arrive in order
@@ -78,11 +79,15 @@ export class DedicatedClient {
     for (const t of message.tiles ?? []) merged.tiles.set(`${t.kind},${t.x},${t.y},${t.z}`, t);
     merged.last = message;
   }
+  flushPending() { const m = this.pending; if (!m) return; this.pending = null; this.messages.push({ ...m.last, changes: [...m.cells.values()], tiles: [...m.tiles.values()] }); } // b100 horse100: the merged ticks so far become one queued tick
   start() {
     this.ready = true;
     const merged = this.pending; this.pending = null;
-    if (merged) this.apply({ ...merged.last, changes: [...merged.cells.values()], tiles: [...merged.tiles.values()] });
+    const late = this.dismountQueued; this.dismountQueued = false; // b100 horse100: ticks merged after a queued dismount come after it
+    const mergedTick = () => { if (merged) this.apply({ ...merged.last, changes: [...merged.cells.values()], tiles: [...merged.tiles.values()] }); };
+    if (!late) mergedTick();
     for (const message of this.messages.splice(0)) this.apply(message);
+    if (late) mergedTick();
   }
   apply(message) {
     // b61 mpnether: S07 Respawn plus the new world. Messages that follow are buffered until the host has swapped worlds and calls start().
