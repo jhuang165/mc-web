@@ -51,7 +51,8 @@ const pw = (rows, id) => rows.find((r) => r.id === id).pw ?? [];
 
 test("the tracker rows carry the changed watcher entries and attributes on the tick of the change", () => {
   const { players, step } = world();
-  for (let t = 0; t < 6; t++) assert.deepEqual(pw(step(t), 2), [], "a standing player sends nothing");
+  assert.deepEqual(pw(step(0), 2), [[32, 41]], "b100: the first gated pass sends the movementSpeed the EntityPlayer constructor left dirty (executed, console100-reference.json)");
+  for (let t = 1; t < 6; t++) assert.deepEqual(pw(step(t), 2), [], "a standing player sends nothing");
   const p2 = players.get(2);
   p2.input.sneak = true; // flag 0
   assert.deepEqual(pw(step(6), 2), [[28, s1c(0)]]);

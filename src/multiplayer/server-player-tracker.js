@@ -54,7 +54,7 @@ const spawnByte = deg => (Math.trunc(Math.fround(Math.fround(Math.fround(deg) * 
 
 export class ServerPlayerTracker {
   // `host`: { players: Map, rules } (the Simulation). `watches(pid, cx, cz)`: isPlayerWatchingChunk for viewer `pid` (the chunk view's `sees`). `fresh(pid)`: true once after the viewer's columns changed.
-  constructor(host, watches = everywhere, fresh = () => false) { this.host = host; this.watches = watches; this.fresh = fresh; this.dims = new Map(); this.done = new WeakMap(); this.masters = new Map(); }
+  constructor(host, watches = everywhere, fresh = () => false) { this.host = host; this.watches = watches; this.fresh = fresh; this.dims = new Map(); this.done = new WeakMap(); this.masters = new Map(); this.joined = new Set(); }
   get limit() { return this.host.rules?.trackerLimit ?? 144; }
   state(dim) { let s = this.dims.get(dim); if (!s) this.dims.set(dim, s = new Map()); return s; }
 
@@ -65,6 +65,7 @@ export class ServerPlayerTracker {
     for (const id of [...m.byId.keys()]) if (!here.has(id)) m.byId.delete(id);
     if (stamp !== undefined && m.stamp === stamp) return m;
     m.stamp = stamp;
+    for (const id of this.joined) if (!this.host.players?.has(id)) this.joined.delete(id);
     for (const [id, target] of here) {
       const e = { id, x: target.position.x, y: target.position.y - (target.motion?.ySize ?? 0), z: target.position.z, rotationYaw: javaYawDeg(target.yaw ?? 0), rotationPitch: javaPitchDeg(target.pitch ?? 0), type: 'player' };
       e.rotationYawHead = e.rotationYaw; // sv.e: rotationYawHead = rotationYaw
@@ -74,7 +75,10 @@ export class ServerPlayerTracker {
       if (!st) {
         const entry = new TrackerEntry(e, { range: PLAYER_RANGE, frequency: PLAYER_FREQUENCY, velocity: false, limit: this.limit }, { player: null, watches: () => false });
         entry.tracked = true; // the shared entry: the viewers' own entries decide who is in the list
-        m.byId.set(id, st = { entry, e, cx: encodeAxis(sizeClass(0.6), e.x), cy: encodeY(e.y), cz: encodeAxis(sizeClass(0.6), e.z), yaw: spawnByte(e.rotationYaw), pitch: spawnByte(e.rotationPitch), head: spawnByte(e.rotationYawHead), lift: 0, sig, grounded: !!target.grounded, py: target.position.y, we: watcherEntries(target) }); // S0C: the spawn packet's position
+        m.byId.set(id, st = { entry, e, cx: encodeAxis(sizeClass(0.6), e.x), cy: encodeY(e.y), cz: encodeAxis(sizeClass(0.6), e.z), yaw: spawnByte(e.rotationYaw), pitch: spawnByte(e.rotationPitch), head: spawnByte(e.rotationYawHead), lift: 0, sig, grounded: !!target.grounded, py: target.position.y, we: watcherEntries(target), dirty: new Set() }); // S0C: the spawn packet's position
+        // b100 console100: the real EntityPlayer constructor leaves generic.movementSpeed dirty (walk speed 0.1 against the registered 0.7; executed, console100-reference.json `real`: S20 41), which the first gated pass
+        // of a joining player's entry sends to his viewers and to himself; a player already in another dimension keeps his old (cleared) set, and a modifier on maxHealth makes that one dirty too
+        if (!this.joined.has(id)) { this.joined.add(id); st.dirty.add('movementSpeed'); if (st.we.mods.maxHealth) st.dirty.add('maxHealth'); }
       } else Object.assign(st.e, e);
       // b75: isAirBorne (a jump: on the ground before, off it now and higher) and a changed watched value force the off-beat send
       const jumped = !!st.grounded && !target.grounded && target.position.y > st.py, changed = sig !== st.sig;
@@ -83,7 +87,10 @@ export class ServerPlayerTracker {
       const now = watcherEntries(target), was = st.we;
       let s1c = 0, s20 = 0;
       for (const i in now.v) if (now.v[i][1] !== was.v[i][1]) s1c += now.v[i][0];
-      for (const k in now.a) if (now.a[k] !== was.a[k]) s20 += ATTRIBUTE_BYTES[k] + 25 * now.mods[k];
+      // b100 console100: the dirty set (func_111190_b) is only sent inside the gated branch (ticks % 2, isAirBorne or a changed watcher; `m` is the entry's own counter, 0 on the tick it was made), so an
+      // attribute-only change (Speed I -> II: same potion colour) waits for the next even tick; each dirty attribute goes out with its modifiers as they are then
+      for (const k in now.a) if (now.a[k] !== was.a[k]) st.dirty.add(k);
+      if (st.dirty.size && (jumped || changed || st.entry.ticks % PLAYER_FREQUENCY === 0)) { for (const k of st.dirty) s20 += ATTRIBUTE_BYTES[k] + 25 * now.mods[k]; st.dirty.clear(); }
       st.we = now; st.wp = [...(s1c ? [[28, 6 + s1c]] : []), ...(s20 ? [[32, 9 + s20]] : [])];
       st.entry.packets.length = 0;
       st.entry.sendLocation(jumped, changed);
@@ -145,7 +152,7 @@ export class ServerPlayerTracker {
     return rows.map(r => {
       if (r.id === pid) { const wp = this.masters.get(dim)?.byId.get(r.id)?.wp; return wp?.length ? { ...r, pw: wp } : r; } // b97: the player's own S1C / S20 go to him too
       if (!tracked?.has(r.id)) return { id: r.id, name: r.name, far: true };
-      if (r.vel) { const { vel, ...rest } = r; r = rest; } // b77 mpvelocity77: S12 of another player moves nothing on the copy; only the owner's row keeps `vel`
+      if (r.vel) { const { vel, ...rest } = r; r = { ...rest, velSent: true }; } // b77 mpvelocity77: S12 of another player moves nothing on the copy; only the owner's row keeps `vel`. b100: `velSent` is only the /netstat count of that S12 (my.b(ft) sends it to every tracker)
       const rel = r.riding ? null : this.released(dim, r.id);
       const pk = this.masters.get(dim)?.byId.get(r.id)?.kinds; // b96 console96
       const st = this.masters.get(dim)?.byId.get(r.id), arm = st?.armour?.length ? { arm: st.armour } : {}, wp = st?.wp?.length ? { pw: st.wp } : {};
