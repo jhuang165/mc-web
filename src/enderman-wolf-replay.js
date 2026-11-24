@@ -50,6 +50,7 @@ export const reference94 = { ...ref93("b94mr"), records: [...ref93("b94mr").reco
 export const reference95 = { ...ref93("b95mr"), records: [...ref93("b95mr").records, ...ref93("b95mr-pigman").records, ...ref93("b95mr-sheep").records, ...ref93("b95mr-squid").records] }; // b95 mobrec95: pigman and giant melee fights, then the two weakest families
 export const reference96 = { ...ref93("b96mr"), records: [...ref93("b96mr").records, ...ref93("b96mr-pig").records, ...ref93("b96mr-chicken").records, ...ref93("b96mr-sheep").records] }; // b96 mobrec96: cows and mooshrooms, pigs, chickens, sheep shearing with a shears stack
 export const reference97 = { ...ref93("b97mr"), records: [...ref93("b97mr").records, ...ref93("b97mr-shears").records] }; // b97 mobrec97: bats, a count-0 shears stack
+export const reference100 = { ...ref93("b100mr-witch1"), records: ["b100mr-witch1", "b100mr-witch2", "b100mr-witch3", "b100mr-witch4", "b100mr-bat"].flatMap((n) => ref93(n).records) }; // b100 mobrec100: witch potion skip conditions and combos, a bat in water (five files, each under 1.1 MB)
 export const reference92 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b92mr-reference.json", import.meta.url))); // b92 mobrec92
 export const reference91 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b91mr-reference.json", import.meta.url))); // b91 mobrec91
 export const reference90 = JSON.parse(readFileSync(new URL("../public/research/enderman-wolf-b90mr-reference.json", import.meta.url))); // b90 mobrec90
@@ -259,6 +260,9 @@ function run(r, opts) {
   let decDone = false;
   const decrement = () => { survival.protection = Math.max(0, survival.protection - 1); survival.hurtTicks = Math.max(0, survival.hurtTicks - 1); survival.hurtTime = Math.max(0, survival.hurtTime - 1); };
   if (/^b9[45]mr/.test(r.name)) { const sk = ew.skulls, one0 = sk.tickOne.bind(sk); sk.tickOne = (b) => { if (!decDone) { decrement(); decDone = true; } return one0(b); }; }
+  // b100 mobrec100: the probe's B88 block counts the player's hurtResistantTime down before its EntityThrowable loop (EndermanWolfProbe), so a witch potion that lands this tick
+  // sees the window already counted down; a harm splash 10 ticks after a poison tick hits (window 20 - 10 = 10, not above 10).
+  if (/^b97mr-witch100/.test(r.name) && ew.potions) { const po = ew.potions.tickOne.bind(ew.potions); ew.potions.tickOne = (...a) => { if (!decDone) { decrement(); decDone = true; } return po(...a); }; }
   for (let t = 0; t < r.ticks; t++) {
     for (const p of script) {
       if (Number(p[0]) !== t) continue;

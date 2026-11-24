@@ -457,6 +457,33 @@ public class EndermanWolfScenarios {
     sc94("b96mr-sheep-shears-dye-9975", 9975, 120, "H", hit1, none, "0 look 270 0", "0 holdd 359 1 0", "5 use 0", "10 holdn 351 5", "15 use 0", "20 shear 0 off", "25 use 0");
   }
   // Batch 97 (mobrec97, b97mr): the b96mr harness with more bat records, a count-0 shears stack and villagers.
+  // Batch 100 (mobrec100): the b97mr harness (run with EW_B100=1, names b97mr-*100-*): witch potion choices under skipped conditions and combined ones, then a bat in water.
+  static void run100() throws Exception {
+    int[][] none = new int[0][0];
+    int[][] pool = {{82, 0, 62, 87, 2, 67, 9, 0}};
+    double[][] farW = {{84.5, 64.5}, {64.5, 64.5}};
+    // water breathing already active: the first roll still draws, no drink starts; the same in water without the effect (7119 of b45cw drinks)
+    for (int sd : new int[] {10011, 10012}) sc93("b97mr-witch100-water-breathing-" + sd, sd, 500, "K", farW, true, pool, "0 look 270 0", "0 effect 0 13 6000");
+    for (int sd : new int[] {10013, 10014}) sc93("b97mr-witch100-water-plain-" + sd, sd, 500, "K", farW, true, pool, "0 look 270 0");
+    // burning with fire resistance already active, then the fire timer runs out unseen
+    for (int sd : new int[] {10021, 10022}) sc93("b97mr-witch100-fire-resist-" + sd, sd, 500, "K", new double[][] {{90.5, 64.5}, {64.5, 64.5}}, false, none, "0 look 270 0", "0 fire 0 100", "0 effect 0 12 6000");
+    // hurt and burning and far all at once: the chain of five rolls picks in order (water breathing, fire resistance, healing, swiftness)
+    for (int sd : new int[] {10031, 10032, 10033, 10034}) sc93("b97mr-witch100-hurt-fire-far-" + sd, sd, 600, "K", new double[][] {{90.5, 64.5}, {64.5, 64.5}}, false, none, "0 look 270 0", "0 health 0 10", "0 fire 0 100");
+    // far target with swiftness already active, then without
+    for (int sd : new int[] {10041, 10042}) sc93("b97mr-witch100-swift-active-" + sd, sd, 500, "K", new double[][] {{88.5, 64.5}, {64.5, 64.5}}, false, none, "0 look 270 0", "0 effect 0 1 6000");
+    // underwater and hurt and burning: the burning ends at once in water, so the fire resistance branch must stay closed
+    for (int sd : new int[] {10051, 10052}) sc93("b97mr-witch100-water-hurt-" + sd, sd, 700, "K", farW, true, pool, "0 look 270 0", "0 health 0 8", "0 fire 0 100");
+    // healing: witch just under full health (a 0.05 roll each tick), then at 1 health
+    sc93("b97mr-witch100-heal-9-10061", 10061, 800, "K", new double[][] {{80.5, 64.5}, {64.5, 64.5}}, false, none, "0 look 270 0", "0 health 0 25.5");
+    sc93("b97mr-witch100-heal-low-10062", 10062, 800, "K", new double[][] {{80.5, 64.5}, {64.5, 64.5}}, false, none, "0 look 270 0", "0 health 0 1");
+    // a throw while drinking and while the player stands close (weakness, poison, slowness choices after drinking)
+    for (int sd : new int[] {10071, 10072, 10073}) sc93("b97mr-witch100-throw-near-" + sd, sd, 400, "K", new double[][] {{70.5, 64.5}, {64.5, 64.5}}, false, none, "0 look 270 0", "0 health 0 12");
+    // a bat in a pool: starts at the surface, then one dropped from a height; the splash draws of Entity.handleWaterMovement are in its draw list
+    sc93("b97mr-bat100-water-surface-10081", 10081, 300, "b", new double[][] {{84.5, 64.5, 1.0}, {64.5, 64.5, 0}}, true, pool);
+    sc93("b97mr-bat100-water-fall-10082", 10082, 300, "b", new double[][] {{84.5, 64.5, 8.0}, {64.5, 64.5, 0}}, true, pool);
+    sc93("b97mr-bat100-water-ceiling-10083", 10083, 400, "b", new double[][] {{84.5, 64.5, 2.0}, {64.5, 64.5, 0}}, true, new int[][] {{82, 0, 62, 87, 2, 67, 9, 0}, {80, 6, 60, 90, 6, 70, 1, 0}});
+    sc93("b97mr-bat100-dry-control-10084", 10084, 300, "b", new double[][] {{84.5, 64.5, 1.0}, {64.5, 64.5, 0}}, false, none);
+  }
   static void run97() throws Exception {
     int[][] none = new int[0][0];
     int[][] ceil = {{40, 6, 40, 90, 6, 90, 1, 0}};

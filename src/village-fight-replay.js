@@ -61,7 +61,8 @@ class LogRandom extends JavaRandom {
   log = [];
   logBooleans = false;
   nextBoolean() { const r = super.nextBoolean(); if (this.logBooleans) this.log.push("b"); return r; }
-  nextInt(b) { const r = super.nextInt(b); if (b !== undefined) this.log.push("i" + b); return r; }
+  armed = false; // b100: the probe's `rose k on` op forces nextInt(8000) to 0 (the draw still advances the stream)
+  nextInt(b) { let r = super.nextInt(b); if (this.armed && b === 8000) r = 0; if (b !== undefined) this.log.push("i" + b); return r; }
   nextFloat() { this.log.push("f"); return super.nextFloat(); }
   nextGaussian() { this.log.push("g"); return super.nextGaussian(); }
 }
@@ -90,6 +91,8 @@ function plain(blocks = []) {
 
 // Batch 99: village-fight-b99-birth{1..4}-reference.json (births in a 5, 9 or 12 door village, two and three villagers; villager rows end with the four yaw/pitch fields).
 const reference99Parts = [1, 2, 3, 4].map((k) => JSON.parse(readFileSync(new URL(`../public/research/village-fight-b99-birth${k}-reference.json`, import.meta.url))));
+const reference100Parts = ["rose1", "rose2"].map((n) => JSON.parse(readFileSync(new URL("../public/research/village-fight-b100-" + n + "-reference.json", import.meta.url))));
+export const fightReference100 = { ...reference100Parts[0], records: reference100Parts.flatMap((p) => p.records) }; // b100 mobrec100 (tools/verify-villagers100.mjs, two files under 1.1 MB)
 export const fightReference99 = { ...reference99Parts[0], records: reference99Parts.flatMap((p) => p.records) }; // see tools/verify-villagers99.mjs
 // b98: one villager as VillageFightProbe.villagerState lists it: [growingAge, mating, playing, customer, timeUntilReset, needsInit, riches, offers (-1 none), uses, max uses, Regeneration ticks, randomTickDivider]
 function villagerRow(ew, e, yaws = false) {
@@ -275,6 +278,7 @@ function replayFightUncapped(r, hooks) {
         e.growingAge = -1;
         e.spawnBox = anchoredShrunkBox(e, w, h, w * 0.5, h * 0.5); e.spawnBoxTick = (ew.worldTicks ?? -1) + 1; e.anchorBox = e.spawnBox.slice();
       }
+      else if (p[1] === "rose") logs[Number(p[2])].armed = p[3] === "on"; // b100: the golem's LookAtVillager roll forced
       else if (p[1] === "day") day = p[2] === "on"; // b98: World.isDaytime
       else if (p[1] === "babyv" || p[1] === "agev") { // b98: EntityAgeable.setGrowingAge: setScaleForAge resizes the box from its minimum corner
         const e = ents[Number(p[2])], was = e.growingAge, w = ENTITY_TYPES[e.type].width, h = ENTITY_TYPES[e.type].height;
@@ -318,7 +322,8 @@ function replayFightUncapped(r, hooks) {
     states[states.length - 1].mobs = extraMobs.map((m, k) => [m.x, m.y, m.z, gone.has(m) ? gone.get(m) : m.removedHealth ?? m.health, idx(legacyRows && LEGACY.has(m.type) ? ew.silverfishState(m).target : ew.ai.brain(m).attackTarget), (m.revenge ? (revengeOf(m) === "player" ? n : index(revengeOf(m))) : -1), mobLogs[k].log.slice()]);
     states[states.length - 1].jockeys = ents.flatMap((e) => (e.type === "chicken" ? [e.chickenJockey ? 1 : 0] : []));
     states[states.length - 1].extras = extra.map((z, k) => [z.x, z.y, z.z, gone.has(z) ? gone.get(z) : z.removedHealth ?? z.health, idx(ew.ai.brain(z).attackTarget), (z.revenge ? (revengeOf(z) === "player" ? n : index(revengeOf(z))) : -1), extraLogs[k].log.slice()]);
-    if (/^b9[89]-/.test(r.name ?? "")) states[states.length - 1].villagers = [...ents, ...extraMobs].filter((e) => e.type === "villager").map((e) => villagerRow(ew, e, r.name.startsWith("b99-")));
+    if (/^b(9[89]|100)-/.test(r.name ?? "")) states[states.length - 1].villagers = [...ents, ...extraMobs].filter((e) => e.type === "villager").map((e) => villagerRow(ew, e, !r.name.startsWith("b98-")));
+    if (r.name?.startsWith("b100-")) states[states.length - 1].golems = ents.filter((e) => e.type === "iron_golem").map((e) => [e.holdRose, e.attackTimer]); // b100: [holdRoseTick, attackTimer]
     hooks.onTick?.(t, ew, ents);
     rows.push([agg, village.playerReputation(name === "alt" ? "Player" : "Player"), village.playerReputation("probe")]);
   }
@@ -350,6 +355,7 @@ export function firstDivergence(r, got) {
       if (JSON.stringify(view(r.rows[t][7], kinds)) !== JSON.stringify(view(got.states[t].mobs, kinds))) return [t, "extra mobs", r.rows[t][7], got.states[t].mobs];
     }
     if (r.rows[t][8] !== undefined && JSON.stringify(r.rows[t][8]) !== JSON.stringify(got.states[t].villagers)) return [t, "villagers", r.rows[t][8], got.states[t].villagers]; // b98
+    if (r.rows[t][9] !== undefined && JSON.stringify(r.rows[t][9]) !== JSON.stringify(got.states[t].golems)) return [t, "golems", r.rows[t][9], got.states[t].golems]; // b100
     if (r.poison && r.poison[t] !== got.states[t].poison) return [t, "poison", r.poison[t], got.states[t].poison];
     if (r.mathRandom && JSON.stringify(r.mathRandom.filter((m) => m[0] === t).map((m) => m[1])) !== JSON.stringify(got.mathCalls.filter((m) => m[0] === t).map((m) => m[1]))) return [t, "Math.random calls", r.mathRandom.filter((m) => m[0] === t).length, got.mathCalls.filter((m) => m[0] === t).length];
     const before = t ? r.rows[t - 1][0][n][3] : 1000;
