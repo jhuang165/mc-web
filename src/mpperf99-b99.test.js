@@ -71,7 +71,7 @@ test("bench hashes are identical off / on / verify and the bench prints mode99",
   const h = (s) => s.slice(s.indexOf("["));
   for (const scene of [["--scene=pen", "--mobs=20"], ["--scene=travel"]]) {
     const out = modes.map((m) => spawnSync(process.execPath, ["tools/bench-alloc81.mjs", ...scene, "--state", "--ticks=50"], { env: { ...process.env, MC_MPPERF99: m }, encoding: "utf8" }).stdout);
-    modes.forEach((m, i) => assert.match(out[i], new RegExp(`mode99=${m} mobs=\\d+ \\[`)));
+    modes.forEach((m, i) => assert.match(out[i], new RegExp(`mode99=${m} (mode100=\\w+ )?mobs=\\d+ \\[`)));
     assert.equal(h(out[1]), h(out[0])); assert.equal(h(out[2]), h(out[0]));
   }
 });

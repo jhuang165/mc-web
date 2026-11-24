@@ -6,6 +6,7 @@
 import { ENTITY_TYPES } from "./entities.js";
 import { mobScale } from "./slime.js";
 import { fast93, boxPair93 } from "./mpperf93-fast.js"; // b93 mpperf93
+import { fast100, fail100 } from "./mpperf100-fast.js"; // b100 mpperf100
 import { OVERWORLD, NETHER, END, PortalState, transferTarget, GAME_IDS } from "./dimensions.js";
 
 // Entities that never reach moveEntity -> doBlockCollisions, or that the port does not move between dimensions.
@@ -60,6 +61,7 @@ export const endArrival = (source, arg) => arg === END && !travelRoute(source, a
 // stays in the old world where the mount stood), and a mob that rides something never travels. Returns { riding, ridden } for a mob record.
 export const mobLinks = (e) => ({ riding: !!(e.vehicle || e.ridingEntity), ridden: !!(e.rider || e.riddenBy) });
 
+const OPT100 = { isPlayer: false, creative: false, riding: false, countdown: true };
 // Per-entity Entity.timeUntilPortal / portalCounter / inPortal. The cooldown is the saved PortalCooldown tag (record.portalCooldown).
 export class EntityPortals {
   constructor() { this.states = new WeakMap(); this.last = new WeakMap(); }
@@ -85,7 +87,14 @@ export class EntityPortals {
     let result = null;
     // Entity.onEntityUpdate runs first in the next tick: it consumes the inPortal the previous tick's collision set.
     if (counted) s.timeUntilPortal = e.portalCooldown | 0;
-    const go = s.tick(dim, { isPlayer: false, riding, countdown: !counted });
+    let go; // b100 mpperf100: one scratch options object (PortalState.tick destructures it on entry and keeps nothing)
+    if (fast100.mode === "off") go = s.tick(dim, { isPlayer: false, riding, countdown: !counted });
+    else {
+      let ref = null;
+      if (fast100.mode === "verify") { ref = Object.assign(new PortalState(), s); ref = [ref, ref.tick(dim, { isPlayer: false, riding, countdown: !counted })]; }
+      OPT100.riding = riding; OPT100.countdown = !counted; go = s.tick(dim, OPT100);
+      if (ref !== null && (ref[1] !== go || ref[0].inPortal !== s.inPortal || ref[0].portalCounter !== s.portalCounter || ref[0].timeUntilPortal !== s.timeUntilPortal)) fail100("portal tick");
+    }
     if (go !== null) result = { arg: go, endPortal: false, direction: s.teleportDirection };
     else if (!riding && !ridden && !noCollide) {
       const hw = box[0], h = box[1], vehicle = kind === "cart" || kind === "boat", bb = e.bb;

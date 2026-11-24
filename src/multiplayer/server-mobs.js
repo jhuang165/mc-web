@@ -49,6 +49,7 @@ import { installServerWither, boundedSkullResistance } from './server-wither.js'
 import { DRAGON_KINDS, installServerDragon, dragonReach } from './server-dragon.js'; // b64 mpdragon
 import { VILLAGE_KINDS, installServerVillagers } from './server-villagers.js'; // b66 mpvillage
 import { GOLEM_KINDS, installServerGolems } from './server-golems.js'; // b66 mpgolems
+import { fast100 } from '../mpperf100-fast.js'; // b100 mpperf100
 import { skullEntry } from './skull-look.js'; // b82 mpball82: the fireballs' join angles (fireballWatch)
 
 // The kinds the server keeps and the client has a copy for. Batch 61 added every natural Overworld spawn of 1.7.10: enderman, slime, witch, cave spider (the spawner and spider
@@ -491,8 +492,21 @@ export class ServerMobs {
     const states = quick ? null : new Map();
     const stateOf = quick ? e => mobStateJson(e, mobState) : e => { let s = states.get(e); if (s === undefined) states.set(e, s = mobStateJson(e, mobState)); return s; };
     t.serverStep(mobs.entities, size);
-    const byWatcher = new Map(), outs = new Map();
-    for (const v of this.views.values()) { byWatcher.set(v.watcher, v); outs.set(v, { out: [...v.destroys], later: [] }); v.destroys = []; } // the destroys held back from the last tick lead this one
+    // b100 mpperf100: the Maps, each view's row and its out / destroys arrays are reused (nothing keeps them past this call: `out` is copied into mobPackets, `later` becomes v.destroys)
+    const f100 = fast100.mode !== 'off', byWatcher = f100 ? (this.byW100 ??= new Map()) : new Map(), outs = f100 ? (this.outs100 ??= new Map()) : new Map();
+    if (f100) { byWatcher.clear(); outs.clear(); }
+    for (const v of this.views.values()) {
+      byWatcher.set(v.watcher, v);
+      if (!f100) { outs.set(v, { out: [...v.destroys], later: [] }); v.destroys = []; } // the destroys held back from the last tick lead this one
+      else {
+        const row = v.row100 ??= { out: [], later: [] }, od = v.destroys, o = row.out;
+        if (o.length !== 0) o.length = 0;
+        for (let k = 0; k < od.length; k++) o.push(od[k]);
+        od.length = 0; row.later = v.later100 ??= []; // od (now empty) stays v.destroys during the tick; `later` swaps in at the end
+        if (fast100.mode === 'verify' && row.later.length !== 0) fail100('later not empty');
+        outs.set(v, row);
+      }
+    }
     const parts = t.queued(), m86 = fast86.mode, q86 = m86 !== 'off', m87 = fast87.mode;
     const send = (en, pk) => {
       const { entity, vehicle, holder, after, ...rest } = pk, e = en.live, i = num(e);
@@ -554,13 +568,14 @@ export class ServerMobs {
     }
     for (const v of this.views.values()) {
       const { out, later } = outs.get(v);
-      v.destroys = later;
+      if (f100) { v.later100 = v.destroys; v.destroys = later; } else v.destroys = later;
       const dl88 = diffs.get(v) ?? [], ix88 = fast88.mode !== 'off' && Array.isArray(dl88);
       for (let k = 0; ix88 && k < dl88.length; k++) stateRow(v, out, dl88[k][0], dl88[k][1], q86, m86); // b88 mpperf88: an index loop (no iterator or pair destructure per row)
       if (!ix88) for (const [e, s] of dl88) stateRow(v, out, e, s, q86, m86);
       for (const { e, status } of this.statuses) if (t.entries.get(e)?.entry.set.has(v.watcher)) out.push({ type: 'mobStatus', i: num(e), status }); // S19 to the players tracking the mob
-      if (out.length) (v.player.mobPackets ??= []).push(...out);
+      if (out.length) { (v.player.mobPackets ??= []).push(...out); if (f100) out.length = 0; }
     }
+    if (f100) { byWatcher.clear(); outs.clear(); } // no stale view or packet stays referenced between ticks
     this.statuses.length = 0;
   }
   // b89 mpobjects89: the target's getEyeHeight for the reach check's canEntityBeSeen ray: the crystal's is 0 (wz has no sa.g()F override, bytecode-read); a living mob's
