@@ -11,6 +11,8 @@ import { installNoteBlocks, NOTE_ID, noteSound, notePitch } from '../note-blocks
 import { installJukeboxes, JUKEBOX_ID } from '../jukebox.js';
 import { isDisc, discOriginal, NOTE_BLOCK, JUKEBOX } from '../note-jukebox-content.js';
 import { makeStack } from '../inventory.js';
+import { InertDrops, inertRecords } from '../inert-drops.js'; // b100 mpobjects100: the null-item drop of a ghost disc (b99 tiles99 wired it in single player)
+import { ghostItemDrops } from './server-ghost-items.js';
 
 const RANGE_SQ = 64 * 64, music = new WeakMap();
 export const musicOf = redstone => music.get(redstone) ?? null;
@@ -33,8 +35,12 @@ export function installMusic(sim, redstone, dim = 0, saved = null) {
   const jukeboxes = installJukeboxes(redstone, {
     play: (item, x, y, z) => { for (const p of nearPlayers(sim, dim, x, y, z)) (p.itemsOut ??= []).push({ type: 'aux', events: [{ id: 1005, x, y, z, data: item ? discOriginal(item) : 0 }] }); },
     spawn: (stack, x, y, z) => sim.items.spawn(makeStack(stack.id, stack.count ?? 1, stack.damage || 0, stack.stored, stack), x, y, z, { delay: 10 }),
+    spawnInert: (x, y, z, n) => inert.spawn(x, y, z, n),
     changed: () => {},
   });
+  const inert = new InertDrops(); // saved inside musicTiles as { kind: 'inert' }, aged once per game tick before the dimension's scheduled ticks (redstone.beginTick, as redstone-runtime.js)
+  const beginTick = redstone.beginTick.bind(redstone);
+  redstone.beginTick = (...a) => { ghostItemDrops(sim, dim, inert); inert.tick(); return beginTick(...a); };
   // The block event: S29 and S24 instead of the single-player client's local sound and particle.
   redstone.behaviours[NOTE_ID].onBlockEventReceived = (w, x, y, z, instrument, note) => {
     // S29 now (the redstone tick runs after the tick's deliverSounds): the players of the dimension whose squared distance (eye height 1.62 above their feet) is under (16 * 3)^2.
@@ -47,11 +53,11 @@ export function installMusic(sim, redstone, dim = 0, saved = null) {
     for (const p of nearPlayers(sim, dim, x, y, z)) (p.itemsOut ??= []).push({ type: 'musicEvent', k: 'note', x, y, z, instrument, note });
     return true;
   };
-  const m = { noteBlocks, jukeboxes, dim, save: () => [...noteBlocks.save().map(e => ({ kind: 'note', ...e })), ...jukeboxes.save().map(e => ({ kind: 'jukebox', ...e }))] };
+  const m = { noteBlocks, jukeboxes, inert, dim, save: () => [...noteBlocks.save().map(e => ({ kind: 'note', ...e })), ...jukeboxes.save().map(e => ({ kind: 'jukebox', ...e })), ...inertRecords(inert)] };
   const base = redstone.save.bind(redstone);
   redstone.save = () => ({ ...base(), musicTiles: m.save() });
   const records = saved?.musicTiles;
-  if (Array.isArray(records)) { noteBlocks.restore(records.filter(e => e?.kind === 'note')); jukeboxes.restore(records.filter(e => e?.kind === 'jukebox')); }
+  if (Array.isArray(records)) { inert.restore(records.filter(e => e?.kind === 'inert')); noteBlocks.restore(records.filter(e => e?.kind === 'note')); jukeboxes.restore(records.filter(e => e?.kind === 'jukebox')); }
   music.set(redstone, m);
   return m;
 }
