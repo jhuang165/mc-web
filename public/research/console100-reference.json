@@ -1,0 +1,167 @@
+{
+ "target": "Minecraft Java 1.7.10",
+ "clientSha1": "e80d9b3bf5085002218d4be59e668bac718abbc6",
+ "classes": {
+  "gb": {
+   "name": "S0CPacketSpawnPlayer",
+   "sha256": "86a04098514c61585d9cbe8e39d9334c76d62c6fa32f9e9e484740f5418c27ad"
+  },
+  "hp": {
+   "name": "S0APacketUseBed",
+   "sha256": "ef9d66eaf1424824c1a6ee69cf52b5ba37c6b461aaca90913c80aafb255482b2"
+  },
+  "gc": {
+   "name": "S0BPacketAnimation",
+   "sha256": "39c32f64468c5373fb39079ea926318156fd413b2abe21c95bf846914f94340e"
+  },
+  "hy": {
+   "name": "S12PacketEntityVelocity",
+   "sha256": "13ec746d1dadfda887d152d155df4b5e7c0b7f70263c194b24b8eb18d93bae08"
+  },
+  "hx": {
+   "name": "S1BPacketEntityAttach",
+   "sha256": "ca523565753db7b88bf85b5b50a3b375736a4f94ae398223e3dcbbdc5a4b27bf"
+  },
+  "hw": {
+   "name": "S1CPacketEntityMetadata",
+   "sha256": "be7813a6c38c61533cee670d87accc6110117d611ab1f71a7b41ffab1609f9b6"
+  },
+  "il": {
+   "name": "S20PacketEntityProperties",
+   "sha256": "c1e8d38a8c3e15dc971077016f227e511cd5970cb03aefe180c6f3e8070942b7"
+  },
+  "my": {
+   "name": "EntityTrackerEntry",
+   "sha256": "6d412d8d6bc168b6fc6c47c9b04705c4e443b72aba5ceba6b2bb44745dc83a4d"
+  }
+ },
+ "method": "Unchanged classes (tools/probes/Console100Probe.java), DifficultyProbe.player (real EntityPlayer watcher and attribute map) with an offline-mode GameProfile (no properties); `bytes` = id VarInt + payload as the encoder fa counts it. first = the dirty set the setup left (-1 = nothing). sprintOn / sprintOff = the dirty movementSpeed set after setSprinting(true / false).",
+ "players": [
+  {
+   "case": "player",
+   "entityId": 1,
+   "s0c": 94,
+   "profileProperties": 0,
+   "s1cWhole": 37,
+   "s20whole": 69,
+   "first": {
+    "bytes": 41,
+    "names": [
+     "generic.movementSpeed"
+    ]
+   },
+   "s1bRide": 10,
+   "s1bDismount": 10,
+   "s0a": 14,
+   "s0b": [
+    3,
+    3,
+    3,
+    3
+   ],
+   "s12": 11,
+   "s12Clamped": 11,
+   "sprintOn": {
+    "bytes": 66,
+    "names": [
+     "generic.movementSpeed"
+    ]
+   },
+   "sprintOff": {
+    "bytes": 41,
+    "names": [
+     "generic.movementSpeed"
+    ]
+   }
+  },
+  {
+   "case": "player",
+   "entityId": 200,
+   "s0c": 95,
+   "profileProperties": 0,
+   "s1cWhole": 37,
+   "s20whole": 69,
+   "first": {
+    "bytes": 41,
+    "names": [
+     "generic.movementSpeed"
+    ]
+   },
+   "s1bRide": 10,
+   "s1bDismount": 10,
+   "s0a": 14,
+   "s0b": [
+    4,
+    4,
+    4,
+    4
+   ],
+   "s12": 11,
+   "s12Clamped": 11,
+   "sprintOn": {
+    "bytes": 66,
+    "names": [
+     "generic.movementSpeed"
+    ]
+   },
+   "sprintOff": {
+    "bytes": 41,
+    "names": [
+     "generic.movementSpeed"
+    ]
+   }
+  },
+  {
+   "case": "player",
+   "entityId": 70000,
+   "s0c": 96,
+   "profileProperties": 0,
+   "s1cWhole": 37,
+   "s20whole": 69,
+   "first": {
+    "bytes": 41,
+    "names": [
+     "generic.movementSpeed"
+    ]
+   },
+   "s1bRide": 10,
+   "s1bDismount": 10,
+   "s0a": 14,
+   "s0b": [
+    5,
+    5,
+    5,
+    5
+   ],
+   "s12": 11,
+   "s12Clamped": 11,
+   "sprintOn": {
+    "bytes": 66,
+    "names": [
+     "generic.movementSpeed"
+    ]
+   },
+   "sprintOff": {
+    "bytes": 41,
+    "names": [
+     "generic.movementSpeed"
+    ]
+   }
+  }
+ ],
+ "real": {
+  "case": "real",
+  "watched": [
+   "generic.maxHealth",
+   "generic.movementSpeed"
+  ],
+  "first": {
+   "bytes": 41,
+   "names": [
+    "generic.movementSpeed"
+   ]
+  },
+  "s0c": 96,
+  "s1cWhole": 37
+ }
+}

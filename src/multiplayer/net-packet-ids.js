@@ -291,7 +291,8 @@ const peerRemovals = (m, ctx) => {
  * bypasses the tracker) keeps the old one S18 per tick.
  */
 const PLAYER_KIND = { move: 21, look: 22, moveLook: 23, teleport: 24, head: 25, attach: 27, velocity: 18 };
-const playerPackets = (p) => [...(!Array.isArray(p.pk) ? [[24, C[24]]] : p.pk.filter((k) => PLAYER_KIND[k] !== undefined).map((k) => [PLAYER_KIND[k], C[PLAYER_KIND[k]]])), ...list(p.pw)]; // b97: then the S1C / S20 of EntityTrackerEntry.b()
+const playerPackets = (p) => [...(p.swing === 6 ? [[11, 2 + varIntSize(p.id | 0)]] : []), ...(!Array.isArray(p.pk) ? [[24, C[24]]] : p.pk.filter((k) => PLAYER_KIND[k] !== undefined).map((k) => [PLAYER_KIND[k], C[PLAYER_KIND[k]]])), ...list(p.pw), ...(p.vel || p.velSent ? [[18, C[18]]] : [])]; // b100 console100: first the S0B(0) of EntityLivingBase.swingItem (sv.ba: mn.a(entity, S0B) to every tracker but the swinger, in packet handling before the tracker pass; the port's `swing` is 6 on the tick a swing was accepted, 5 and down after);
+// b97: then the S1C / S20 of EntityTrackerEntry.b(); b100 console100: then the S12 of Entity.velocityChanged (my.a(List) ends with it, my.b(ft) sends it to every tracker, 11 bytes executed)
 /**
  * b93 console93: the S13s a connection queued (`ctx.destroyed = { n }`, the player's destroyedItemsNetCache) go out in the player's next onUpdate (mw.h): the ids in packets of at most 127
  * (`Math.min(size, 127)`, the loop repeats until the list is empty), bytecode-read. Returns the records and empties the queue.
@@ -308,7 +309,9 @@ const CLIENT_BYTES = {
   pingKeepAlive: C[0], pingProbeReply: 9, abilities: C[57],
   pingStatusReply: (m) => 1 + jsonString(utf8Length(JSON.stringify({ description: m.description, players: m.players, version: m.version, ...(m.favicon ? { favicon: m.favicon } : {}) }))), // S00ServerInfo
   chat: (m) => s02(typeof m.json === 'string' ? utf8Length(m.json) : textJson(m.text)), sleepMsg: (m) => s02(utf8Length(JSON.stringify({ translate: `tile.bed.${m.key ?? ''}` }))),
-  health: C[6], sleepIn: C[10], sleepWake: C[11], pfx73: C[11],
+  health: C[6], sleepIn: C[10],
+  // b100 console100: S0B writes the entity id as a VarInt then one byte (executed, console100-reference.json: 3 / 4 / 5 for ids 1 / 200 / 70000); the wake-up is the player's own id, a crit's target is a player id (`pl`) or a mob (flat, the port's mob ids are not the native ones)
+  sleepWake: (m, ctx) => 2 + varIntSize(ctx?.self | 0), pfx73: (m) => 2 + varIntSize(list(m.events)[0]?.pl | 0),
   collect: C[13], projCollect: C[13],
   healthHurt: C[26], useDone: C[26], mobStatus: C[26], attach: C[27], effect: C[29], healthEffect: C[29], healthEffectEnd: C[30], playerOp: C[31],
   musicEvent: C[36],
@@ -347,7 +350,7 @@ const CLIENT_PACKETS = {
   dimRespawn: (m, ctx) => [[7, C[7]], ...bulks(m.world?.columns, ctx)],
   // S03 every 20 ticks (MinecraftServer.v: tickCounter % 20; `ctx.tick` is the server's counter, from 0 at launch, else the world's tick count); an S18 per pose of another
   // player (the tracker sends nobody their own); the cells; the S21 resends (partial, the changed sections)
-  tick: (m, ctx) => { const t = ctx?.tick ?? m.tick; return [...(Number.isInteger(t) && t % 20 === 0 ? [[3, C[3]]] : []), ...peerRemovals(m, ctx), ...list(m.players).filter((p) => !p?.far && (ctx?.self === undefined || p?.id !== ctx.self)).flatMap(playerPackets), ...list(m.players).filter((p) => ctx?.self !== undefined && p?.id === ctx.self).flatMap((p) => list(p.pw)),
+  tick: (m, ctx) => { const t = ctx?.tick ?? m.tick; return [...(Number.isInteger(t) && t % 20 === 0 ? [[3, C[3]]] : []), ...peerRemovals(m, ctx), ...list(m.players).filter((p) => !p?.far && (ctx?.self === undefined || p?.id !== ctx.self)).flatMap(playerPackets), ...list(m.players).filter((p) => ctx?.self !== undefined && p?.id === ctx.self).flatMap((p) => [...list(p.pw), ...(p.vel ? [[18, C[18]]] : [])]), // b100: the player's own S12 (my.b(ft) sends to the entity's own connection too)
     ...cellRecords(m.changes), ...objectRecords(m.itrack, ctx), ...list(m.chunks).map((c) => [33, s21(c, ctx, false, Number.isInteger(c?.mask) ? c.mask : 0xffff)])]; },
   dismount: () => [[8, C[8]], [27, C[27]], [8, C[8]]], // b98 horse98: yz.a(sa)'s S08 (setPlayerLocation), hx's S1B(0, player, -1), then mw.a(sa)'s own S08
   blocks: (m) => cellRecords(m.changes),
