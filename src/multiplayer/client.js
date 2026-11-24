@@ -19,8 +19,8 @@ const INV = new Set(['invItems', 'invSet', 'invConfirm', 'invBroke']); // b60: w
 const WINDOW = new Set(['openWindow', 'windowItems', 'setSlot', 'confirmTransaction', 'windowProperty', 'windowClose', 'tradeList']);
 export class DedicatedClient {
   pings = new ClientPings(); // b68 mpping: S38 ping per player name
-  constructor({ onTick = () => {}, onChat = () => {}, onClose = () => {}, onBlocks = () => {}, onSignEditor = () => {}, onEffect = () => {}, onBeaconWindow = () => {}, onCrack = () => {}, onMobs = () => {}, onVehicles = () => {}, onCollect = () => {}, onPlayerOp = () => {}, onSound = () => {}, onHealth = () => {}, onHealthFx = () => {}, onSlot = () => {}, onAux = () => {}, onWindow = () => {}, onInv = () => {}, onDisp = () => {}, onDimRespawn = () => {}, onStats = () => {}, onScoreboard = () => {} } = {}) {
-    Object.assign(this, { onMobs, onVehicles, onTick, onChat, onBlocks, onSignEditor, onEffect, onBeaconWindow, onCrack, onCollect, onPlayerOp, onSound, onHealth, onHealthFx, onSlot, onAux, onWindow, onInv, onDisp, onDimRespawn, onStats, onScoreboard, onClose, socket: null, ready: false, messages: [], players: [], intentional: false, lastTick: -1 });
+  constructor({ onTick = () => {}, onChat = () => {}, onClose = () => {}, onBlocks = () => {}, onSignEditor = () => {}, onEffect = () => {}, onBeaconWindow = () => {}, onCrack = () => {}, onMobs = () => {}, onVehicles = () => {}, onCollect = () => {}, onPlayerOp = () => {}, onSound = () => {}, onHealth = () => {}, onHealthFx = () => {}, onSlot = () => {}, onAux = () => {}, onWindow = () => {}, onInv = () => {}, onDisp = () => {}, onDimRespawn = () => {}, onDismount = () => {}, onStats = () => {}, onScoreboard = () => {} } = {}) {
+    Object.assign(this, { onMobs, onVehicles, onTick, onChat, onBlocks, onSignEditor, onEffect, onBeaconWindow, onCrack, onCollect, onPlayerOp, onSound, onHealth, onHealthFx, onSlot, onAux, onWindow, onInv, onDisp, onDimRespawn, onDismount, onStats, onScoreboard, onClose, socket: null, ready: false, messages: [], players: [], intentional: false, lastTick: -1 });
   }
   // `session`: the account token from AccountApi; the server picks the name.
   async connect({ url, session }) {
@@ -87,6 +87,7 @@ export class DedicatedClient {
   apply(message) {
     // b61 mpnether: S07 Respawn plus the new world. Messages that follow are buffered until the host has swapped worlds and calls start().
     if (message.type === 'dimRespawn') { this.ready = false; this.pending = null; this.onDimRespawn(message); return; }
+    if (message.type === 'dismount') this.onDismount(message); // b99 horse99: S08 + S1B + S08 (client-dismount.js)
     if (message.type === 'dragonCredits') this.onDragonCredits?.(message); // b64 mpdragon
     if (message.type === 'boltSpawn') this.onBolt?.(message); // b66 mplightning: S2C spawn global entity (a lightning bolt)
     if (message.type === 'chunkBulk' || message.type === 'chunkUnload') this.onChunks?.(message); // b71 mpchunks
