@@ -60,7 +60,7 @@ public class VillageFightProbe {
   static boolean b35or36(String name) { return name.startsWith("b35-") || b36up(name); }
   static boolean b36up(String name) { return name.startsWith("b36-") || b37up(name); }
   static boolean b37up(String name) { return name.startsWith("b37-") || name.startsWith("b85-") || name.startsWith("b86-") || b38up(name); }
-  static boolean b98up(String name) { return name.startsWith("b98-") || name.startsWith("b99-"); } // batch 99: b99-* records (mobrec99) use the b98 layout; their villager rows also end with [rotationYaw, renderYawOffset, rotationYawHead, rotationPitch]
+  static boolean b98up(String name) { return name.startsWith("b98-") || name.startsWith("b99-") || name.startsWith("b100-"); } // batch 99: b99-* records (mobrec99) use the b98 layout; their villager rows also end with [rotationYaw, renderYawOffset, rotationYawHead, rotationPitch]
   static boolean b38up(String name) { return name.startsWith("b38-") || name.startsWith("b39-") || name.startsWith("b41-") || name.startsWith("b86-") || name.startsWith("b87-") || name.startsWith("b90-") || b98up(name); } // batch 98: b98-* (mobrec98: villagers); batch 87: b87-; batch 90: b90-* too (mobrec87: pigmen, baby and villager zombie kills); batch 86: b86-* too (the pigman fight); batch 39: b39-* records use the b38 legacy-row layout
   // batch 98: [growingAge, isMating (br), isPlaying (bs), has customer (bt), timeUntilReset (bv), needsInitilization (bw), riches (bx), offers, uses of each offer, max uses of each offer, Regeneration duration left, randomTickDivider (bq)]
   static String villagerState(yv v) throws Exception {
@@ -83,8 +83,9 @@ public class VillageFightProbe {
 
   public static class Log extends Random {
     List<String> log = new ArrayList<>();
+    boolean armed = false; // batch 100: the `rose k on|off` script op: nextInt(8000) answers 0 (EntityAILookAtVillager's 1 in 8000 roll), the stream still advances as natively
     Log(long seed) { super(seed); }
-    public int nextInt(int bound) { int r = super.nextInt(bound); log.add("i" + bound + (SeedRandom.TRACE ? SeedRandom.where() : "")); return r; }
+    public int nextInt(int bound) { int r = super.nextInt(bound); if (armed && bound == 8000) r = 0; log.add("i" + bound + (SeedRandom.TRACE ? SeedRandom.where() : "")); return r; }
     public float nextFloat() { float r = super.nextFloat(); log.add("f" + (SeedRandom.TRACE ? SeedRandom.where() : "")); return r; }
     public double nextGaussian() { double r = super.nextGaussian(); log.add("g"); return r; }
     public boolean nextBoolean() { boolean r = super.nextBoolean(); log.add("b"); return r; } // batch 31: the zombie's onKillEntity roll on Normal
@@ -264,6 +265,7 @@ public class VillageFightProbe {
           case "trade": { yv v = (yv) ents[Integer.parseInt(p[2])]; v.a_(player); v.b(player); break; }
           case "untrade": ((yv) ents[Integer.parseInt(p[2])]).a_((yz) null); break;
           case "buy": { yv v = (yv) ents[Integer.parseInt(p[2])]; ago list = v.b(player); v.a((agn) list.get(list.size() - 1)); break; }
+          case "rose": logs[Integer.parseInt(p[2])].armed = p[3].equals("on"); break; // batch 100: force EntityAILookAtVillager's roll on the k-th mob's Random
           case "door": VillageLiveProbe.door(Integer.parseInt(p[2]), 0, Integer.parseInt(p[3]), Integer.parseInt(p[4])); break;
           case "baby": ((yq) ents[Integer.parseInt(p[2])]).i(true); break; // batch 87: "t baby k" EntityZombie.setChild(true): data watcher 12, the baby speed boost modifier (+0.5, operation 1), the half-size box // batch 85: "t zvillager k" EntityZombie.setVillager(true)
           case "convert": MobMoveProbe.method(yq.class, "a", int.class).invoke(ents[Integer.parseInt(p[2])], Integer.parseInt(p[3])); break; // batch 85: "t convert k ticks" EntityZombie.startConversion (yq.a(int)): the timer, Weakness off, Strength on
@@ -434,9 +436,15 @@ public class VillageFightProbe {
         for (sv m : extraMobs) if (m instanceof yv) vs.add((yv) m);
         for (yv v : vs) {
           String st = villagerState(v);
-          if (name.startsWith("b99-")) st = st.substring(0, st.length() - 1) + ",[" + num(v.y) + "," + num(v.aM) + "," + num(v.aO) + "," + num(v.z) + "]]"; // batch 99: rotationYaw, renderYawOffset, rotationYawHead, rotationPitch
+          if (name.startsWith("b99-") || name.startsWith("b100-")) st = st.substring(0, st.length() - 1) + ",[" + num(v.y) + "," + num(v.aM) + "," + num(v.aO) + "," + num(v.z) + "]]"; // batch 99: rotationYaw, renderYawOffset, rotationYawHead, rotationPitch
           row.append(firstV ? "" : ",").append(st); firstV = false;
         }
+        row.append("]");
+      }
+      if (name.startsWith("b100-")) { // batch 100: element 9, every iron golem as [holdRoseTick (wt.bs), attackTimer (wt.br)]
+        row.append(",[");
+        boolean firstG = true;
+        for (int k = 0; k < n; k++) if (ents[k] instanceof wt) { wt g = (wt) ents[k]; row.append(firstG ? "" : ",").append("[").append(MobMoveProbe.field(wt.class, "bs").getInt(g)).append(",").append(MobMoveProbe.field(wt.class, "br").getInt(g)).append("]"); firstG = false; }
         row.append("]");
       }
       row.append("]");
@@ -1095,6 +1103,22 @@ public class VillageFightProbe {
     // Batch 99 mobrec99 (names b99-*, the b98 layout plus the yaws at the end of each villager's state): villager births in the 12-door village, with the child's head yaw.
     run99();
     difficulty = 2;
+    // Batch 100 mobrec100 (names b100-*, the b99 layout plus row element 9: every iron golem's [holdRoseTick, attackTimer]).
+    run100();
+    difficulty = 2;
+  }
+
+  // Batch 100: the rose offering. `rose 2 on` arms the golem's Entity.rand so that EntityAILookAtVillager's nextInt(8000) answers 0 (the draw still happens); the op `rose 2 off` disarms it again.
+  static void run100() throws Exception {
+    local = 0; eggTimer = 6000; bright = 15; patches = new int[][] {};
+    blocks = new int[][] {};
+    double[][] near = {{58.5, 52.5}, {60.5, 56.5}, {58.5, 55.5}, {30.5, 30.5}};
+    double[][] far = {{58.5, 52.5}, {70.5, 56.5}, {58.5, 55.5}, {30.5, 30.5}};
+    for (int sd : new int[] {10001, 10002, 10003}) scenario("b100-rose-child-" + sd, sd, 800, "VVG", near, new String[] {"0 day on", "0 babyv 1", "0 rose 2 on", "9 rose 2 off"});
+    for (int sd : new int[] {10004, 10005}) scenario("b100-rose-adults-" + sd, sd, 560, "VVG", near, new String[] {"0 day on", "0 rose 2 on", "9 rose 2 off"});
+    scenario("b100-rose-dusk-10006", 10006, 800, "VVG", near, new String[] {"0 day on", "0 babyv 1", "0 rose 2 on", "9 rose 2 off", "60 day off"});
+    scenario("b100-rose-far-10007", 10007, 700, "VVG", far, new String[] {"0 day on", "0 babyv 1", "0 rose 2 on", "9 rose 2 off"});
+    scenario("b100-rose-night-10008", 10008, 300, "VVG", near, new String[] {"0 babyv 1", "0 rose 2 on", "9 rose 2 off"}); // night: the roll is never drawn
   }
 
   // Batch 99: births in a village of `doors` doors (door x 50, z 50 + 3 i). Spec "seed:doors:villagers:ticks" (default 2 villagers); B99_SPECS (comma list, development aid) replaces the default specs.

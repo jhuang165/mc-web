@@ -2293,7 +2293,7 @@ export class EntityWorld {
       const mx = [c.vx, c.vy, c.vz];
       c.living = true; // EntityLivingBase.updateFallState: a landing in water cancels the fall (moveEntity reads it)
       copyFallScream(c, m, moveEntityWithHeading(this.world, c, w, h, 0)); // b65: a landing above 3 blocks makes an enderman copy scream (copy-talk.js)
-      if (c.inWater === false) copyWaterAfterMove(c, m, inWater(this.world, c, w, h), w, mx); // batch 61: updateFallState's second handleWaterMovement (a splash on the copy's Random)
+      if (c.inWater === false && m.type !== "bat") copyWaterAfterMove(c, m, inWater(this.world, c, w, h), w, mx); // batch 61: updateFallState's second handleWaterMovement (a splash on the copy's Random)
     }
   }
   // Entity.onEntityUpdate on the client entity: handleWaterMovement (which pushes a living entity along the flow) and handleLavaMovement at the
@@ -3060,7 +3060,7 @@ export class EntityWorld {
   // EntityLivingBase.updateFallState (inside moveEntity, after the move): a mob not yet in water asks handleWaterMovement again with the box it
   // just moved to, so a mob that sinks into water splashes during that tick's move, not at the start of the next.
   waterAfterMove(e, t) {
-    if (e.inWater !== false || !inWater(this.world, e, t.width, t.height)) return;
+    if (e.type === "bat" || e.inWater !== false || !inWater(this.world, e, t.width, t.height)) return; // EntityBat.updateFallState (we.a(DZ)) is an empty method (bytecode-read): its move never asks handleWaterMovement again, the splash waits for the next tick's own call
     e.inWater = true;
     e.fallDistance = 0;
     this.splash(e, t, e.moveMotion ?? undefined); // sv.a(DZ) runs inside moveEntity: the motion is the move's, before the drag after it
