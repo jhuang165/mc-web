@@ -88,11 +88,16 @@ function plain(blocks = []) {
     set: () => {}, put: (x, y, z, b, m) => cells.set(key(x, y, z), [b, m]), solid: (x, y, z) => (cells.has(key(x, y, z)) ? ![0, WATER, LAVA, WEB].includes(cells.get(key(x, y, z))[0]) : y < 0), surface: () => 1, spawn: () => ({ x: 5.5, y: 0, z: 5.5 }) };
 }
 
+// Batch 99: village-fight-b99-birth{1..4}-reference.json (births in a 5, 9 or 12 door village, two and three villagers; villager rows end with the four yaw/pitch fields).
+const reference99Parts = [1, 2, 3, 4].map((k) => JSON.parse(readFileSync(new URL(`../public/research/village-fight-b99-birth${k}-reference.json`, import.meta.url))));
+export const fightReference99 = { ...reference99Parts[0], records: reference99Parts.flatMap((p) => p.records) }; // see tools/verify-villagers99.mjs
 // b98: one villager as VillageFightProbe.villagerState lists it: [growingAge, mating, playing, customer, timeUntilReset, needsInit, riches, offers (-1 none), uses, max uses, Regeneration ticks, randomTickDivider]
-function villagerRow(ew, e) {
+function villagerRow(ew, e, yaws = false) {
   const o = e.offers;
-  return [e.growingAge, e.mating ? 1 : 0, e.playing ? 1 : 0, e.customer ? 1 : 0, e.timeUntilReset ?? 0, e.needsInit ? 1 : 0, e.riches ?? 0, o ? o.length : -1, o ? o.map((x) => x.uses) : [], o ? o.map((x) => x.maxUses) : [],
+  const row = [e.growingAge, e.mating ? 1 : 0, e.playing ? 1 : 0, e.customer ? 1 : 0, e.timeUntilReset ?? 0, e.needsInit ? 1 : 0, e.riches ?? 0, o ? o.length : -1, o ? o.map((x) => x.uses) : [], o ? o.map((x) => x.maxUses) : [],
     (e.effects ?? []).find((x) => x.id === 10)?.duration ?? 0, ew.ai.brain(e).randomTickDivider];
+  if (yaws) row.push([e.rotationYaw, e.renderYawOffset, e.rotationYawHead, e.rotationPitch]); // b99: VillageFightProbe appends [rotationYaw, renderYawOffset, rotationYawHead, rotationPitch]
+  return row;
 }
 export function replayFight(r, hooks = {}) {
   const was = setPathNodeCap(Infinity); // natively a path search has no node cap (the live port stops at 30000 expanded points)
@@ -313,7 +318,7 @@ function replayFightUncapped(r, hooks) {
     states[states.length - 1].mobs = extraMobs.map((m, k) => [m.x, m.y, m.z, gone.has(m) ? gone.get(m) : m.removedHealth ?? m.health, idx(legacyRows && LEGACY.has(m.type) ? ew.silverfishState(m).target : ew.ai.brain(m).attackTarget), (m.revenge ? (revengeOf(m) === "player" ? n : index(revengeOf(m))) : -1), mobLogs[k].log.slice()]);
     states[states.length - 1].jockeys = ents.flatMap((e) => (e.type === "chicken" ? [e.chickenJockey ? 1 : 0] : []));
     states[states.length - 1].extras = extra.map((z, k) => [z.x, z.y, z.z, gone.has(z) ? gone.get(z) : z.removedHealth ?? z.health, idx(ew.ai.brain(z).attackTarget), (z.revenge ? (revengeOf(z) === "player" ? n : index(revengeOf(z))) : -1), extraLogs[k].log.slice()]);
-    if (r.name?.startsWith("b98-")) states[states.length - 1].villagers = [...ents, ...extraMobs].filter((e) => e.type === "villager").map((e) => villagerRow(ew, e));
+    if (/^b9[89]-/.test(r.name ?? "")) states[states.length - 1].villagers = [...ents, ...extraMobs].filter((e) => e.type === "villager").map((e) => villagerRow(ew, e, r.name.startsWith("b99-")));
     hooks.onTick?.(t, ew, ents);
     rows.push([agg, village.playerReputation(name === "alt" ? "Player" : "Player"), village.playerReputation("probe")]);
   }
