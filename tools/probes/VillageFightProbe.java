@@ -60,7 +60,8 @@ public class VillageFightProbe {
   static boolean b35or36(String name) { return name.startsWith("b35-") || b36up(name); }
   static boolean b36up(String name) { return name.startsWith("b36-") || b37up(name); }
   static boolean b37up(String name) { return name.startsWith("b37-") || name.startsWith("b85-") || name.startsWith("b86-") || b38up(name); }
-  static boolean b38up(String name) { return name.startsWith("b38-") || name.startsWith("b39-") || name.startsWith("b41-") || name.startsWith("b86-") || name.startsWith("b87-") || name.startsWith("b90-") || name.startsWith("b98-"); } // batch 98: b98-* (mobrec98: villagers); batch 87: b87-; batch 90: b90-* too (mobrec87: pigmen, baby and villager zombie kills); batch 86: b86-* too (the pigman fight); batch 39: b39-* records use the b38 legacy-row layout
+  static boolean b98up(String name) { return name.startsWith("b98-") || name.startsWith("b99-"); } // batch 99: b99-* records (mobrec99) use the b98 layout; their villager rows also end with [rotationYaw, renderYawOffset, rotationYawHead, rotationPitch]
+  static boolean b38up(String name) { return name.startsWith("b38-") || name.startsWith("b39-") || name.startsWith("b41-") || name.startsWith("b86-") || name.startsWith("b87-") || name.startsWith("b90-") || b98up(name); } // batch 98: b98-* (mobrec98: villagers); batch 87: b87-; batch 90: b90-* too (mobrec87: pigmen, baby and villager zombie kills); batch 86: b86-* too (the pigman fight); batch 39: b39-* records use the b38 legacy-row layout
   // batch 98: [growingAge, isMating (br), isPlaying (bs), has customer (bt), timeUntilReset (bv), needsInitilization (bw), riches (bx), offers, uses of each offer, max uses of each offer, Regeneration duration left, randomTickDivider (bq)]
   static String villagerState(yv v) throws Exception {
     StringBuilder b = new StringBuilder("[").append(v.d()).append(",").append(MobMoveProbe.field(yv.class, "br").getBoolean(v) ? 1 : 0).append(",").append(MobMoveProbe.field(yv.class, "bs").getBoolean(v) ? 1 : 0)
@@ -133,7 +134,7 @@ public class VillageFightProbe {
     wc c = VillageLiveProbe.newCollection(seed);
     VillageLiveProbe.W.players.clear();
     VillageLiveProbe.W.day = false;
-    if (name.startsWith("b98-")) { // batch 98: EntityVillager.addDefaultEquipmentAndRecipies shuffles with Collections.shuffle(list) (the shared static Random): reseeded per record, as VillagerTradeLiveProbe does
+    if (b98up(name)) { // batch 98: EntityVillager.addDefaultEquipmentAndRecipies shuffles with Collections.shuffle(list) (the shared static Random): reseeded per record, as VillagerTradeLiveProbe does
       Field shuffle = java.util.Collections.class.getDeclaredField("r"); shuffle.setAccessible(true);
       Random shared = (Random) shuffle.get(null);
       if (shared == null) { shared = new Random(0); shuffle.set(null, shared); }
@@ -320,7 +321,7 @@ public class VillageFightProbe {
           } else if ((sp instanceof yn || sp instanceof yl || sp instanceof yv) && b37up(name)) {
             // Batch 37: a spider built by a spawn op and the skeleton its onSpawnWithEgg seats on it (World.spawnEntityInWorld first, mountEntity after): both join the world list and tick in this pass; the skeleton updates with its mount.
             sv m = (sv) sp;
-            for (String fn : new String[] {"aO", "aM", "aN", "aP"}) MobMoveProbe.set(m, fn, 0f);
+            for (String fn : new String[] {"aO", "aM", "aN", "aP"}) MobMoveProbe.set(m, fn, 0f); // batch 99: a born villager is zeroed here too: its constructor head yaw (random, 0 to 6.28 degrees) is snapped to the body by the look helper in the birth tick itself (10 degree step), so no record can see it
             for (int slot = 0; slot < 5; slot++) equipSync(m, slot);
             int mount = -1; if (((sa) m).m != null) for (int k = 0; k < extraMobs.size(); k++) if (extraMobs.get(k) == ((sa) m).m) mount = k;
             mobRecs.add("[" + t + "," + (sp instanceof yn ? 0 : sp instanceof yl ? 1 : 2) + "," + num(m.s) + "," + num(m.t) + "," + num(m.u) + "," + ((SeedRandom) MobMoveProbe.field(sa.class, "Z").get(m)).seed + "," + num(m.y) + "," + mount + "," + num(((ti) m.a(yj.d)).e()) + "," + num(m.aS()) + "]");
@@ -425,13 +426,17 @@ public class VillageFightProbe {
           row.append("]");
         }
       }
-      if (name.startsWith("b98-")) { // batch 98: the villagers' own state, the starting ones then the ones born during the run
+      if (b98up(name)) { // batch 98: the villagers' own state, the starting ones then the ones born during the run
         row.append(",[");
         boolean firstV = true;
         List<yv> vs = new ArrayList<>();
         for (int k = 0; k < n; k++) if (ents[k] instanceof yv) vs.add((yv) ents[k]);
         for (sv m : extraMobs) if (m instanceof yv) vs.add((yv) m);
-        for (yv v : vs) { row.append(firstV ? "" : ",").append(villagerState(v)); firstV = false; }
+        for (yv v : vs) {
+          String st = villagerState(v);
+          if (name.startsWith("b99-")) st = st.substring(0, st.length() - 1) + ",[" + num(v.y) + "," + num(v.aM) + "," + num(v.aO) + "," + num(v.z) + "]]"; // batch 99: rotationYaw, renderYawOffset, rotationYawHead, rotationPitch
+          row.append(firstV ? "" : ",").append(st); firstV = false;
+        }
         row.append("]");
       }
       row.append("]");
@@ -1087,5 +1092,26 @@ public class VillageFightProbe {
     scenario("b98-trade-night-9837", 9837, 300, "VV", new double[][] {{52.5, 54.5}, {56.5, 56.5}, {49.5, 54.5}}, new String[] {"5 trade 0", "10 buy 0", "40 untrade 0"});
     scenario("b98-trade-child-9838", 9838, 120, "V", talk98, new String[] {"0 babyv 0", "5 trade 0"}); // a trade call on a child (the port's interact refuses it; setCustomer itself does not)
     difficulty = 2;
+    // Batch 99 mobrec99 (names b99-*, the b98 layout plus the yaws at the end of each villager's state): villager births in the 12-door village, with the child's head yaw.
+    run99();
+    difficulty = 2;
+  }
+
+  // Batch 99: births in a village of `doors` doors (door x 50, z 50 + 3 i). Spec "seed:doors:villagers:ticks" (default 2 villagers); B99_SPECS (comma list, development aid) replaces the default specs.
+  static void run99() throws Exception {
+    local = 0; eggTimer = 6000; bright = 15; patches = new int[][] {};
+    double[][] pair = {{58.5, 52.5}, {60.5, 56.5}, {30.5, 30.5}};
+    double[][] trio = {{58.5, 52.5}, {60.5, 56.5}, {55.5, 60.5}, {30.5, 30.5}};
+    String env = System.getenv("B99_SPECS");
+    if (env == null) env = "10072:9:2:800,10321:9:2:720,10130:12:2:1040,10424:12:2:1000,10076:12:2:1560,10130:5:2:1040,10456:12:3:890,10194:12:3:1260";
+    for (String t : env.split(",")) {
+      String[] a = t.split(":");
+      int sd = Integer.parseInt(a[0]), doors = Integer.parseInt(a[1]), vil = Integer.parseInt(a[2]), ticks = Integer.parseInt(a[3]);
+      java.util.ArrayList<int[]> list = new java.util.ArrayList<>();
+      for (int i = 1; i < doors; i++) { list.add(new int[] {50, 0, 50 + 3 * i, 50, 0, 50 + 3 * i, 64, 0}); list.add(new int[] {50, 1, 50 + 3 * i, 50, 1, 50 + 3 * i, 64, 8}); }
+      blocks = list.toArray(new int[0][]);
+      scenario("b99-birth-d" + doors + "v" + vil + "-" + sd, sd, ticks, vil == 3 ? "VVV" : "VV", vil == 3 ? trio : pair, new String[] {"0 day on"});
+    }
+    blocks = new int[][] {};
   }
 }

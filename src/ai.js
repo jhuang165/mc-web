@@ -547,7 +547,7 @@ class WatchClosest extends Task {
       let best = null, bd = Infinity;
       for (const b of m.nearby(this.range, 3, this.range, (o) => (this.watched === "villager" ? o.e.type === "villager" : o.e.type !== "ender_crystal"), 0, true)) {
         const d = m.distSq(b);
-        if (d < bd) { best = b; bd = d; }
+        if (d <= bd) { best = b; bd = d; } // World.findNearestEntityWithinAABB (ahb.a: dcmpl, ifle) keeps the later of two equal distances (b99 mobrec99)
       }
       this.target = best;
     }
