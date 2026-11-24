@@ -20,7 +20,7 @@ import { chunkFromNbt } from './chunk-nbt.js';
 import { nbtGet, hasNumber } from './nbt-get.js';
 import { readFireworkNbt } from './fireworks-nbt.js';
 import { readBookNbt } from './books-nbt.js';
-import { readItemTagsNbt, readExtraRaw, rawOf } from './item-tags.js';
+import { readItemTagsNbt, readExtraRaw, rawOf, setRawForm, enchantEntryRaw } from './item-tags.js';
 import { splitWrongTyped } from './tag-types.js';
 import { profileOfSkullTile, skullBytes } from './skull-profile.js';
 import { NBT } from './nbt.js';
@@ -94,7 +94,7 @@ export function readItemTag(stack, tagNbt) {
     const value = get(nbt, key, NBT.LIST);
     // NBTTagCompound.getTagList accepts any element type when the list is empty.
     if (!value || (value.items.length && value.elementType !== NBT.COMPOUND)) return undefined;
-    return value.items.slice(0, 64).map((e) => ({ id: get(e, 'id', NBT.SHORT, 0), lvl: get(e, 'lvl', NBT.SHORT, 0) }));
+    return value.items.slice(0, 64).map((e) => { const raw = enchantEntryRaw(e); return { id: get(e, 'id', NBT.SHORT, 0), lvl: get(e, 'lvl', NBT.SHORT, 0), ...(raw ? { raw } : {}) }; }); // b100 tiles100: raw keeps an int width / extra keys
   };
   const enchantments = readEnchantments('ench'), stored = readEnchantments('StoredEnchantments');
   if (enchantments) stack.enchantments = enchantments;
@@ -106,7 +106,7 @@ export function readItemTag(stack, tagNbt) {
   const color = get(display, 'color', NBT.INT);
   if (Number.isInteger(color) && color >= 0 && color <= 0xFFFFFF) stack.color = color;
   const unbreakable = get(nbt, 'Unbreakable', NBT.BYTE);
-  if (unbreakable !== undefined) stack.unbreakable = unbreakable !== 0;
+  if (unbreakable !== undefined) { stack.unbreakable = unbreakable !== 0; setRawForm(stack, 'Unbreakable', nbt.get('Unbreakable'), { type: NBT.BYTE, value: unbreakable !== 0 ? 1 : 0 }); } // b100 tiles100: keeps the width it was read at
   const lost = [], recognized = new Set(['ench', 'StoredEnchantments', 'RepairCost', 'display', 'Unbreakable', ...readFireworkNbt(stack, nbt), ...readBookNbt(stack, nbt), ...readItemTagsNbt(stack, nbt, lost)]);
   readExtraRaw(stack, nbt, recognized); // b97 tiles97: unknown keys of tag and display stay raw (ItemStack keeps the whole tag), so nothing is reported ignored
   for (const [k, t] of Object.entries(split.top)) (stack.extraRaw ??= {})[k] = rawOf(t);

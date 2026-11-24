@@ -51,11 +51,45 @@ export const tagOf = (r) => { if (!r || !Number.isInteger(r.t) || r.t < 1 || r.t
 const validRaw = (r) => { try { tagOf(r); return true; } catch { return false; } };
 // b97 tiles97: ItemStack.readFromNBT keeps the whole `tag` compound. Keys the port does not model stay as raw NBT: stack.extraRaw {key: raw} for
 // unknown keys of `tag`, stack.displayExtraRaw {key: raw} for unknown keys of display (Name, color and Lore are modelled).
-const RAW_MAPS = ['extraRaw', 'displayExtraRaw'];
+const RAW_MAPS = ['extraRaw', 'displayExtraRaw', 'rawForms'];
 const validRawMap = (m) => !!m && typeof m === 'object' && !Array.isArray(m) && Object.values(m).every(validRaw);
 const rawMapEntries = (m) => (m && typeof m === 'object' ? Object.entries(m) : []);
 const sameRaw = (a, b) => (a === undefined || b === undefined ? a === b : JSON.stringify(a) === JSON.stringify(b));
 const stringList = (t) => t?.type === NBT.LIST && (t.value.elementType === NBT.STRING ? t.value.items.length > 0 : t.value.elementType === NBT.END && !t.value.items.length);
+
+// b100 tiles100: a modelled tag whose NBT was not in the port's own canonical form (Unbreakable / map_is_scaling of another width or value, an `ench` entry with an int id or
+// extra keys, an Explosion / Fireworks compound with extra keys or other widths) keeps the tag it was read from: stack.rawForms {Unbreakable, map_is_scaling, Explosion,
+// Fireworks} and `raw` on an enchantment entry. The raw tag is written back only while the modelled value still equals what it reads as, so an edited stack writes the canonical form.
+const sortedJson = (r) => JSON.stringify(r, (k, v) => (v && Array.isArray(v) && v.length && v.every((p) => Array.isArray(p) && typeof p[0] === 'string' && p[1] && p[1].t) ? [...v].sort((a, b) => (a[0] < b[0] ? -1 : 1)) : v));
+export const sameNbt = (a, b) => sortedJson(rawOf(a)) === sortedJson(rawOf(b));
+/** Keeps `t` (the tag as read) on the stack under `key` unless it equals the canonical tag the port would write. */
+export function setRawForm(stack, key, t, canonical) {
+  if (t && !(canonical && sameNbt(t, canonical))) (stack.rawForms ??= {})[key] = rawOf(t);
+  else if (stack.rawForms) { delete stack.rawForms[key]; if (!Object.keys(stack.rawForms).length) delete stack.rawForms; }
+}
+/** The kept raw tag of `key`, as a tag, when `fits(tag)` (it still reads as the modelled value); else undefined. */
+export function rawFormTag(stack, key, fits) {
+  const r = stack.rawForms?.[key];
+  if (!r) return undefined;
+  try { const t = tagOf(r); return fits(t) ? t : undefined; } catch { return undefined; }
+}
+const numberOf = (t) => (t && t.type >= NBT.BYTE && t.type <= NBT.DOUBLE ? t.value : undefined);
+const isFlag = (t, on) => { const v = numberOf(t); return v !== undefined && (Number(v) !== 0) === on; };
+/** The tag of a boolean field (Unbreakable, map_is_scaling): the width it was read at, else a byte. */
+export const flagTag = (stack, key, on) => rawFormTag(stack, key, (t) => isFlag(t, on)) ?? tag(NBT.BYTE, on ? 1 : 0);
+export const shortOf = (t) => { const v = numberOf(t); if (v === undefined) return 0; if (typeof v === 'bigint') return Number(BigInt.asIntN(16, v)); return (Math.floor(v) << 16) >> 16; };
+/** The `ench` / StoredEnchantments entry as a raw tag when it is not the canonical {id short, lvl short} compound. */
+export function enchantEntryRaw(c) {
+  if (c instanceof Map && c.size === 2 && c.get('id')?.type === NBT.SHORT && c.get('lvl')?.type === NBT.SHORT) return undefined;
+  return c instanceof Map ? rawOf(tag(NBT.COMPOUND, c)) : undefined;
+}
+/** The compound Map written for an enchantment entry {id, lvl, raw?}. */
+export function enchantEntryMap(e) {
+  if (e.raw) {
+    try { const t = tagOf(e.raw); if (t.type === NBT.COMPOUND && shortOf(t.value.get('id')) === e.id && shortOf(t.value.get('lvl')) === e.lvl) return t.value; } catch { /* canonical */ }
+  }
+  return new Map([['id', tag(NBT.SHORT, e.id)], ['lvl', tag(NBT.SHORT, e.lvl)]]);
+}
 
 /** The four fields of `s` normalised for a stack (what Inventory.read keeps). */
 export function readItemTags(s) {
@@ -108,7 +142,7 @@ export function writeItemTags(stack, entries) {
   if (Array.isArray(stack.customPotionEffects)) {
     entries.CustomPotionEffects = tag(NBT.LIST, { elementType: stack.customPotionEffects.length ? NBT.COMPOUND : NBT.END, items: stack.customPotionEffects.map((e) => effectTag(e).value) });
   }
-  if (typeof stack.mapScaling === 'boolean') entries.map_is_scaling = tag(NBT.BYTE, stack.mapScaling ? 1 : 0);
+  if (typeof stack.mapScaling === 'boolean') entries.map_is_scaling = flagTag(stack, 'map_is_scaling', stack.mapScaling);
 }
 // NBTTagCompound.getTagList(key, type): an empty list for a list of another element type (a non-empty one).
 const listOf = (map, key, type) => {
@@ -142,7 +176,7 @@ export function readItemTagsNbt(stack, nbt, lost = []) {
   const custom = listOf(nbt, 'CustomPotionEffects', NBT.COMPOUND);
   if (custom) stack.customPotionEffects = custom.items.map(readCustomEffect).filter(Boolean);
   const scaling = nbt.get('map_is_scaling');
-  if (scaling) { const v = nbtGet(nbt, 'map_is_scaling', NBT.BYTE); if (v !== undefined) stack.mapScaling = v !== 0; }
+  if (scaling) { const v = nbtGet(nbt, 'map_is_scaling', NBT.BYTE); if (v !== undefined) { stack.mapScaling = v !== 0; setRawForm(stack, 'map_is_scaling', scaling, tag(NBT.BYTE, v !== 0 ? 1 : 0)); } }
   return ['SkullOwner', 'CustomPotionEffects', 'map_is_scaling'];
 }
 /** b97 tiles97: the unknown keys of `tag` (not in `recognized`) and of display (not Name, color, Lore) kept raw on the stack. */

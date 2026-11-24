@@ -50,7 +50,9 @@ export const maxDamage = (id) => itemInfo(id).maxDamage || 0;
 
 export const emptyGear = () => ({ equipment: [null, null, null, null, null], dropChances: Array(5).fill(DEFAULT_DROP_CHANCE), canPickUpLoot: false });
 const stack = (id, damage = 0) => ({ id, count: 1, damage });
-export const cloneStack = (s) => (s ? { ...s, ...(s.enchantments ? { enchantments: s.enchantments.map((e) => ({ id: e.id, lvl: e.lvl })) } : {}) } : null);
+// b100 tiles100: an enchantment entry keeps `raw` (int width / extra keys read from NBT) across mob gear copies.
+export const enchPair = (e) => ({ id: e.id, lvl: e.lvl, ...(e.raw ? { raw: e.raw } : {}) });
+export const cloneStack = (s) => (s ? { ...s, ...(s.enchantments ? { enchantments: s.enchantments.map((e) => enchPair(e)) } : {}) } : null);
 
 // EntityLiving.addRandomArmor (sw.bC), the armour part only: with Entity.rand.nextFloat() < 0.15 x local
 // a tier (nextInt(2), plus one per three rolls of 0.095) from the helmet down, each further piece
@@ -169,7 +171,7 @@ const hasTag = (s) => !!s.enchantments?.length;
 // b71: a head's SkullOwner (item-tags.js skullOwner / skullRaw) survives on a mob's helmet so RenderBiped can draw the player's skin.
 // b98 tiles98: also the raw unknown tag keys (extraRaw, displayExtraRaw) so a hand-built copy keeps them.
 export const skullFields = (s) => ({ ...(typeof s?.skullOwner === "string" ? { skullOwner: s.skullOwner } : {}), ...(s?.skullRaw ? { skullRaw: structuredClone(s.skullRaw) } : {}),
-  ...(s?.extraRaw ? { extraRaw: structuredClone(s.extraRaw) } : {}), ...(s?.displayExtraRaw ? { displayExtraRaw: structuredClone(s.displayExtraRaw) } : {}) });
+  ...(s?.extraRaw ? { extraRaw: structuredClone(s.extraRaw) } : {}), ...(s?.displayExtraRaw ? { displayExtraRaw: structuredClone(s.displayExtraRaw) } : {}), ...(s?.rawForms ? { rawForms: structuredClone(s.rawForms) } : {}) });
 // Whether the mob swaps its stack in `slot` for the candidate (the flag of EntityLiving.onLivingUpdate's loop).
 export function prefersPickup(slot, current, candidate) {
   if (!current) return true;
@@ -213,7 +215,7 @@ export function bowEffects(bow, wither = false) {
 // NBT: Equipment (five compounds, an empty one for a missing stack), DropChances and CanPickUpLoot.
 export function saveGear(gear) {
   return {
-    equipment: gear.equipment.map((s) => (s ? { id: s.id, count: s.count ?? 1, damage: s.damage ?? 0, ...(hasTag(s) ? { enchantments: s.enchantments.map((e) => ({ id: e.id, lvl: e.lvl })) } : {}), ...skullFields(s) } : null)),
+    equipment: gear.equipment.map((s) => (s ? { id: s.id, count: s.count ?? 1, damage: s.damage ?? 0, ...(hasTag(s) ? { enchantments: s.enchantments.map((e) => enchPair(e)) } : {}), ...skullFields(s) } : null)),
     dropChances: gear.dropChances.map(f),
     canPickUpLoot: !!gear.canPickUpLoot,
   };
@@ -226,7 +228,7 @@ export function readGear(saved) {
     const max = maxDamage(s.id);
     // ItemStack.loadItemStackFromNBT keeps Count 0 (a Thorns-broken piece; probed, zero-stacks-reference.json mobNbt).
     gear.equipment[i] = { id: s.id, count: Number.isFinite(s.count) ? Math.max(0, Math.min(64, s.count | 0)) : 1, damage: Math.max(0, Math.min(max || 32767, Number.isFinite(s.damage) ? s.damage | 0 : 0)),
-      ...(Array.isArray(s.enchantments) && s.enchantments.length ? { enchantments: s.enchantments.filter((e) => Number.isInteger(e?.id) && Number.isInteger(e?.lvl)).map((e) => ({ id: e.id, lvl: e.lvl })) } : {}), ...skullFields(s) };
+      ...(Array.isArray(s.enchantments) && s.enchantments.length ? { enchantments: s.enchantments.filter((e) => Number.isInteger(e?.id) && Number.isInteger(e?.lvl)).map((e) => enchPair(e)) } : {}), ...skullFields(s) };
   });
   if (Array.isArray(saved.dropChances)) saved.dropChances.slice(0, 5).forEach((c, i) => { if (Number.isFinite(c)) gear.dropChances[i] = f(c); });
   gear.canPickUpLoot = !!saved.canPickUpLoot;

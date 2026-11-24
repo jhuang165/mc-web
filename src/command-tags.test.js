@@ -22,7 +22,7 @@ test('give tags join all remaining arguments and preserve supported stack data, 
   const g = game(), out = g.run('/give @p diamond_sword 1 0 {display:{Name:"A sword",Lore:[hello]},ench:[{id:16,lvl:3}],Unbreakable:1,RepairCost:7,unused:1}');
   const stack = g.survival.inventory.main.find(s => s?.displayName === 'A sword');
   assert.equal(stack.displayName, 'A sword');
-  assert.deepEqual(stack.enchantments, [{ id: 16, lvl: 3 }]);
+  assert.deepEqual(stack.enchantments.map(({ id, lvl }) => ({ id, lvl })), [{ id: 16, lvl: 3 }]); // b100 tiles100: the entry also carries `raw` (the int-width tag it was read as)
   assert.equal(stack.unbreakable, true); assert.equal(stack.repairCost, 7);
   assert.deepEqual(stack.lore, ['hello']); // display.Lore is kept since batch 57 (item-tags.js)
   // b97 tiles97: ItemStack.readFromNBT keeps the whole tag, so an unknown key is kept raw and nothing is reported as not kept (the old test expected it stripped)

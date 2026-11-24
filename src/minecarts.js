@@ -1,5 +1,5 @@
 import { isFrozen } from "./saved-order.js"; // b62: an unloaded chunk's entities are in no chunk list (getEntitiesWithinAABB misses them)
-import { readItemTags, tagOf } from './item-tags.js';
+import { readItemTags, tagOf, enchantEntryMap, flagTag } from './item-tags.js';
 import { bindIds } from "./entity-ids.js";
 import { LastOutputError } from "./chat-component.js";
 import { ringEntityActive } from './streaming-ticks.js';
@@ -71,7 +71,7 @@ function cartTag(t) {
   return t.type === 9 ? payload(9, t.value) : [t.type, payload(t.type, t.value)];
 }
 function itemTagsNbt(stack) {
-  const tag = {}, list = (entries) => [9, 10, entries.map((e) => ({ id: [2, e.id], lvl: [2, e.lvl] }))];
+  const tag = {}, list = (entries) => [9, 10, entries.map((e) => cartTag({ type: 10, value: enchantEntryMap(e) })[1])]; // b100 tiles100
   if (Array.isArray(stack.enchantments)) tag.ench = list(stack.enchantments);
   const stored = stack.storedEnchantments ?? (stack.stored?.length ? stack.stored : undefined);
   if (Array.isArray(stored)) tag.StoredEnchantments = list(stored);
@@ -82,10 +82,10 @@ function itemTagsNbt(stack) {
   for (const [k, r] of Object.entries(stack.displayExtraRaw ?? {})) if (!(k in display)) display[k] = cartTag(tagOf(r)); // b98 tiles98
   if (Object.keys(display).length) tag.display = [10, display];
   for (const [k, r] of Object.entries(stack.extraRaw ?? {})) if (!(k in tag)) tag[k] = cartTag(tagOf(r)); // b98 tiles98: raw unknown keys
-  if (typeof stack.unbreakable === 'boolean') tag.Unbreakable = [1, stack.unbreakable ? 1 : 0];
+  if (typeof stack.unbreakable === 'boolean') tag.Unbreakable = cartTag(flagTag(stack, 'Unbreakable', stack.unbreakable));
   if (stack.skullRaw) tag.SkullOwner = cartTag(tagOf(stack.skullRaw)); else if (typeof stack.skullOwner === 'string') tag.SkullOwner = [8, stack.skullOwner];
   if (Array.isArray(stack.customPotionEffects)) tag.CustomPotionEffects = [9, 10, stack.customPotionEffects.map((e) => ({ Id: [1, e.id], Amplifier: [1, e.amplifier], Duration: [3, e.duration], Ambient: [1, e.ambient ? 1 : 0] }))];
-  if (typeof stack.mapScaling === 'boolean') tag.map_is_scaling = [1, stack.mapScaling ? 1 : 0];
+  if (typeof stack.mapScaling === 'boolean') tag.map_is_scaling = cartTag(flagTag(stack, 'map_is_scaling', stack.mapScaling));
   return tag;
 }
 

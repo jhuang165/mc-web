@@ -10,7 +10,7 @@ for (const [key, live] of Object.entries(ORIGINAL_ITEMS)) {
   const [id, damage] = key.split(":").map(Number);
   if (!LIVE_TO_ORIGINAL.has(live) || damage === undefined) LIVE_TO_ORIGINAL.set(live, { id, ...(damage === undefined ? {} : { damage }) });
 }
-const pairs = (list) => list.map((e) => ({ id: e.id, lvl: e.lvl }));
+const pairs = (list) => list.map((e) => ({ id: e.id, lvl: e.lvl, ...(e.raw ? { raw: e.raw } : {}) })); // b100 tiles100: raw survives
 
 export function toLiveStack(s) {
   const id = s && (ORIGINAL_ITEMS[`${s.id}:${s.damage ?? 0}`] ?? ORIGINAL_ITEMS[s.id]);
