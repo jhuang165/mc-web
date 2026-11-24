@@ -59,7 +59,7 @@ export class DedicatedClient {
   // presence/time/weather come from the newest tick, so a slow device never
   // falls behind or holds an unbounded queue. Chat keeps the latest 100 lines.
   buffer(message) {
-    if (message.type === 'dragonCredits') { this.messages.push(message); return; } // b64 mpdragon: S2B state 4
+    if (message.type === 'dragonCredits' || message.type === 'abilities') { this.messages.push(message); return; } // b64 mpdragon: S2B state 4; b100 abilities100: S39, in order
     if (message.type === 'dimRespawn') { this.messages = this.messages.filter(m => m.type !== 'chunkBulk' && m.type !== 'chunkUnload'); this.messages.push(message); this.pending = null; return; } /* b72 mpstream72: columns of the old world are void */ // b61 mpnether: the world swap keeps its place in the queue
     if (SLEEP_TYPES.has(message.type)) { this.messages.push(message); return; } // b66 mpsleep: S0A / S0B / bed messages, in order
     if (message.type === 'sb') { this.messages.push(message); return; } // b64 mpscoreboard: S3B-S3E, all must arrive in order
@@ -89,6 +89,7 @@ export class DedicatedClient {
     if (message.type === 'dimRespawn') { this.ready = false; this.pending = null; this.onDimRespawn(message); return; }
     if (message.type === 'dismount') this.onDismount(message); // b99 horse99: S08 + S1B + S08 (client-dismount.js)
     if (message.type === 'dragonCredits') this.onDragonCredits?.(message); // b64 mpdragon
+    if (message.type === 'abilities') this.onAbilities?.(message); // b100 abilities100: S39 (speeds, flags)
     if (message.type === 'boltSpawn') this.onBolt?.(message); // b66 mplightning: S2C spawn global entity (a lightning bolt)
     if (message.type === 'chunkBulk' || message.type === 'chunkUnload') this.onChunks?.(message); // b71 mpchunks
     if (message.type === 'blocks') this.onBlocks(message);

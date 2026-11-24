@@ -263,6 +263,7 @@ const finishDrinking = (player) => finishDrinkingItem(player, finishBucketDrinki
 import { captureBucketTarget } from "./buckets-simulation.js";
 import { HUNGER, POISON } from "./status-effects.js";
 import { PlayerMotion, fovMultiplier, setAbilitySpeeds, shownAbilitySpeeds } from "./player-movement.js";
+import { abilitySpeedsOf, abilityRecordFields, clientModeOf } from "./multiplayer/abilities.js"; // b100 abilities100
 import { drainKnockback } from "./player-knockback.js";
 import { deathThrow, hitPoseSource } from "./death-throw.js";
 import { hurtNonLiving } from "./falling-hurt.js";
@@ -733,6 +734,7 @@ function showMultiplayer() {
 }
 let mpServerList = null; // b68 mpping
 function leaveMultiplayer() {
+  setAbilitySpeeds(); // b100 abilities100: single player uses the default speeds again
   disconnectMaps(); // b69 mpmaps
   multiplayer?.close(); multiplayer = null; remoteItems.clear(); requestedPickups.clear(); takenDrops.clear(); remoteOrbs.clear(); for (const k of Object.keys(mpInv)) delete mpInv[k]; xpOrbs.orbs = []; remoteMobs = null; remotePistons = null; aimedRemoteMob = null;
   remoteVehicles?.clear(); remoteVehicles = null; aimedRemoteVeh = null; mpRiding = false; mpHorse = null; // b61
@@ -1000,6 +1002,7 @@ async function joinMultiplayer(settings) {
   client.onChunks = m => { if (multiplayer?.ready && active?.remote) applyChunkMessage(m, { world, scene, blockCount: BLOCKS.length, entities: cols => { remoteMobs?.dropColumns(cols); remoteVehicles?.dropColumns(cols); remotePlayers?.dropColumns(cols); /* b73 streamfix73 */ } /* b72 mpstream72 */, tiles: list => applyTiles(list, { world, signs, skulls: SKULLS, beacons, spawners, chests: survival.chests, enders: survival.enderTiles, commandBlocks: redstoneRuntime?.commandBlocks /* b80 mpcmd80 */ }), dropTiles: cols => dropTilesIn(cols, { signs, skulls: SKULLS, beacons, spawners, chests: survival.chests, enders: survival.enderTiles, pistons: remotePistons }) /* b73 streamfix73: Chunk.onChunkUnload drops the tile entities */ }); }; // b71 mpchunks: S26 bulk columns and S21 unloads
   connectMaps(); client.onMaps = m => applyMapMessage(m); // b69 mpmaps: S34 map updates fill the page's map store (multiplayer/client-maps.js)
   client.onMusic = e => noteEvent(e, { sound: (name, x, y, z, volume, pitch) => sounds.play(name, { volume, pitch, position: { x, y, z } }), particle: (...a) => scene.fx.spawn(...a) }); // b66 mpbooks: S24 note block
+  client.onAbilities = a => { setAbilitySpeeds(abilitySpeedsOf(a)); if (!(a.allowFlying && a.flying)) flying = false; }; // b100 abilities100: S39 on a respawn (code-read only)
   client.onDragonCredits = () => multiplayerCredits(client); // b64 mpdragon: S2B game state 4 (the End poem), then C16 respawn
   client.onBolt = message => remoteLightning?.apply(message); // b66 mplightning: the server's lightning bolt
   client.onTabReply = options => chatUi.tabReply(options); // b69 mptabcomplete: S3A
@@ -1013,7 +1016,7 @@ async function joinMultiplayer(settings) {
     const self = snapshot.players.find(p => p.id === client.id);
     streamStorage?.dispose(); streamStorage = null;
     const record = { id: 'remote-' + client.id, remote: true, name: 'ledoge0 — Multiplayer', seed: snapshot.seed,
-      biome: snapshot.biome, generationVersion: snapshot.generationVersion, mode: snapshot.gameMode === 'survival' ? 'survival' : 'creative', difficulty: 0,
+      biome: snapshot.biome, generationVersion: snapshot.generationVersion, mode: clientModeOf(snapshot, welcome.self), ...abilityRecordFields(welcome.abilities), difficulty: 0, /* b100 abilities100: own game mode and S39 speeds */
       position: { ...self, yaw: welcome.self.yaw, pitch: welcome.self.pitch }, player: { ...welcome.self.player, time: snapshot.time }, experience: welcome.self.experience,
       entities: [], weather: snapshot.weather, allowCommands: false, edits: [], worldSpawn: snapshot.worldSpawn /* b68: the server's /setworldspawn (S05) */, ...(snapshot.hardcore ? { hardcore: true } : {}) /* b77: join hardcore flag: death screen, hearts */ };
     gui.show(downloadTerrainScreen()); await nextPaint();
@@ -1061,7 +1064,7 @@ async function multiplayerDimension(client, settings, m) {
     screen = 'home'; tripLoading = true; keys.clear(); $('#hud').classList.add('hidden');
     gui.show(downloadTerrainScreen()); await nextPaint();
     const record = { id: 'remote-' + client.id, remote: true, name: active?.name ?? 'ledoge0 — Multiplayer', seed: snapshot.seed,
-      biome: snapshot.biome, generationVersion: snapshot.generationVersion, mode: snapshot.gameMode === 'survival' ? 'survival' : 'creative', difficulty: 0,
+      biome: snapshot.biome, generationVersion: snapshot.generationVersion, mode: clientModeOf(snapshot, m.self), ...abilityRecordFields(m.abilities), difficulty: 0, /* b100 abilities100 */
       position: { ...self, yaw: m.self.yaw, pitch: m.self.pitch }, player: { ...m.self.player, time: snapshot.time }, experience: m.self.experience,
       entities: [], weather: snapshot.weather, allowCommands: false, edits: [], worldSpawn: snapshot.worldSpawn /* b68: the server's /setworldspawn (S05) */, ...(snapshot.hardcore ? { hardcore: true } : {}) /* b77: join hardcore flag: death screen, hearts */ };
     await launch(record, prepared, { slice: true });

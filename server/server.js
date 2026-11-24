@@ -285,7 +285,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
           simulation.addPlayer(id, account.name, profile.uuid /* b87 offline87: the saved player's key is the profile UUID (playerdata/<uuid>.dat) */, { skin: account.skinHash, cape: account.capeHash ?? null });
           ips.set(id, ip); joined = true; ws.chunks = m.chunks === true; clearTimeout(timer); sockets.set(id, ws); owners.set(id, account.id);
           ws.netId = id; // b89 console89: the receiver of what send() counts (its own pose is not sent; its world gives the chunk data)
-          send(ws, { type: 'welcome', protocol: PROTOCOL, id, viewDistance: simulation.rules.chunkRadius, /* b69 serverprops */ world: simulation.playerTracker.snapshot(id, simulation.objectTracker.snapshot(id, simulation.snapshot(id))) /* b73 streamfix73 */ /* b71 mptrackers71 */, self: simulation.savePlayer(simulation.players.get(id)) });
+          send(ws, { type: 'welcome', protocol: PROTOCOL, id, viewDistance: simulation.rules.chunkRadius, /* b69 serverprops */ world: simulation.playerTracker.snapshot(id, simulation.objectTracker.snapshot(id, simulation.snapshot(id))) /* b73 streamfix73 */ /* b71 mptrackers71 */, self: simulation.savePlayer(simulation.players.get(id)), abilities: simulation.abilitiesOf(simulation.players.get(id)) /* b100 abilities100: S39 */ });
           pings.join(id, account.name); // b68 mpping: S38 for the tab list
           social.scoreboardJoin(id); // b64 mpscoreboard: S3E teams and the displayed objectives with their scores
           if (previous === undefined) broadcast({ type: 'chat', name: '', text: `${account.name} joined the game` });

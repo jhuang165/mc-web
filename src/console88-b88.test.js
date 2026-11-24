@@ -53,7 +53,7 @@ test("the port's estimates equal the executed samples byte for byte", () => {
   assert.equal(writePacketBytes({ type: "blocks", changes: [[1, 2, 3, 4, 0]] }), 12); assert.equal(writePacketBytes({ type: "blocks", changes: [[1, 2, 3, 58, 0]] }), 13, "a native block id past 127 is a two-byte VarInt (b90 console90: the port id 58 is native 159; the VarInt is the native id's)");
   assert.equal(writePacketBytes({ type: "openWindow", title: "container.chest", kind: "chest" }), sample("S2D container.chest"));
   assert.equal(writePacketBytes({ type: "chunkUnload", columns: [{ x: 0, z: 0 }] }), sample("S21 unload, one biome"));
-  assert.equal(writePacketBytes({ type: "welcome" }), sample("S01 default"));
+  assert.equal(writePacketBytes({ type: "welcome" }), sample("S01 default") + 10); // b100 abilities100: + the join's S39 (10 bytes)
   assert.equal(writePacketBytes({ type: "dimRespawn" }), sample("S07 default"));
   assert.equal(writePacketBytes({ type: "fishHooks", hooks: [{}] }), sample("S0E data 1"), "a hook's data int is its angler, so the velocity shorts follow");
   assert.equal(writePacketBytes({ type: "mobs", packets: [{ type: "spawn" }] }), sample("S0F empty watcher"));

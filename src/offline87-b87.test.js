@@ -58,7 +58,7 @@ const CLIENTBOUND_CLASS = {
   dispEnts: "S0EPacketSpawnObject", fishHooks: "S0EPacketSpawnObject", tick: "S18PacketEntityTeleport", healthHurt: "S19PacketEntityStatus", useDone: "S19PacketEntityStatus", mobStatus: "S19PacketEntityStatus",
   attach: "S1BPacketEntityAttach", dismount: "S08PacketPlayerPosLook", effect: "S1DPacketEntityEffect", healthEffect: "S1DPacketEntityEffect", healthEffectEnd: "S1EPacketRemoveEntityEffect", playerOp: "S1FPacketSetExperience",
   chunkUnload: "S21PacketChunkData", pistonTiles: "S24PacketBlockAction", musicEvent: "S24PacketBlockAction", crack: "S25PacketBlockBreakAnim", chunkBulk: "S26PacketMapChunkBulk", aux: "S28PacketEffect",
-  sound: "S29PacketSoundEffect", dispFx: "S2APacketParticles", fishFx: "S2APacketParticles", dragonCredits: "S2BPacketChangeGameState", boltSpawn: "S2CPacketSpawnGlobalEntity",
+  sound: "S29PacketSoundEffect", dispFx: "S2APacketParticles", fishFx: "S2APacketParticles", dragonCredits: "S2BPacketChangeGameState", abilities: "S39PacketPlayerAbilities", boltSpawn: "S2CPacketSpawnGlobalEntity",
   openWindow: "S2DPacketOpenWindow", beaconWindow: "S2DPacketOpenWindow", windowClose: "S2EPacketCloseWindow", slot: "S2FPacketSetSlot", setSlot: "S2FPacketSetSlot", invSet: "S2FPacketSetSlot",
   windowItems: "S30PacketWindowItems", invItems: "S30PacketWindowItems", windowProperty: "S31PacketWindowProperty", confirmTransaction: "S32PacketConfirmTransaction", invConfirm: "S32PacketConfirmTransaction",
   mapData: "S34PacketMaps", signEditor: "S36PacketSignEditorOpen", stats: "S37PacketStatistics", pingList: "S38PacketPlayerListItem", tabReply: "S3APacketTabComplete", tradeList: "S3FPacketCustomPayload", error: "S40PacketDisconnect",
