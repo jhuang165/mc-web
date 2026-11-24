@@ -145,6 +145,22 @@ Batch 79 (2026-11-16/18, ten tracks in `../wt79-<name>` on `batch79-<name>`, cut
 - Verification: the first full run hung on those two files; after the fix one full `npm test` on 536376793: 8964 tests, 8964 pass. Build and bridge tests ok. No browser checks.
 - Open: "Still open from batch 79" in `public/research/remaining-gaps.md`.
 
+Batch 100 (2026-11-23, ten tracks in `../wt100-<name>` on `batch100-<track>100`, cut from 9958c1313, merged --no-ff on `batch100-lead`; track agents ran on Sonnet; shared rules `../artifacts/b100-lead/track-rules.md`; lead note `b100-lead-track.md`; no browser checks or full test runs in tracks):
+- 0.129.0, by track (details in the `*-b100-track.md` notes and "Done in batch 100" in `public/research/remaining-gaps.md`):
+  - horse100: a `dismount` arriving while the client loads terrain is queued in order, not dropped.
+  - abilities100: S39 `abilities` on the dedicated server (welcome, respawn, credits end; `dimRespawn` carries speeds); clients predict with the server's speeds; the client record uses the player's own mode (`src/multiplayer/abilities.js`).
+  - console100: a joining player's first gated pass sends the movementSpeed S20 (41 bytes, `Console100Probe` executed); dirty attributes wait for the gated pass; S0B VarInt size; swing S0B(0) and tracker S12 counted.
+  - mpobjects100: the server's ghost jukebox disc leaves an inert drop and, as natively, disconnects tracking players (`server-ghost-items.js`, `MpObjects100Probe`); villager bursts reach clients as `mobStatus` 12/13/14.
+  - credit100: an online Thorns wearer hit by a logged-out shooter's arrow runs Thorns on the removed body; player kills of a removed body credit `playerKills`.
+  - mpperf100: portal-step scratch options, direct riding flags, reused `track` arrays and Maps, lighter `pickupCandidates`, behind `MC_MPPERF100=on|off|verify`; hashes unchanged, heap growth about 2% lower.
+  - spcopy100: `screen-pause.js` follows `doesGuiPauseGame` (sign, book and command block screens now pause); credits do not pause a public-LAN host.
+  - tiles100: tolerant numeric tags and extra keys in enchantment entries, `Fireworks` and `Explosion` keep their read form until edited (`Tiles100Probe`, 18 records).
+  - entnbt100: XP follows the int-wrapping `xpBarCap`; a non-positive cap hides the bar; negative levels draw no number.
+  - mobrec100: a bat in water splashes on the native tick (`EntityBat.updateFallState` is empty); 8 golem rose and 17 witch records executed.
+- Lead: merges reviewed file by file; `client.js` `buffer()` conflict between horse100 and abilities100 resolved by keeping both lines. Lead fixes 675a7ded6 (`server-mobs.js` imports `fail100`; verify mode threw) and 814a2453d (S0E constant in `server-ghost-items.js`, no `node:zlib` in the browser; death-screen branch shape).
+- Verification: one full `npm test` on the merged tree: 11000/11001; the one failure (`gui-screens.test.js` death-screen layout after spcopy100's `main.js` branch) and a build break (mpobjects100's `server-ghost-items.js` pulled `node:zlib` into the browser bundle through `net-packet-ids.js`) fixed in lead commit 814a2453d, then the failing and related tests (22/22) and the build rerun ok. Bridge tests ok. No browser checks.
+- Open: "Still open from batch 100" in `public/research/remaining-gaps.md`.
+
 Batch 99 (2026-11-23, ten tracks in `../wt99-<name>` on `batch99-<track>99`, cut from 8df1376b7, merged --no-ff on `batch99-lead`; track agents ran on Sonnet; shared rules `../artifacts/b99-lead/track-rules.md`; lead note `b99-lead-track.md`; no browser checks or full test runs in tracks):
 - 0.128.0, by track (details in the `*-b99-track.md` notes and "Done in batch 99" in `public/research/remaining-gaps.md`):
   - horse99: the client applies the `dismount` message as S08, S1B, S08 (`client-dismount.js`); the probe seat height gap was a foal versus an adult (`Horse99Probe`).

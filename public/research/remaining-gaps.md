@@ -2,6 +2,47 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 100
+
+Batch 100 covered these areas (track agents ran on Sonnet):
+- **Horses.** A `dismount` message that arrives while the client is still loading terrain (after join or a `dimRespawn`) is queued in order instead of dropped, and applied after the merged tick at `start()`.
+- **Abilities.** The dedicated server sends S39 (`abilities`, 10 bytes, bytecode-read): in the welcome after S01, on respawn and at the end of the credits; `dimRespawn` carries the speeds. The client predicts movement with the server's walk and fly speeds and resets them on leaving. The client record now takes the player's own game mode, not the server default.
+- **The dedicated server.** `Console100Probe` (executed): the real EntityPlayer constructor leaves movementSpeed dirty, so a joining player's first gated pass sends an S20 of 41 bytes; dirty attributes now wait for the gated pass (even tick, jump or changed watcher). S0B is sized with a VarInt id; a swing's S0B(0) and S12 velocity to trackers are counted in `/netstat`.
+- **Multiplayer objects.** A ghost jukebox disc on the server leaves an inert drop (`InertDrops` in `server-music.js`, saved with the music tiles). As natively, tracking players within range get S0E and are then disconnected (the real S1C write throws; `MpObjects100Probe` executed). Villager heart, angry and happy bursts reach clients as `mobStatus` 12, 13 and 14.
+- **Kill credit.** An online Thorns wearer hit by a logged-out shooter's arrow now runs Thorns against the removed body. A removed body killed by a player credits `playerKills` and the death event names the killer; a player attacker adds no killed-by stat. No S19, XP or death throw for a removed body is native, not a gap.
+- **Server speed.** Behind `MC_MPPERF100=on|off|verify`: one scratch options object in the portal step, riding flags read directly in server portal travel, reused per-view arrays and Maps in `track`, and a lighter `pickupCandidates`. Hashes unchanged; heap growth about 2% lower, time within noise.
+- **The single-player copy.** `screen-pause.js` follows `doesGuiPauseGame` per screen: the sign editor, book and command block screens now stop the world (they ran before), while the sign cursor still blinks. With a public LAN host the credits do not pause, and their time is added to the away trip.
+- **Tiles.** `Unbreakable`, `map_is_scaling`, enchantment id and lvl keep the width and value they were read at; extra keys in `ench` and `StoredEnchantments` entries and inside `Fireworks` and `Explosion` are written back (`Tiles100Probe` executed, 18 records identical). An edited stack writes the canonical form.
+- **Entity NBT.** The XP bar follows `xpBarCap` with int wrapping: a non-positive cap hides the bar (the level number stays), `add` clamps and wraps like `yz.s`/`yz.v`, a negative level draws no number, and the death level uses an int multiply.
+- **Mob records.** A bat in water now splashes on the native tick: `EntityBat.updateFallState` is empty (bytecode-read), so the bat's move never asks `handleWaterMovement` a second time (the port splashed one tick early). 8 executed iron golem rose records and 17 witch potion records replay with no divergence.
+
+Found wrong in the batch 99 list:
+- "A `dismount` arriving during terrain loading is dropped" left the snap missing; fixed.
+- "The removed body gets no death throw, S19, XP orbs or kill credit": all but the player kill credit are native.
+- "The server's ghost jukebox disc ejects no inert drop" described the port; natively the item exists and disconnects tracking players.
+- "A bat in water" was a port bug (a splash one tick early), not a probe artefact.
+- "`track` packet pushes" were mostly growth of the per-view arrays, not packet objects.
+- The client record took the server's default game mode, not the player's own.
+
+Still open from batch 100:
+- **Multiplayer.**
+  - Horses: no C06 reply to S08; S08 carries no yaw or pitch; other ordered messages still apply after the merged tick at `start()`.
+  - Abilities: the client keeps flags from its own mode (only `flying` is cleared); no server `/gamemode` on a connected player.
+  - The dedicated server: a respawn keeps the tracker entry (natively a new one, with a new first pass); the swing condition is the accepted C0A, not the native progress check; hurt S19 and the sleeper wake-up S0B to trackers are not counted; a default-skin player's empty textures property.
+  - Multiplayer objects: the item tracker re-list is every tick (natively the entry's own cadence); the disconnect is not tested end to end through `server.js`; villager 12 not executed, 13 and 14 bytecode-read only.
+  - Kill credit: a kill by a mob riding a mob (spider jockey arrow) not checked.
+  - Speed: the `next` tail, FineGrid Map growth, `moveEntityBody` boxing, `bb.slice()`.
+  - Server commands: /publish stays off. End island tails past 128 blocks are cut on some seeds (left for the user's decision). WebSocket compression stays off.
+  - Not seen in a browser: prediction with non-default speeds, adventure mode on the client, plus the batch 67 to 99 lists.
+- **Single player.**
+  - The copy: the death screen should keep ticking the world (GuiGameOver does not pause); the terrain read beside the picked portal still needs the worker.
+  - Tiles: item frame and dispenser copies checked by reading only; the dedicated server wire and `world-import.js` not audited for kept raw forms.
+  - Entity NBT: the XP aria-label uses the unwrapped cost; a native Infinity bar loops forever, the port stops at 1,000,000 iterations.
+  - Mob records: the witch's knockback from its own potion uses unseeded `Math.random` (two records dropped); the replay's order of potion hit and hurt countdown is the probe's; golem spawn gating has no record.
+  - Not seen in a browser: sign, book and command block pausing, the sign blink while paused, credits with a public LAN host, the XP track at wrapped levels, plus the batch 99 list.
+- **Rendering.** No native pixel capture.
+- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+
 ## Done in batch 99
 
 Batch 99 covered these areas (track agents ran on Sonnet):
@@ -21,24 +62,7 @@ Found wrong in the batch 98 list:
 - "`tickSpawners`' per-tick player list" was built by its Overworld caller, not by `tickSpawners`, and is too small to show in the sampler.
 - `inertDropNbt` wrote a PickupDelay that 1.7.10 `xk.b` does not write.
 
-Still open from batch 99:
-- **Multiplayer.**
-  - Horses: a `dismount` message arriving while the client loads terrain is dropped; S08 carries no yaw or pitch on the port wire.
-  - The dedicated server: a default-skin player's empty textures property (needs a captured session-server response); textures size modelled, not signed. Clients predict movement with default ability speeds.
-  - Kill credit: the removed body gets no death throw, S19, XP orbs or kill credit.
-  - Speed: `moveEntityBody` / `moveWith` boxing, the `next` iterator tail, `bb.slice()` for own-bb entities, `track` packet pushes, `FineGrid`, `explosionBlocksWith`.
-  - Tiles: the server's ghost jukebox disc ejects no inert drop (`server-music.js`).
-  - The golem rose statuses are bytecode-read only, not executed against a real tracker.
-  - Server commands: /publish stays off. End island tails past 128 blocks are cut on some seeds (left for the user's decision). WebSocket compression stays off.
-  - Not seen in a browser: the client dismount snap, the golem arm after an offer ends, plus the batch 67 to 98 lists.
-- **Single player.**
-  - The copy: the terrain read beside the picked portal still needs the worker when the wait is shorter than one cell build; whether the credits screen pauses a public-LAN host's server is unconfirmed.
-  - Tiles: tolerant numeric tags (`Unbreakable`, `map_is_scaling`, enchantment id and lvl) are rewritten as byte or short; extra keys in `ench` entries and the insides of `Fireworks` and `Explosion` are lossy.
-  - Entity NBT: a non-positive `xpBarCap` (about level 3e8) hides the whole bar natively, the port only zeroes the fill; a non-finite walk or fly speed is ignored (deliberate).
-  - Mob records: iron golem rose offering and village spawn, witch potions, a bat in water; villager sounds and hearts not compared.
-  - Not seen in a browser: the F3 walk/fly line, the XP bar at odd XpP, the batch 98 list.
-- **Rendering.** No native pixel capture.
-- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+Still open from batch 99: carried into the batch 100 list above, less what batch 100 fixed or found wrong.
 
 ## Done in batch 98
 
