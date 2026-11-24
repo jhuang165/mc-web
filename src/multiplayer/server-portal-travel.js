@@ -63,11 +63,11 @@ export class ServerPortalTravel {
   }
   // A mob that travelled with a rider: the player is put down beside it (ServerVehicles.dismount), a mob rider is let go at the mount's top (mountEntity(null)).
   unmount(p, e, owner) {
-    if (e.rider) for (const pl of this.dims.sim.players.values()) if (pl.mount?.mob === e) { p.vehicles.dismount(pl); break; }
+    if (e.rider) for (const pl of this.dims.sim.players.values()) if (pl.mount?.mob === e) { p.vehicles.dismount(pl, true); break; } // b99 portals99: World.removeEntity's riddenBy.mountEntity(null) on the EntityPlayerMP sends S08, S1B, S08 (native flag)
     if (e.riddenBy) mobUnmount(e.riddenBy, null, (m) => owner.size(m)[1]);
   }
   unseat(p, v) {
-    for (const pl of this.dims.sim.players.values()) if (pl.mount && !pl.mount.mob && pl.mount.rider === v.rider) { p.vehicles.dismount(pl); return; }
+    for (const pl of this.dims.sim.players.values()) if (pl.mount && !pl.mount.mob && pl.mount.rider === v.rider) { p.vehicles.dismount(pl, true); return; } // b99 portals99: the same mountEntity(null) packets
     v.rider = null;
   }
   // transferEntityToWorld + spawnEntityInWorld for one traveller: the copy joins the destination's list (createEntityByName + copyDataFrom, from the saved record).

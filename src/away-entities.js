@@ -19,7 +19,7 @@ import { entityWalkers, watchJoin, vehicleTargets, thrownAtVehicleOrHanging } fr
 import { applyExplosion } from "./explosion-simulation.js";
 import { Minecarts } from "./minecarts.js";
 import { Boats } from "./boats.js";
-import { EntityPortals, entityDeparture } from "./entity-portal.js";
+import { EntityPortals, entityDeparture, mobLinks } from "./entity-portal.js";
 import { JavaRandom } from "./java-random.js";
 import { EntityWorld, ENTITY_TYPES } from "./entities.js";
 import { Survival } from "./survival.js";
@@ -325,9 +325,9 @@ export function awayEntities(plan, { world, ticking, entityTicks = ticking, rt, 
       if (c.dead) continue;
       // Entities outside the 32-block rule do not update (and so do not run Entity.onEntityUpdate's portal step); a mob with a rider or a vehicle is not a portal collider.
       if (!entityTicks(c.x, c.z)) continue;
-      const riding = kind === "mob" && !!(c.rider || c.vehicle || c.ridingEntity || c.riddenBy);
+      const links = kind === "mob" ? mobLinks(c) : null; // b99 portals99: the live and server split; only a mob that rides something is held back, a ridden one runs the countdown without colliding
       const shot = kind === "arrow" || kind === "rocket"; // b91 entnbt91: their own update ran sa.C's countdown; an arrow that started in the ground touched no portal
-      const r = portals.step(c, kind, { dim: 0, getId, riding, ridden: vehicle && !!(c.rider || c.passenger), ...(shot ? { counted: true, noCollide: kind === "arrow" && c.groundAtStart === true } : {}) });
+      const r = portals.step(c, kind, { dim: 0, getId, riding: !!links?.riding, ridden: links ? links.ridden : vehicle && !!(c.rider || c.passenger), ...(shot ? { counted: true, noCollide: kind === "arrow" && c.groundAtStart === true } : {}) });
       if (!r) continue;
       const d = entityDeparture(portals, kind, c, r, owner);
       // Live depart(): a mob that mounted the vehicle after the collision stays behind, unmounted (the copy is made from the vehicle's own NBT).
