@@ -1,0 +1,180 @@
+{
+ "target": "Minecraft Java 1.7.10",
+ "clientSha1": "e80d9b3bf5085002218d4be59e668bac718abbc6",
+ "classes": {
+  "fz": {
+   "name": "S0FPacketSpawnMob",
+   "sha256": "58beddf5e7e263e0f0777abb619e8accf48b6cad82d8fcc6b74e5aef0b3fe34c"
+  },
+  "hw": {
+   "name": "S1CPacketEntityMetadata",
+   "sha256": "be7813a6c38c61533cee670d87accc6110117d611ab1f71a7b41ffab1609f9b6"
+  },
+  "il": {
+   "name": "S20PacketEntityProperties",
+   "sha256": "c1e8d38a8c3e15dc971077016f227e511cd5970cb03aefe180c6f3e8070942b7"
+  },
+  "hz": {
+   "name": "S04PacketEntityEquipment",
+   "sha256": "bf8f39f50445f02853c034d4b2c2c4e7520e05686197419b8bfb877606740147"
+  },
+  "my": {
+   "name": "EntityTrackerEntry",
+   "sha256": "6d412d8d6bc168b6fc6c47c9b04705c4e443b72aba5ceba6b2bb44745dc83a4d"
+  }
+ },
+ "method": "Unchanged classes (tools/probes/Console99Probe.java), MobPackets89Probe's world double. Each mob is made by EntityList.createEntityByName; `bytes` = id VarInt + payload as the encoder fa counts it. first = the dirty set the constructor left (S20 of the first gated pass, -1 = nothing sent); speed = after addPotionEffect(Speed); egg = after onSpawnWithEgg. Order of EntityTrackerEntry.tryStartWachingThis (my.b(mw), bytecode-read): spawn, S1C whole, S20 watched set, S12 (not for an S0F), S1B, S1B leash, S04 slots 0-4, S0A, S1D per effect.",
+ "mobs": [
+  {
+   "case": "mob",
+   "id": "Zombie",
+   "s0f": 54,
+   "whole": 35,
+   "s20whole": 69,
+   "watched": [
+    "generic.maxHealth",
+    "generic.movementSpeed"
+   ],
+   "first": {
+    "bytes": 41,
+    "names": [
+     "generic.movementSpeed"
+    ]
+   },
+   "calm": false,
+   "changedHealth": 11,
+   "changedAge": 8,
+   "unchanged": false,
+   "speed": {
+    "bytes": 66,
+    "names": [
+     "generic.movementSpeed"
+    ]
+   },
+   "again": {
+    "bytes": -1,
+    "names": []
+   },
+   "s04": 14,
+   "egg": {
+    "bytes": -1,
+    "names": []
+   }
+  },
+  {
+   "case": "mob",
+   "id": "EntityHorse",
+   "s0f": 72,
+   "whole": 53,
+   "s20whole": 98,
+   "watched": [
+    "generic.maxHealth",
+    "generic.movementSpeed",
+    "horse.jumpStrength"
+   ],
+   "first": {
+    "bytes": 69,
+    "names": [
+     "generic.maxHealth",
+     "generic.movementSpeed"
+    ]
+   },
+   "calm": false,
+   "changedHealth": 11,
+   "changedAge": 11,
+   "unchanged": false,
+   "speed": {
+    "bytes": 66,
+    "names": [
+     "generic.movementSpeed"
+    ]
+   },
+   "again": {
+    "bytes": -1,
+    "names": []
+   },
+   "s04": 14,
+   "egg": {
+    "bytes": 123,
+    "names": [
+     "generic.maxHealth",
+     "generic.movementSpeed",
+     "horse.jumpStrength"
+    ]
+   }
+  },
+  {
+   "case": "mob",
+   "id": "Villager",
+   "s0f": 58,
+   "whole": 39,
+   "s20whole": 69,
+   "watched": [
+    "generic.maxHealth",
+    "generic.movementSpeed"
+   ],
+   "first": {
+    "bytes": 41,
+    "names": [
+     "generic.movementSpeed"
+    ]
+   },
+   "calm": false,
+   "changedHealth": 11,
+   "changedAge": 11,
+   "unchanged": false,
+   "speed": {
+    "bytes": 66,
+    "names": [
+     "generic.movementSpeed"
+    ]
+   },
+   "again": {
+    "bytes": -1,
+    "names": []
+   },
+   "s04": 14,
+   "egg": {
+    "bytes": -1,
+    "names": []
+   }
+  },
+  {
+   "case": "mob",
+   "id": "Wolf",
+   "s0f": 66,
+   "whole": 47,
+   "s20whole": 69,
+   "watched": [
+    "generic.maxHealth",
+    "generic.movementSpeed"
+   ],
+   "first": {
+    "bytes": 69,
+    "names": [
+     "generic.maxHealth",
+     "generic.movementSpeed"
+    ]
+   },
+   "calm": false,
+   "changedHealth": 11,
+   "changedAge": 11,
+   "unchanged": false,
+   "speed": {
+    "bytes": 66,
+    "names": [
+     "generic.movementSpeed"
+    ]
+   },
+   "again": {
+    "bytes": -1,
+    "names": []
+   },
+   "s04": 14,
+   "egg": {
+    "bytes": -1,
+    "names": []
+   }
+  }
+ ]
+}
