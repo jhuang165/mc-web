@@ -3,6 +3,7 @@ import { cartInventoryAt } from "./cart-inventory.js";
 import { heldLightCell } from "./held-light.js";
 import { isStemCake, popDrops } from './stems-cake.js';
 import { maxHealthOf } from "./mob-riding.js";
+import { applyDismount } from "./multiplayer/client-dismount.js";
 import { hasVoidParticles } from "./void-fog.js";
 import { StreamStorage } from './streaming-storage.js';
 import { isColoredBlock, carpetNeighbourChange, coloredPickDamage, COLORED_ITEM_OFFSET, CARPET } from './colored-blocks.js';
@@ -989,6 +990,7 @@ async function joinMultiplayer(settings) {
     onStats: message => { applyStatsMessage(stats, message); const w = statsWaiter; statsWaiter = null; w?.(); }, // b63 mpstats: S37 fills the Statistics screen
     onChat: (message) => printChat(chatDisplay(message)), // S02PacketChat: the component JSON the server sent, else the legacy line
     onPlayerOp: applyServerPlayerOp,
+    onDismount: message => applyDismount(message, { position, previous, velocity, motion, setRiding: on => { mpRiding = on; } }), // b99 horse99: S08 / S1B / S08
     onDimRespawn: message => multiplayerDimension(client, settings, message), // b61 mpnether: S07 Respawn, the server moved this player to another dimension
     onHealthFx: applyHealthFx,
     onHealth: message => { const r = applyHealthMessage(survival, message); if (r.hotbar) renderHotbar(); renderVitals(); if (r.died && screen !== 'dead') die(); }, // S06: the server's health, food and saturation; health 0 opens the death screen
