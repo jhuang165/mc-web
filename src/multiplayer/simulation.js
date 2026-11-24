@@ -2,7 +2,7 @@ import { World, PHYSICS, WATER, LAVA, MOB_SPAWNER, BED, TNT, raycast, collides }
 import { capeFields } from './cape-wire.js'; // b71 mpcapes
 import { isFence } from '../fences.js'; // b62: the fence lead click
 import { Survival, ITEMS, GAME_MODE_IDS } from '../survival.js';
-import { PlayerMotion } from '../player-movement.js';
+import { PlayerMotion, normalAbilitySpeeds } from '../player-movement.js';
 import { vectorOf } from '../mpperf83-fast.js'; // b83 mpperf83
 import { eachValue89 } from '../mpperf89-fast.js'; // b89 mpperf89
 import { fast97, fail97 } from '../mpperf97-fast.js'; // b97 mpperf97
@@ -277,7 +277,7 @@ export class DedicatedSimulation {
     for (const key of ['chests', 'furnaces', 'dispensers', 'hoppers', 'brewing', 'enderTiles', 'tableNames']) survival[key] = this.tiles[key];
     const player = { id, name, resumeKey, world: this.world, position, previous: vector(position), velocity: vector({ x: 0, y: 0, z: 0 }), motion: new PlayerMotion(), survival,
       yaw: saved?.yaw ?? 0, pitch: saved?.pitch ?? 0, grounded: false, collidedH: false, flying: false, fallDistance: 0, landedFall: 0, eating: null,
-      input: { ...IDLE_INPUT }, lastInput: this.ticks, swing: 0, skin, cape, itemInUse: null, achievementsSaved: saved?.achievements ?? null, spawnpoint: saved?.spawnpoint ?? null, spawnForced: saved?.spawnForced, rand: seeded(),
+      input: { ...IDLE_INPUT }, lastInput: this.ticks, swing: 0, skin, cape, itemInUse: null, achievementsSaved: saved?.achievements ?? null, spawnpoint: saved?.spawnpoint ?? null, spawnForced: saved?.spawnForced, rand: seeded(), ...(saved?.abilitySpeeds ? { abilitySpeeds: normalAbilitySpeeds(saved.abilitySpeeds) } : {}), // b99 entnbt99: loaded walkSpeed/flySpeed drive this player's server movement
       dig: createServerDig({ crack: (cell, stage) => this.crack(id, cell, stage) }) };
     this.serverItems.join(player, saved);
     this.sleep.join(player); // b66 mpsleep: damage wakes a sleeper
@@ -306,7 +306,7 @@ export class DedicatedSimulation {
     this.dimensions.removePlayer(id); // b62 mpnether2: the Nether's mob view
   }
   savePlayer(p) { return { position: { x: p.position.x, y: p.position.y, z: p.position.z }, yaw: p.yaw, pitch: p.pitch,
-    player: { gameMode: p.survival.mode, /* b70 serverprops2: playerGameType (mw.b(dh)) */ slots: p.survival.inventory.serialize(), current: p.survival.inventory.current, armor: p.survival.inventory.serializeArmor(), ...vitalsOf(p.survival), enderItems: p.survival.enderItems.map(copyStack) }, ...this.serverItems.savedFields(p), ...this.stats.savedFields(p), ...(p.achievementsSaved ? { achievements: p.achievementsSaved } : {}), ...(p.spawnpoint ? { spawnpoint: p.spawnpoint, ...(p.spawnForced !== undefined ? { spawnForced: p.spawnForced } : {}) } : {}), ...this.dimensions.savedFields(p), ...this.vehicles.horses.savedFields(p) }; }
+    player: { gameMode: p.survival.mode, /* b70 serverprops2: playerGameType (mw.b(dh)) */ slots: p.survival.inventory.serialize(), current: p.survival.inventory.current, armor: p.survival.inventory.serializeArmor(), ...vitalsOf(p.survival), enderItems: p.survival.enderItems.map(copyStack) }, ...this.serverItems.savedFields(p), ...this.stats.savedFields(p), ...(p.abilitySpeeds ? { abilitySpeeds: { fly: p.abilitySpeeds.fly, walk: p.abilitySpeeds.shownWalk } } : {}), ...(p.achievementsSaved ? { achievements: p.achievementsSaved } : {}), ...(p.spawnpoint ? { spawnpoint: p.spawnpoint, ...(p.spawnForced !== undefined ? { spawnForced: p.spawnForced } : {}) } : {}), ...this.dimensions.savedFields(p), ...this.vehicles.horses.savedFields(p) }; }
   input(id, message) {
     const p = this.players.get(id), input = cleanInput(message.controls), look = cleanLook(message.yaw, message.pitch);
     if (!p || !input || !look || !Number.isInteger(message.current) || message.current < 0 || message.current > 8) return false;

@@ -167,14 +167,18 @@ export const SPRINT_BOOST = 0.30000001192092896;
 // b98 entnbt98 (bytecode-read yz.e, EntityPlayer.onLivingUpdate): on the server the movementSpeed base value is set to capabilities.walkSpeed every tick (ti.a(D) of yw.b()), clamped
 // to the attribute's 0..max range; EntityPlayer.moveEntityWithHeading uses capabilities.flySpeed as jumpMovementFactor while flying. A level.dat / region import carries both floats
 // (record.abilitySpeeds); a non-finite one is ignored here (native NaN would poison the position).
-const speeds = { fly: f(0.05), walk: f(0.1) };
-export function setAbilitySpeeds(s) { speeds.fly = Number.isFinite(s?.fly) ? f(s.fly) : f(0.05); speeds.walk = Number.isFinite(s?.walk) ? Math.max(0, f(s.walk)) : f(0.1); }
-export const flySpeed = () => speeds.fly;
-export const moveSpeed = (sprinting, potion = 1) => (sprinting ? speeds.walk * (1 + SPRINT_BOOST) * potion : speeds.walk * potion);
+const speeds = { fly: f(0.05), walk: f(0.1), shownWalk: f(0.1) };
+// b99 entnbt99: the dedicated server keeps one pair per player (`player.abilitySpeeds`, from `normalAbilitySpeeds`); the single-player client uses the module pair above.
+export function normalAbilitySpeeds(s) { return { fly: Number.isFinite(s?.fly) ? f(s.fly) : f(0.05), walk: Number.isFinite(s?.walk) ? Math.max(0, f(s.walk)) : f(0.1), shownWalk: Number.isFinite(s?.walk) ? f(s.walk) : f(0.1) }; }
+export function setAbilitySpeeds(s) { Object.assign(speeds, normalAbilitySpeeds(s)); }
+export const flySpeed = (sp = speeds) => sp.fly;
+// F3's "ws:" shows capabilities.walkSpeed raw (a loaded negative stays negative there; the movement attribute clamps it at 0), "fs:" flySpeed.
+export const shownAbilitySpeeds = () => ({ walk: speeds.shownWalk, fly: speeds.fly });
+export const moveSpeed = (sprinting, potion = 1, sp = speeds) => (sprinting ? sp.walk * (1 + SPRINT_BOOST) * potion : sp.walk * potion);
 // EntityLivingBase.moveEntityWithHeading (sv.e(FF)V) on the ground: aiMoveSpeed times
 // 0.16277136F / friction³ with friction = slipperiness * 0.91F, all in floats.
-export function groundAccel(sprinting, friction, potion = 1) {
-  return f(f(moveSpeed(sprinting, potion)) * f(f(0.16277136) / f(f(friction * friction) * friction)));
+export function groundAccel(sprinting, friction, potion = 1, sp = speeds) {
+  return f(f(moveSpeed(sprinting, potion, sp)) * f(f(0.16277136) / f(f(friction * friction) * friction)));
 }
 // EntityPlayer.onLivingUpdate: jumpMovementFactor = speedInAir (0.02F), plus speedInAir * 0.3
 // (a double) while sprinting. Water and lava use moveFlying(..., 0.02F) whatever the sprint.

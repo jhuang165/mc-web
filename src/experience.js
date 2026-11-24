@@ -204,3 +204,13 @@ export class ExperienceOrbs {
  serialize(){return this.orbs.map(o=>this.serializeOne(o));}
  serializeOne(o){ensureUuid(o);return strip(o);} // b88 entnbt88: the orb's UUID is drawn on its first save and kept (Entity.writeToNBT)
 }
+
+// b99 entnbt99 (bytecode-read bbv, GuiIngame.func_73828_d "expBar"): the bar is drawn only while xpBarCap() (yz.bP: 17 below level 15, 17+(l-15)*3 from 15, 62+(l-30)*7 from 30, all int
+// arithmetic that wraps) is above 0; the fill width is (int)(xpP * 183F) and is drawn only above 0, so a NaN, zero or negative XpP draws no fill and an XpP above 1 draws a fill wider than the
+// 182-pixel track (f2i saturates at the int range). Returns the pixel width of the fill.
+export function xpBarCap(level) { level |= 0; return level >= 30 ? (62 + Math.imul(level - 30 | 0, 7)) | 0 : level >= 15 ? (17 + Math.imul(level - 15, 3)) | 0 : 17; }
+export function xpBarFill(progress, level) {
+  if (!(xpBarCap(level) > 0)) return 0;
+  const x = Math.fround(Math.fround(progress) * 183), w = Number.isNaN(x) ? 0 : x >= 2147483647 ? 2147483647 : x <= -2147483648 ? -2147483648 : Math.trunc(x);
+  return w > 0 ? w : 0;
+}

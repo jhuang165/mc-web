@@ -4,6 +4,7 @@
 // Bytecode-read (javap, 1.7.10 jar, EntityPlayerMP = mw): onUpdateEntity (mw.i) sends S06 (ib: health, food, saturation) whenever getHealth, the food
 // level or "saturation == 0" differs from the last values it sent, then stores them; this module does the same (`status`).
 import { ITEMS } from '../survival.js';
+import { jsonFloat } from '../player-nbt.js'; // b99 entnbt99
 import { Effects } from '../status-effects.js';
 import { makeStack } from '../inventory.js';
 import { tickPlayerEnvironment, finishPlayerMovement } from '../player-environment.js';
@@ -24,7 +25,7 @@ const finite = Number.isFinite;
 
 /** The vitals a saved player record carries (the Survival constructor reads them back on join). */
 // b61: `effects` is EntityLivingBase.writeEntityToNBT's ActiveEffects (Id, Amplifier, Duration, Ambient per effect, in HashMap order; Effects.serialize) and `absorption` is AbsorptionAmount.
-export const vitalsOf = (s) => ({ health: s.health, food: s.food, saturation: s.saturation, exhaustion: s.exhaustion, timer: s.timer, effects: s.effects.serialize(), absorption: s.absorption || 0 });
+export const vitalsOf = (s) => ({ health: jsonFloat(s.health), food: s.food, saturation: jsonFloat(s.saturation), exhaustion: jsonFloat(s.exhaustion), timer: s.timer, effects: s.effects.serialize(), absorption: s.absorption || 0 });
 
 export class ServerSurvival {
   constructor(simulation) { this.sim = simulation; }
