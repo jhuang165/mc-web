@@ -145,6 +145,22 @@ Batch 79 (2026-11-16/18, ten tracks in `../wt79-<name>` on `batch79-<name>`, cut
 - Verification: the first full run hung on those two files; after the fix one full `npm test` on 536376793: 8964 tests, 8964 pass. Build and bridge tests ok. No browser checks.
 - Open: "Still open from batch 79" in `public/research/remaining-gaps.md`.
 
+Batch 99 (2026-11-23, ten tracks in `../wt99-<name>` on `batch99-<track>99`, cut from 8df1376b7, merged --no-ff on `batch99-lead`; track agents ran on Sonnet; shared rules `../artifacts/b99-lead/track-rules.md`; lead note `b99-lead-track.md`; no browser checks or full test runs in tracks):
+- 0.128.0, by track (details in the `*-b99-track.md` notes and "Done in batch 99" in `public/research/remaining-gaps.md`):
+  - horse99: the client applies the `dismount` message as S08, S1B, S08 (`client-dismount.js`); the probe seat height gap was a foal versus an adult (`Horse99Probe`).
+  - portals99: a player riding a mob, cart or boat through a portal gets the `dismount` message on the server; away runs use `mobLinks`; leads through portals audited, native.
+  - mpobjects99: golem rose status 11 on every `setHoldingRose`; server villager AI and End snapshot pinned.
+  - credit99: a removed body hit by Thorns plays the hurt/death sound and counts deaths and killed-by stats; wolf and dispenser kills already native.
+  - console99: mob S0F/S1C/S20/S04 sizes and dirty sets executed (`Console99Probe`); `/netstat` already native.
+  - mpperf99: spawner player list only when read, `ChunkSet` unchanged-input path, one sound player list per call, behind `MC_MPPERF99=on|off|verify`; hashes unchanged, gain within noise.
+  - spcopy99: the Teleporter search reads saved portal columns without building terrain (`TerrainPeek.searchGet`); End exit audited.
+  - tiles99: inert ghost-disc drop wired in single player (saves, export, import); wrong-typed known tag keys kept raw (`tag-types.js`, `Tiles99Probe`).
+  - entnbt99: F3 shows loaded ability speeds; XP bar fill `(int)(XpP * 183F)`; per-player ability speeds and non-finite vitals on the dedicated server.
+  - mobrec99: 8 executed villager birth records; `WatchClosest` keeps the later of two equal distances.
+- Lead: ten clean merges (git auto-merged `main.js`, `server-survival.js`, `simulation.js`); every shared-file diff reviewed. Lead fix 62981072d: the removed body's sound carries its dimension (it is no longer in `sim.players`).
+- Verification: one full `npm test` on the merged tree: 10928/10928. Build and bridge tests ok. No browser checks.
+- Open: "Still open from batch 99" in `public/research/remaining-gaps.md`.
+
 Batch 98 (2026-11-23, ten tracks in `../wt98-<name>` on `batch98-<track>98`, cut from 3dd97fce9, merged --no-ff on `batch98-lead`; track agents ran on Sonnet; shared rules `../artifacts/b98-lead/track-rules.md`; lead note `b98-lead-track.md`; no browser checks or full test runs in tracks):
 - 0.127.0, by track (details in the `*-b98-track.md` notes and "Done in batch 98" in `public/research/remaining-gaps.md`):
   - horse98: server dismounts send S08, S1B, S08 (`dismount` message); pig and horse water records executed (`Horse98Probe`), already native.

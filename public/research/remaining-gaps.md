@@ -2,6 +2,44 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 99
+
+Batch 99 covered these areas (track agents ran on Sonnet):
+- **Horses.** The client applies the server's `dismount` message as S08, S1B, S08 (`client-dismount.js`): position and previous position at the spot, motion and ySize 0, riding cleared, in one step instead of from the next tick row. `Horse99Probe` explains the probe's 64.1 / 64.7 seat height as a random foal versus an adult; the port already matched.
+- **Portals.** A player riding a mob, cart or boat that travels through a portal now gets the `dismount` message on the dedicated server (bytecode-read `ahb.e`). Away runs use `mobLinks` (consistency only). Leads through portals were audited and are already native.
+- **Multiplayer objects.** An iron golem's rose status 11 is sent on every `setHoldingRose`, including an offer that ends with the counter already 0 (bytecode-read `wt.a(boolean)`). The server villager AI and the End snapshot lane are pinned by tests; both were already native.
+- **Kill credit.** A logged-out shooter's removed body hit by Thorns plays the hurt or death sound, counts the `deaths` and killed-by stats (and `deathCount` objectives), and refreshes the saved record's stats. A tamed wolf's kill and a dispenser arrow or fire charge kill were already native (no owner credit, no XP flag).
+- **The dedicated server.** `Console99Probe` executes the S0F, S1C, S20 and S04 sizes and the dirty attribute set for zombie, horse, villager and wolf; `/netstat` already matched.
+- **Server speed.** Behind `MC_MPPERF99=on|off|verify`: the Overworld spawner player list is built only when read, `ChunkSet.chunks` returns its kept list for unchanged input, `deliverSounds` builds one player list per call. Hashes unchanged; gain within noise.
+- **The single-player copy.** The Teleporter's 128-block search reads saved portal columns from edits and stored columns (`TerrainPeek.searchGet`), so a saved portal outside the exit window no longer builds terrain or loses the arrival hint. The End exit was audited (bytecode-read `mw.b(int)`) and matches.
+- **Tiles.** A ghost jukebox disc leaves an inert id-0 drop in single player, saved inside `musicTiles`, exported as an `Item` entity with Health and no PickupDelay, and imported back. A known tag key with the wrong type is kept raw (`tag-types.js`, `Tiles99Probe` executed): it no longer enchants, renames or colours the stack.
+- **Entity NBT.** F3 shows the loaded walk and fly speeds (walk raw). The XP bar fill follows `(int)(XpP * 183F)` (bytecode-read `bbv`): NaN, zero and negative draw nothing, above 1 overflows the track. The dedicated server loads, saves and moves with per-player ability speeds; non-finite saturation and exhaustion survive its JSON save.
+- **Mob records.** 8 executed villager birth records (5, 9 and 12 doors, two and three villagers) replay with no divergence. Fix: `WatchClosest` keeps the later of two equal-distance candidates (`ahb.a`, `dcmpl; ifle`), so an adult looks at a child standing on its parent.
+
+Found wrong in the batch 98 list:
+- The probe horse's seat height was a foal versus an adult, not a port gap.
+- "`tickSpawners`' per-tick player list" was built by its Overworld caller, not by `tickSpawners`, and is too small to show in the sampler.
+- `inertDropNbt` wrote a PickupDelay that 1.7.10 `xk.b` does not write.
+
+Still open from batch 99:
+- **Multiplayer.**
+  - Horses: a `dismount` message arriving while the client loads terrain is dropped; S08 carries no yaw or pitch on the port wire.
+  - The dedicated server: a default-skin player's empty textures property (needs a captured session-server response); textures size modelled, not signed. Clients predict movement with default ability speeds.
+  - Kill credit: the removed body gets no death throw, S19, XP orbs or kill credit.
+  - Speed: `moveEntityBody` / `moveWith` boxing, the `next` iterator tail, `bb.slice()` for own-bb entities, `track` packet pushes, `FineGrid`, `explosionBlocksWith`.
+  - Tiles: the server's ghost jukebox disc ejects no inert drop (`server-music.js`).
+  - The golem rose statuses are bytecode-read only, not executed against a real tracker.
+  - Server commands: /publish stays off. End island tails past 128 blocks are cut on some seeds (left for the user's decision). WebSocket compression stays off.
+  - Not seen in a browser: the client dismount snap, the golem arm after an offer ends, plus the batch 67 to 98 lists.
+- **Single player.**
+  - The copy: the terrain read beside the picked portal still needs the worker when the wait is shorter than one cell build; whether the credits screen pauses a public-LAN host's server is unconfirmed.
+  - Tiles: tolerant numeric tags (`Unbreakable`, `map_is_scaling`, enchantment id and lvl) are rewritten as byte or short; extra keys in `ench` entries and the insides of `Fireworks` and `Explosion` are lossy.
+  - Entity NBT: a non-positive `xpBarCap` (about level 3e8) hides the whole bar natively, the port only zeroes the fill; a non-finite walk or fly speed is ignored (deliberate).
+  - Mob records: iron golem rose offering and village spawn, witch potions, a bat in water; villager sounds and hearts not compared.
+  - Not seen in a browser: the F3 walk/fly line, the XP bar at odd XpP, the batch 98 list.
+- **Rendering.** No native pixel capture.
+- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+
 ## Done in batch 98
 
 Batch 98 covered these areas (track agents ran on Sonnet):
@@ -23,22 +61,7 @@ Found wrong in the batch 97 list:
 - The `item-component.js` display extras and the sign / command block round trips were already native.
 - The horse95 probe gave its player yOffset 1.62 (`mw` has 0); its verdicts still hold.
 
-Still open from batch 98:
-- **Multiplayer.**
-  - Horses: the client ignores the `dismount` message; a mob carrying a player through a portal puts the rider down without it; the probe horse's 64.1 / 64.7 seat height is unexplained.
-  - The dedicated server: a default-skin player's empty textures property (online servers) is not counted; the textures size is modelled, not signed. Ability speeds and raw XP are not checked on the server.
-  - Kill credit: the removed body gets no death throw, XP orbs, stats or hurt sound.
-  - Speed: `moveEntityBody` / `moveWith` boxing, the `next` iterator tail, `bb.slice()` for own-bb entities, `tickSpawners`' per-tick player list.
-  - Server commands: /publish stays off. End island tails past 128 blocks are cut on some seeds (left for the user's decision). WebSocket compression stays off.
-  - Not seen in a browser: the client's count-0 shear sound and wool, plus the batch 67 to 97 lists.
-- **Single player.**
-  - The copy: a wait shorter than one cell build still gets no in-tick hint; a Teleporter read outside the 8 x 8 window is not covered.
-  - Tiles: the inert jukebox drop needs wiring (`main.js`, `server-music.js`, saves, export); a known tag key with the wrong type is still dropped.
-  - Entity NBT: a non-finite walk or fly speed is ignored (deliberate); `away-entities.js` still treats any mob link as riding (unreachable there).
-  - Mob records: one villager birth record only; hearts, villager sounds and the child's head yaw not compared; a bat in water.
-  - Not seen in a browser: the F3 walk/fly line still shows the defaults; the XP bar for a NaN or negative XpP; the loading screen while a short-wait trip waits for the worker; the batch 97 list.
-- **Rendering.** No native pixel capture.
-- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+Still open from batch 98: carried into the batch 99 list above, less what batch 99 fixed or found wrong.
 
 ## Done in batch 97
 
