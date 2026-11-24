@@ -962,6 +962,7 @@ function pushPairsReference(w, e, near, list) {
   for (const o of list) if (o !== e && Math.abs(o.x - e.x) <= 12 && Math.abs(o.z - e.z) <= 12 && Math.abs(o.y - e.y) <= 12 && o.ridingEntity !== e && e.ridingEntity !== o && pushable(o) && pushMeets(near, o, w, pushBox)) out.push(o);
   return out;
 }
+const VILLAGER_STATUS = { heart: 12, angryVillager: 13, happyVillager: 14 };
 export class EntityWorld {
   // `ids` is the shared Entity.nextEntityID (entity-ids.js): main.js and the away run hand every dimension's list the same one.
   constructor(world, saved, random = Math.random, ids = new EntityIds(), { reload = false } = {}) {
@@ -2109,6 +2110,7 @@ export class EntityWorld {
     return hit;
   }
   villageBurst(name, e, size, rand) {
+    this.mobStatus?.(e, VILLAGER_STATUS[name]); // b100 mpobjects100: World.setEntityState(12 hearts / 13 angry / 14 happy) is an S19 on a dedicated server (the client copy draws it, copy-status.js)
     if (this.fx) burst(this.fx, name, 5, { x: e.x, y: e.y, z: e.z, width: size.width, height: size.height }, rand, 1);
   }
   // The village collection (World.villageCollectionObj), made on first use.
