@@ -230,6 +230,15 @@ export class TerrainPeek {
     this.writes.push([x, y, z, id, meta, flags]);
   }
   notify() {}
+  // b99 spcopy99: the block at x,y,z as the saved data alone knows it (edits, then a kept stored column), air elsewhere. Only valid for asking about portal blocks (terrain holds none):
+  // the Teleporter's search reads through it, so a far saved portal does not make the peek build (or wait for) its terrain column.
+  searchGet(x, y, z) {
+    if (y < 0 || y >= 256) return 0;
+    const e = this.edits.get(`${x},${y},${z}`);
+    if (e !== undefined) return e & 255;
+    const c = this.stored?.column(x >> 4, z >> 4);
+    return c ? c.blocks[((x & 15) * 16 + (z & 15)) * 256 + y] : 0;
+  }
   // The columns in the box whose saved or written cells include block `id`, sorted by x then z (the Teleporter's search order), as [x, z, ys] with
   // `ys` the ascending y of every such block in the column (the search weighs height; the exit prewarm picks the portal as it does).
   // Terrain never contains a portal block (neither the Nether/End generators nor the Overworld population place one), so every
