@@ -110,7 +110,7 @@ import { ITEM_COMPASS, COMPASS_FRAMES, COMPASS_STRIP, compassAngle, createCompas
 import { compassFrameCount, spriteEpoch } from "./sprite-frames.js";
 import { InventoryPlayerView, PAPERDOLL_LAYOUTS } from "./inventory-player.js";
 import { HorsePreviewView, HORSE_PREVIEW_LAYOUT } from "./horse-preview.js";
-import {Experience,ExperienceOrbs,smeltExperience,xpBarFill} from "./experience.js";
+import {Experience,ExperienceOrbs,smeltExperience,xpBarFill,xpBarCap} from "./experience.js";
 import {ExperienceRenderer} from "./experience-renderer.js";
 import {plantedBlock,cropItem} from './crops.js';
 import { NetherLive } from './nether-portal-live.js'; // nether portal lighting/removal and nether wart
@@ -2810,7 +2810,7 @@ function refreshContainer() {
 }
 function renderVitals() {
   const mpMount = multiplayer && mpRiding ? mountedHorse(remoteMobs, mpRiding) : null, jump = mpMount ? (mpHorse?.bar() ?? { visible: false, width: 0 }) : jumpBar(rider); // b77: a server horse's bar$('#jump-hud').classList.toggle('hidden',!jump.visible);$('#jump-fill').style.width=jump.width/182*100+'%';
-  $('#experience-hud').classList.toggle('hidden',survival.creative||jump.visible);{const lv=$('#experience-level'),k=String(experience.level||'');if(lv.dataset.lv!==k+font.version){lv.dataset.lv=k+font.version;lv.innerHTML=xpLevelHtml(experience.level);}}$('#experience-fill').style.width=`calc(${xpBarFill(experience.progress,experience.level)}*var(--u))`;$('#experience-hud').setAttribute('aria-label',`Experience level ${experience.level}, ${experience.points} of ${experience.level>=30?62+(experience.level-30)*7:experience.level>=15?17+(experience.level-15)*3:17} points`);
+  $('#experience-hud').classList.toggle('hidden',survival.creative||jump.visible);{const lv=$('#experience-level'),k=String(experience.level||'');if(lv.dataset.lv!==k+font.version){lv.dataset.lv=k+font.version;lv.innerHTML=xpLevelHtml(experience.level);}}$('#experience-hud .experience-track').style.visibility=xpBarCap(experience.level)>0?'':'hidden';$('#experience-fill').style.width=`calc(${xpBarFill(experience.progress,experience.level)}*var(--u))`;$('#experience-hud').setAttribute('aria-label',`Experience level ${experience.level}, ${experience.points} of ${experience.level>=30?62+(experience.level-30)*7:experience.level>=15?17+(experience.level-15)*3:17} points`);
   $("#survival-hud").classList.toggle("hidden", survival.creative);
   if (survival.creative) return;
   // GuiIngame.renderPlayerStats (damage-hud.js): the hurt blink, low-health jiggle, regeneration wave, Absorption and hunger shake.
