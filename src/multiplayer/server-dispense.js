@@ -210,7 +210,7 @@ export class ServerDispense {
     const at = (body ?? who).position;
     mobs.thornsOfVictim(ref, {
       byPlayer: true,
-      hurt: (n) => { if (body || who.dead) return false; if (gone) { /* b98 credit98: the removed body takes the hit (mw.a(ro, F) has no online test); a lethal one broadcasts its death and drops its items */ const hit = who.survival.damage(n, 'thorns', true, 'thorns', ref) !== false; if (hit) this.sim.serverSurvival?.dieGone(who); return hit; } return this.sim.damagePlayer(who, n, { name: 'thorns', from: ref, call: () => who.survival.damage(n, 'thorns', true, 'thorns', ref) }); },
+      hurt: (n) => { if (body || who.dead) return false; if (gone) { /* b98 credit98: the removed body takes the hit (mw.a(ro, F) has no online test); a lethal one broadcasts its death and drops its items */ const hit = who.survival.damage(n, 'thorns', true, 'thorns', ref) !== false; if (hit) this.sim.serverSurvival?.goneHit(who, ref); return hit; } /* b99 credit99: hurt/death sound, deaths stat */ return this.sim.damagePlayer(who, n, { name: 'thorns', from: ref, call: () => who.survival.damage(n, 'thorns', true, 'thorns', ref) }); },
       sound: () => this.fx.push({ k: 'sound', name: 'damage.thorns', x: at.x, y: at.y, z: at.z, volume: 0.5, pitch: 1, dim: lane.dim }),
     });
   }
