@@ -44,7 +44,7 @@ test("index loops equal the reference: hash-set keys, chunk order", () => {
 test("bench hashes are identical off / on / verify and the bench prints mode96", () => {
   const out = {};
   for (const m of modes) out[m] = spawnSync(process.execPath, ["tools/bench-alloc81.mjs", "--scene=pen", "--state", "--ticks=50", "--mobs=20"], { env: { ...process.env, MC_MPPERF96: m }, encoding: "utf8" }).stdout;
-  for (const m of modes) assert.match(out[m], new RegExp(`mode96=${m} (mode97=\\w+ )?(mode98=\\w+ )?mobs=\\d+ \\[`));
+  for (const m of modes) assert.match(out[m], new RegExp(`mode96=${m} (mode97=\\w+ )?(mode98=\\w+ )?(mode99=\\w+ )?mobs=\\d+ \\[`));
   const h = (s) => s.slice(s.indexOf("["));
   assert.equal(h(out.on), h(out.off)); assert.equal(h(out.verify), h(out.off));
   const tr = modes.map((m) => spawnSync(process.execPath, ["tools/bench-alloc81.mjs", "--scene=travel", "--state", "--ticks=50"], { env: { ...process.env, MC_MPPERF96: m }, encoding: "utf8" }).stdout);
