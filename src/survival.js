@@ -1031,13 +1031,13 @@ export class Survival {
       else if (hungerDrops(this.difficulty)) this.food = Math.max(0, this.food - 1);
     }
     if (this.naturalRegeneration !== false && this.food >= 18 && this.health < this.maxHealth && this.health > 0) { // gamerule naturalRegeneration
-      if (++this.timer >= 80) {
+      if ((this.timer = (this.timer + 1) | 0) >= 80) { // b100 entnbt100: FoodStats.foodTimer is an int (zr.d + 1 wraps)
         this.health = Math.min(this.maxHealth, this.health + 1);
         this.exhaust(3);
         this.timer = 0;
       }
     } else if (this.food <= 0) {
-      if (++this.timer >= 80) {
+      if ((this.timer = (this.timer + 1) | 0) >= 80) { // b100 entnbt100: FoodStats.foodTimer is an int (zr.d + 1 wraps)
         if (starvationHurts(this.difficulty, this.health)) this.damage(1, "starvation");
         this.timer = 0;
       }

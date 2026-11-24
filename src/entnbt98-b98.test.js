@@ -115,7 +115,7 @@ test("adding experience to a loaded out-of-range bar follows addExperience (no t
   assert.equal(inf.level, 3);
   const big = new Experience({ total: 2147483647, level: 7, progress: 0.25 });
   big.add(1);
-  assert.equal(big.total, -2147483648);
+  assert.equal(big.total, 2147483647); // b100: yz.v clamps n to MAX_INT - total (bytecode-read), the old -2147483648 wrapped
   const over = new Experience({ total: 0, level: 0, progress: 5 });
   over.add(0);
   assert.ok(over.progress < 1 && over.level > 0);

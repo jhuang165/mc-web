@@ -78,7 +78,7 @@ export function drawLabels(root, selector = ".gui-label,.native-bag-label,.nativ
 
 /** The XP level: four black copies at +/-1 and the green one on top (GuiIngame). */
 export function xpLevelHtml(level) {
-  if (!level) return "";
+  if (!(level > 0)) return ""; // b100 entnbt100: GuiIngame draws the number only while XpLevel > 0 (a negative level shows nothing)
   const s = String(level), copy = (dx, dy, c, top) => `<span class="xp-copy mc-text flat" style="${top ? "" : `left:calc(${dx}*var(--u));top:calc(${dy}*var(--u));`}position:${top ? "relative" : "absolute"}">${bitmapHtml(s, c)}</span>`;
   return `<span style="position:relative;display:inline-block">${[[1, 0], [-1, 0], [0, 1], [0, -1]].map(([x, y]) => copy(x, y, 0, false)).join("")}${copy(0, 0, 0x80ff20, true)}</span>`;
 }
