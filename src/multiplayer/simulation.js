@@ -7,6 +7,7 @@ import { vectorOf } from '../mpperf83-fast.js'; // b83 mpperf83
 import { eachValue89 } from '../mpperf89-fast.js'; // b89 mpperf89
 import { fast97, fail97 } from '../mpperf97-fast.js'; // b97 mpperf97
 import { fast98 } from '../mpperf98-fast.js'; // b98 mpperf98
+import { fast99 } from '../mpperf99-fast.js'; // b99 mpperf99
 const NO_BEACON_PLAYERS98 = Object.freeze([]);
 import { movePlayer } from '../player-physics.js';
 import { ServerStats } from './server-stats.js'; // b63 mpstats
@@ -457,10 +458,11 @@ export class DedicatedSimulation {
   deliverSounds() {
     const queue = fast98.mode === 'off' ? this.soundsOut.splice(0) : this.soundsOut;
     if (!queue.length) return; // b98 mpperf98: nothing queued, nothing copied
+    const quick = fast99.mode !== 'off', all = quick ? [...this.players.values()] : null; // b99 mpperf99: one list for every sound of the call (same order), not one Map iterator per sound
     for (let qi = 0; qi < queue.length; qi++) {
       const s = queue[qi];
       const range = s.volume > 1 ? SOUND_RANGE * s.volume : SOUND_RANGE;
-      for (const o of this.players.values()) {
+      for (const o of quick ? all : this.players.values()) {
         if (o.id === s.except || (o.dimension | 0) !== (s.dim ?? this.players.get(s.except)?.dimension ?? 0)) continue; // b61: the sound's dimension (the eater's, unless tagged)
         const dx = s.x - o.position.x, dy = s.y - (o.position.y + EYE_OFFSET), dz = s.z - o.position.z;
         if (dx * dx + dy * dy + dz * dz < range * range) (o.soundsOut ??= []).push({ name: s.name, x: s.x, y: s.y, z: s.z, volume: s.volume, pitch: s.pitch });
@@ -749,7 +751,7 @@ export class DedicatedSimulation {
     this.vehicles.tick(); // b61
     this.dispense.tickJoined(); // b81 blast81: TNT primed during the entity pass updates in it
     this.fishing.tick(); // b64 mpstats2: bobbers, inside their anglers' dimensions
-    tickSpawners({ mobs: this.mobs, spawners: this.tileEntities.spawners, random: this.weather.random, players: [...this.players.values()].filter(p => !p.dimension), light: overworldLight(this), time: this.time, vehicles: this.vehicles, viewDistance: this.rules.viewDistance }); // b70 serverprops2: tracker clamp // b65: + spawner minecarts, Riding vehicles, client effects; b63: MobSpawnerBaseLogic after the entities
+    tickSpawners({ mobs: this.mobs, spawners: this.tileEntities.spawners, random: this.weather.random, players: fast99.mode === 'off' ? [...this.players.values()].filter(p => !p.dimension) : () => [...this.players.values()].filter(p => !p.dimension), light: overworldLight(this), time: this.time, vehicles: this.vehicles, viewDistance: this.rules.viewDistance }); // b70 serverprops2: tracker clamp // b65: + spawner minecarts, Riding vehicles, client effects; b63: MobSpawnerBaseLogic after the entities
     this.falling.tickEntities(); // b92: the scheduled part ran in tickScheduledSystems; b90 mpobjects90: WorldServer.tickUpdates spawns the falling block and World.updateEntities runs it BEFORE EntityTracker.updateTrackedEntities, so its S0E leaves in the tick it spawned (dispense.flush is the tracker pass)
     this.maps.tick(); // b69 mpmaps (b91: ItemMap.onUpdate is the player's entity update, so before the tracker pass): ItemMap.onUpdate and the S34 map updates (server-maps.js)
     tickTileSystems({ hoppers: this.containers.ticks.hoppers, redstone: this.redstone }); // b92: the end of World.updateEntities (tile entities), before the tracker pass

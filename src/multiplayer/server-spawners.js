@@ -37,9 +37,11 @@ export function chainSupported(spawnData) {
 
 // `mobs`: the dimension's ServerMobs. `spawners`: its MobSpawners. `players`: the server players of this dimension. `light`: { sky, block, thunder, thundering }, the dimension's reads.
 // `vehicles`: the dimension's ServerVehicles (spawner minecarts tick here; a SpawnData Riding minecart or boat is made in it). Returns the mobs spawned.
-export function tickSpawners({ mobs, spawners, random, players, light, time = 0, vehicles = null, viewDistance = VIEW_DISTANCE }) { // b70 serverprops2: `viewDistance` (sim.rules.viewDistance) sets the tracker clamp of the puff and the cart status
+export function tickSpawners({ mobs, spawners, random, players: playersIn, light, time = 0, vehicles = null, viewDistance = VIEW_DISTANCE }) { // b70 serverprops2: `viewDistance` (sim.rules.viewDistance) sets the tracker clamp of the puff and the cart status
   const carts = liveCartSpawners(vehicles?.carts);
-  if ((!spawners?.size && !carts.length) || !players.length) return [];
+  if (!spawners?.size && !carts.length) return []; // b99 mpperf99: `players` may be a function: the list is built only past this point
+  const players = typeof playersIn === 'function' ? playersIn() : playersIn;
+  if (!players.length) return [];
   const world = mobs.mobs, events = [], cartOf = new Map();
   for (const c of vehicles?.carts.carts ?? []) if (c.type === 4 && c.spawner) cartOf.set(c.spawner, c);
   const extraCollision = box => !!(vehicles?.all ?? []).some(v => !v.dead && v.bb && boxesIntersect(box, v.bb)); // carts and boats set preventEntitySpawning

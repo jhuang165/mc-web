@@ -19,6 +19,7 @@
 import { JavaHashSetOrder } from '../java-hashset-order.js';
 import { chunkHash } from '../chunk-store.js';
 import { fast88 } from '../mpperf88-fast.js'; // b88 mpperf88
+import { fast99, fail99 } from '../mpperf99-fast.js'; // b99 mpperf99
 
 export const VIEW_DISTANCE = 10;
 
@@ -45,6 +46,11 @@ export class ChunkSet {
   // (a legacy End window) is [localCx, localCz, dx, dz] (see above).
   chunks(players, world, radius = VIEW_DISTANCE) {
     const size = world?.size ?? 128, ox = world?.originX ?? 0, oz = world?.originZ ?? 0;
+    const quick = fast99.mode !== 'off';
+    if (quick && this.same99(players, radius, size, ox, oz)) { // b99 mpperf99: the same chunk numbers, radius, size and origin as the last call: no pairs and no key string
+      if (fast99.mode === 'verify') { const k = `${radius}|${size}|${ox},${oz}|${players.map(p => [Math.floor((p.x + ox) / 16), Math.floor((p.z + oz) / 16)]).join(';')}`; if (k !== this.lastKey) fail99('chunk key'); }
+      return this.last;
+    }
     const centres = players.map(p => [Math.floor((p.x + ox) / 16), Math.floor((p.z + oz) / 16)]);
     const key = `${radius}|${size}|${ox},${oz}|${centres.join(';')}`;
     if (key === this.lastKey) return this.last;
@@ -56,7 +62,20 @@ export class ChunkSet {
       out.push(dx || dz ? [cx, cz, dx, dz] : [cx, cz]);
     }
     this.lastKey = key; this.last = out;
+    if (quick) this.keep99(players, radius, size, ox, oz); else this.flat99 = null;
     return out;
+  }
+  // b99 mpperf99: the last call's inputs as numbers (the key string's content: radius, size, origin, each player's chunk).
+  same99(players, radius, size, ox, oz) {
+    const l = this.flat99;
+    if (!l || l.length !== players.length * 2 + 4 || l[0] !== radius || l[1] !== size || l[2] !== ox || l[3] !== oz) return false;
+    for (let i = 0; i < players.length; i++) if (l[4 + i * 2] !== Math.floor((players[i].x + ox) / 16) || l[5 + i * 2] !== Math.floor((players[i].z + oz) / 16)) return false;
+    return true;
+  }
+  keep99(players, radius, size, ox, oz) {
+    const l = [radius, size, ox, oz];
+    for (let i = 0; i < players.length; i++) l.push(Math.floor((players[i].x + ox) / 16), Math.floor((players[i].z + oz) / 16));
+    this.flat99 = l;
   }
 }
 
