@@ -80,7 +80,7 @@ export class ServerSurvival {
     const s = p.survival, sim = this.sim, names = s.hurtSounds, lethal = s.health <= 0;
     const name = names.includes('game.player.die') ? 'game.player.die' : names.includes('game.player.hurt') ? 'game.player.hurt' : null;
     names.length = 0;
-    if (name && sim.soundRand && sim.soundsOut) sim.soundsOut.push({ name: lethal ? 'game.player.die' : name, x: p.position.x, y: p.position.y, z: p.position.z, volume: 1, pitch: Math.fround(Math.fround(Math.fround(sim.soundRand.nextFloat() - sim.soundRand.nextFloat()) * Math.fround(0.2)) + 1), except: p.id });
+    if (name && sim.soundRand && sim.soundsOut) sim.soundsOut.push({ name: lethal ? 'game.player.die' : name, x: p.position.x, y: p.position.y, z: p.position.z, volume: 1, pitch: Math.fround(Math.fround(Math.fround(sim.soundRand.nextFloat() - sim.soundRand.nextFloat()) * Math.fround(0.2)) + 1), except: p.id, dim: p.dimension | 0 }); // b99 lead: the removed body is no longer in sim.players, so deliverSounds cannot look its dimension up
     if (lethal) this.dieGone(p, attacker);
     const record = sim.savedPlayers?.get(p.resumeKey); // the logout's file: the in-memory StatisticsFile is what the next login reads
     if (record) { delete record.stats; Object.assign(record, sim.stats?.savedFields(p)); }
