@@ -49,7 +49,7 @@ import { installServerWither, boundedSkullResistance } from './server-wither.js'
 import { DRAGON_KINDS, installServerDragon, dragonReach } from './server-dragon.js'; // b64 mpdragon
 import { VILLAGE_KINDS, installServerVillagers } from './server-villagers.js'; // b66 mpvillage
 import { GOLEM_KINDS, installServerGolems } from './server-golems.js'; // b66 mpgolems
-import { fast100 } from '../mpperf100-fast.js'; // b100 mpperf100
+import { fast100, fail100 } from '../mpperf100-fast.js'; // b100 mpperf100 (b100 lead: fail100 is used by the verify check)
 import { skullEntry } from './skull-look.js'; // b82 mpball82: the fireballs' join angles (fireballWatch)
 
 // The kinds the server keeps and the client has a copy for. Batch 61 added every natural Overworld spawn of 1.7.10: enderman, slime, witch, cave spider (the spawner and spider
