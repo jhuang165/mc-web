@@ -4827,8 +4827,9 @@ function animate(now) {
     if (debug) updateDebugOverlay();
     if (elapsed - lastSave > 5) save();
     scene.effects.crack(mining?.block, mining?.progress);
-  } else if (screen === "inventory") pausedGui.run(dt, () => gui.tick()); // a pausing screen (sign, book, command block): updateScreen still runs each client tick
-  else if (screen === "dead") {
+  } else if (screen === "inventory") {
+    pausedGui.run(dt, () => gui.tick()); // a pausing screen (sign, book, command block): updateScreen still runs each client tick
+  } else if (screen === "dead") {
     // GuiGameOver does not pause the game. Here only EntityLivingBase.onDeathUpdate and the
     // particles keep ticking (the rest of the world waits on the death screen): at deathTime
     // 20 the client player, still 0.6 x 1.8 (onDeath's setSize runs on the server), goes up

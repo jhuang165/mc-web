@@ -6,7 +6,8 @@
 // "disconnect.genericReason: Internal Exception: ...". No S40 goes out. So every player that starts tracking the item (within 64 blocks and view distance, the column sent) loses the
 // connection, at the ejection or later when they come into range, until the item is gone at age 6000.
 import { clampTrackRange, trackedWithin } from '../ring-events.js';
-import { PLAY_FRAME } from './net-packet-ids.js';
+// The S0E frame size is PLAY_FRAME.clientbound[14] (net-packet-ids.js, pinned by mpobjects100-b100.test.js). Not imported: net-packet-ids.js pulls node:zlib, and this file is in the browser LAN host's bundle.
+export const S0E_FRAME = 21;
 
 export const GHOST_DROP_REASON = 'Internal Exception: io.netty.handler.codec.EncoderException: java.lang.NullPointerException';
 const dropped = new WeakSet();
@@ -22,7 +23,7 @@ export function ghostItemDrops(sim, dim, inert) {
       if (!trackedWithin(range, x, z, p.position)) continue;
       if (sim.chunkViews?.sees && !sim.chunkViews.sees(p.id, Math.floor(d.x / 16), Math.floor(d.z / 16))) continue; // PlayerManager.isPlayerWatchingChunk
       dropped.add(p);
-      sim.admin?.netStats?.write(14, PLAY_FRAME.clientbound[14] + 6); // the S0E is written and counted; the S1C throws before eu.b counts it
+      sim.admin?.netStats?.write(14, S0E_FRAME + 6); // the S0E is written and counted; the S1C throws before eu.b counts it
       sim.admin?.host?.drop?.(p.id, GHOST_DROP_REASON);
     }
   }

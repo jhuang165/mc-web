@@ -7,7 +7,8 @@ import { populationBlockMapperReady } from "./population-world.js";
 import { World } from "./world.js";
 import { DedicatedSimulation } from "./multiplayer/simulation.js";
 import { musicOf, JUKEBOX } from "./multiplayer/server-music.js";
-import { GHOST_DROP_REASON } from "./multiplayer/server-ghost-items.js";
+import { GHOST_DROP_REASON, S0E_FRAME } from "./multiplayer/server-ghost-items.js";
+import { PLAY_FRAME } from "./multiplayer/net-packet-ids.js";
 import { IDLE_INPUT } from "./multiplayer/protocol.js";
 
 await populationBlockMapperReady;
@@ -104,4 +105,9 @@ test("villager hearts, angry and happy bursts reach the watchers as S19 12 / 13 
   s.mobs.statuses.length = 0;
   for (const name of ["heart", "angryVillager", "happyVillager"]) ew.villageBurst(name, v, { width: 0.6, height: 1.8 }, { nextGaussian: () => 0, nextDouble: () => 0.5, nextFloat: () => 0.5, nextInt: () => 0 });
   assert.deepEqual(s.mobs.statuses.map((q) => q.status), [12, 13, 14]);
+});
+
+test("b100 lead: the ghost-item S0E frame constant equals PLAY_FRAME and server-ghost-items.js stays out of node:zlib (browser LAN host bundle)", () => {
+  assert.equal(S0E_FRAME, PLAY_FRAME.clientbound[14]);
+  assert.doesNotMatch(readFileSync(new URL("./multiplayer/server-ghost-items.js", import.meta.url), "utf8"), /from ['"]\.\/net-(packet-ids|native-bytes)\.js['"]/);
 });
