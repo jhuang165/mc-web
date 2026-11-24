@@ -1,4 +1,5 @@
 import { writeItemTags } from './item-tags.js';
+import { inertItemNbt } from './inert-drops.js'; // b99 tiles99
 import { skullOwnerEntry } from './skull-profile.js';
 import { writeFireworkTags } from './fireworks-nbt.js';
 import { writeBookTags } from './books-nbt.js';
@@ -177,7 +178,7 @@ function payloadIn(state,ox,oz,report,blockAt) {
   const nest=(b,seen)=>{const m=mountOf(b);if(m&&!seen.has(m)){seen.add(m);ridden.add(m);b.n.Riding=tag(NBT.COMPOUND,nest(m,seen));}return new Map(Object.entries(b.n));};
   const roots=built.map(b=>[b,nest(b,new Set([b]))]);
   for(const [b,m] of roots)if(!ridden.has(b))entities.push(m);}
- for(const {value:e} of state.drops??[]) {const item=stackNbt(e.stack,undefined,report);if(!item)continue;entities.push(new Map(Object.entries({...entity({...e,posY:e.y+.125,fire:Number.isInteger(e.fire)?e.fire:(e.age??0)>0?-1:0},'Item',ox,oz),Item:tag(NBT.COMPOUND,item),Age:short(e.age??0),Health:short(((e.health??5)<<24)>>24),...(e.thrower?{Thrower:str(e.thrower)}:{}),...(e.owner?{Owner:str(e.owner)}:{}),PortalCooldown:int(Number.isInteger(e.portalCooldown)?e.portalCooldown:0)})));} // b88 entnbt88: the raw cooldown (entnbt88-reference.json ticks: 5000 and -7 load and save unchanged)
+ for(const {value:e} of [...(state.drops??[]),...(state.musicTiles??[]).filter(w=>w.value?.kind==='inert').map(w=>({value:{...w.value,y:w.value.y,mx:0,my:0,mz:0}}))]) {const item=e.kind==='inert'?inertItemNbt(e):stackNbt(e.stack,undefined,report);if(!item)continue;entities.push(new Map(Object.entries({...entity({...e,posY:e.y+.125,fire:Number.isInteger(e.fire)?e.fire:(e.age??0)>0?-1:0},'Item',ox,oz),Item:tag(NBT.COMPOUND,item),Age:short(e.age??0),Health:short(((e.health??5)<<24)>>24),...(e.thrower?{Thrower:str(e.thrower)}:{}),...(e.owner?{Owner:str(e.owner)}:{}),PortalCooldown:int(Number.isInteger(e.portalCooldown)?e.portalCooldown:0)})));} // b88 entnbt88: the raw cooldown (entnbt88-reference.json ticks: 5000 and -7 load and save unchanged)
  for(const {value:e} of state.tnt??[])entities.push(new Map(Object.entries({...entity({...e,posY:e.y+TNT_Y_OFFSET,fire:Number.isInteger(e.fire)?e.fire:0},'PrimedTnt',ox,oz),Fuse:byte(e.fuse)}))); // Fire starts at 0 for an object entity (object-nbt-reference.json); b82 fireext82: then moveEntity's counter (-1 at rest, 160 and up once lit)
  for(const {value:e} of state.xpOrbs??[])entities.push(new Map(Object.entries({...entity({...e,posY:e.y+.25},'XPOrb',ox,oz),Health:short(((e.health??5)<<24)>>24),Age:short(e.age??0),Value:short(e.value??1)})));
  for(const {value:e} of state.falling??[]) {const o=toOriginal(e.block,e.meta&15,e.flowing?{flowing:true}:{});entities.push(new Map(Object.entries({...entity({...e,posY:e.y+FALLING_Y_OFFSET,fire:Number.isInteger(e.fire)?e.fire:0},'FallingSand',ox,oz),
@@ -203,7 +204,7 @@ function payloadIn(state,ox,oz,report,blockAt) {
  for(const {value:e} of state.comparatorTiles??[]){const b=blockAt(e.x,e.y,e.z);if(b===149||b===150)tiles.push(new Map(Object.entries({id:str('Comparator'),x:int(e.x+ox),y:int(e.y),z:int(e.z+oz),OutputSignal:int(e.signal)})));}
  for(const {value:e} of state.commandBlocks??[])tiles.push(writeCommandBlock(e,e.x+ox,e.y,e.z+oz));
  // TileEntityNote (Music) and TileEntityJukebox (RecordPlayer): the note byte, the Record int and the RecordItem stack.
- for(const {value:e} of state.musicTiles??[])tiles.push(e.kind==='note'?writeNoteTile(e,e.x+ox,e.y,e.z+oz):writeJukeboxTile(e,e.x+ox,e.y,e.z+oz,undefined,s=>stackNbt(s,undefined,report)));
+ for(const {value:e} of state.musicTiles??[])if(e.kind!=='inert')tiles.push(e.kind==='note'?writeNoteTile(e,e.x+ox,e.y,e.z+oz):writeJukeboxTile(e,e.x+ox,e.y,e.z+oz,undefined,s=>stackNbt(s,undefined,report)));
  // TileEntitySign.writeToNBT: Text1-Text4 (signs.js).
  for(const {value:e} of state.signs??[])tiles.push(new Map(Object.entries({id:str('Sign'),x:int(e.x+ox),y:int(e.y),z:int(e.z+oz),Text1:str(e.text?.[0]??''),Text2:str(e.text?.[1]??''),Text3:str(e.text?.[2]??''),Text4:str(e.text?.[3]??'')})));
  // TileEntitySkull.writeToNBT (bytecode-read, item-tags2-reference.json): SkullType and Rot bytes and the Owner GameProfile compound; 1.7.10 writes no ExtraType (skull-profile.js).

@@ -24,6 +24,7 @@ import { crystalBox } from "./ender-crystal.js"; // b88 boatray88: EntityEnderCr
 import { installCommandBlocks } from "./command-block.js";
 import { installNoteBlocks } from "./note-blocks.js";
 import { installJukeboxes, JUKEBOX_ID } from "./jukebox.js";
+import { InertDrops, inertRecords } from "./inert-drops.js";
 import { isDisc } from "./note-jukebox-content.js";
 import { installShapedBlocks, trapdoorSupportOriginal } from "./shaped-blocks.js";
 import { blockProperties } from "./redstone.js";
@@ -133,7 +134,8 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
   const commandBlocks = installCommandBlocks(redstone, { host: () => game.commandHost(), changed: () => game.markUnsaved?.() });
   installShapedBlocks(redstone, trapdoorSupportOriginal(blockProperties())); // fence gates (107) and trapdoors (96): redstone opening, trapdoor support loss
   const noteBlocks = installNoteBlocks(redstone, { particle: (...a) => game.music?.particle?.(...a), changed: () => game.markUnsaved?.() });
-  const jukeboxes = installJukeboxes(redstone, { play: (...a) => game.music?.play?.(...a), spawn: (...a) => game.music?.spawn?.(...a), changed: () => game.markUnsaved?.() });
+  const inertDrops = new InertDrops(); // b99 tiles99: the null-item EntityItem a ghost disc leaves (inert-drops.js); saved inside musicTiles as { kind: "inert" }
+  const jukeboxes = installJukeboxes(redstone, { spawnInert: (x, y, z, n) => { inertDrops.spawn(x, y, z, n); game.markUnsaved?.(); }, play: (...a) => game.music?.play?.(...a), spawn: (...a) => game.music?.spawn?.(...a), changed: () => game.markUnsaved?.() });
   // Note block and jukebox right and left clicks (note-blocks.js, jukebox.js): { handled, consumed } where consumed is a disc taken from the held stack.
   const music = {
     noteBlocks,
@@ -149,8 +151,9 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
     },
     click(x, y, z) { if (redstone.getBlock(x, y, z) === 25) { noteBlocks.click(x, y, z); flush(); } },
     // One record list: { kind: "note", x, y, z, note } and { kind: "jukebox", x, y, z, record }.
-    save: () => [...noteBlocks.save().map((e) => ({ kind: "note", ...e })), ...jukeboxes.save().map((e) => ({ kind: "jukebox", ...e }))],
-    restore(records) { noteBlocks.restore(records?.filter((e) => e.kind === "note")); jukeboxes.restore(records?.filter((e) => e.kind === "jukebox")); },
+    inertDrops,
+    save: () => [...noteBlocks.save().map((e) => ({ kind: "note", ...e })), ...jukeboxes.save().map((e) => ({ kind: "jukebox", ...e })), ...inertRecords(inertDrops)],
+    restore(records) { inertDrops.restore(records?.filter?.((e) => e?.kind === "inert")); noteBlocks.restore(records?.filter((e) => e.kind === "note")); jukeboxes.restore(records?.filter((e) => e.kind === "jukebox")); },
   };
   // BlockChest type 1 (trapped chest 146): canProvidePower; weak power is the viewer count (TileEntityChest.numPlayersUsing) clamped to
   // 0..15 on every side, strong power only toward the block beneath (side 1). chests-reference.json "power" records.
@@ -219,6 +222,7 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
     const mc = game.minecarts?.();
     if (mc && mc.blockHook !== cartTouch) mc.blockHook = cartTouch;
     redstone.beginTick();
+    inertDrops.tick();
   };
   // After the scheduled ticks: block events, the tile-entity loop, the pistons' pushes. The shared tick tree (tile-ticks.js) calls tickBegin, takes and
   // runs the scheduled entries with the other kinds, and world-tick.js calls tickEnd.

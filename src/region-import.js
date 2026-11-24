@@ -1,4 +1,5 @@
 import { readCommandBlock } from "./command-block.js";
+import { inertFromNbt } from './inert-drops.js'; // b99 tiles99
 import { LastOutputError, normalizeLastOutput } from "./chat-component.js";
 import { makeSpawner, readNBT as readSpawnerNBT, spawnerJSON } from './mob-spawner.js';
 import { readNoteTile } from "./note-blocks.js";
@@ -19,7 +20,8 @@ import { chunkFromNbt } from './chunk-nbt.js';
 import { nbtGet, hasNumber } from './nbt-get.js';
 import { readFireworkNbt } from './fireworks-nbt.js';
 import { readBookNbt } from './books-nbt.js';
-import { readItemTagsNbt, readExtraRaw } from './item-tags.js';
+import { readItemTagsNbt, readExtraRaw, rawOf } from './item-tags.js';
+import { splitWrongTyped } from './tag-types.js';
 import { profileOfSkullTile, skullBytes } from './skull-profile.js';
 import { NBT } from './nbt.js';
 import { potFromNbt } from './stone-utility.js';
@@ -86,7 +88,8 @@ const MAPPED = new Map();
 // ItemStack.stackTagCompound, as far as the browser stack carries it: ench, StoredEnchantments, RepairCost, display.Name,
 // display.color, Unbreakable, display.Lore, SkullOwner, CustomPotionEffects and map_is_scaling. Returns the keys it could not keep (nested display ones). Used by the Java
 // import and by /give's data tag.
-export function readItemTag(stack, nbt) {
+export function readItemTag(stack, tagNbt) {
+  const split = splitWrongTyped(tagNbt), nbt = split.clean; // b99 tiles99: a known key of the wrong type stays raw (tag-types.js)
   const readEnchantments = (key) => {
     const value = get(nbt, key, NBT.LIST);
     // NBTTagCompound.getTagList accepts any element type when the list is empty.
@@ -106,6 +109,8 @@ export function readItemTag(stack, nbt) {
   if (unbreakable !== undefined) stack.unbreakable = unbreakable !== 0;
   const lost = [], recognized = new Set(['ench', 'StoredEnchantments', 'RepairCost', 'display', 'Unbreakable', ...readFireworkNbt(stack, nbt), ...readBookNbt(stack, nbt), ...readItemTagsNbt(stack, nbt, lost)]);
   readExtraRaw(stack, nbt, recognized); // b97 tiles97: unknown keys of tag and display stay raw (ItemStack keeps the whole tag), so nothing is reported ignored
+  for (const [k, t] of Object.entries(split.top)) (stack.extraRaw ??= {})[k] = rawOf(t);
+  for (const [k, t] of Object.entries(split.display)) (stack.displayExtraRaw ??= {})[k] = rawOf(t);
   const ignored = [];
   if (display && display.has('Lore') && !(stack.lore || stack.loreRaw)) ignored.push('display.Lore');
   ignored.push(...lost); // SkullOwner.<key> of a profile compound (item-tags.js)
@@ -729,6 +734,9 @@ export async function importJavaRegionArea(regions, options = {}) {
       const insideArea = x >= destination.chunkX * 16 && x < (destination.chunkX + area.width) * 16 && z >= destination.chunkZ * 16 && z < (destination.chunkZ + area.depth) * 16;
       const item = get(entity, 'Item', NBT.COMPOUND);
       if (!insideArea || drops.length >= IMPORT_DROP_LIMIT || !item) { tally(entityLost, !insideArea ? 'Item (outside area)' : !item ? 'Item (no stack)' : 'Item (over drop limit)'); continue; }
+      const inertRecord = inertFromNbt(x, pos[1] - 0.125, z, get(item, 'id', NBT.SHORT, -1), get(item, 'Count', NBT.BYTE, 0), get(entity, 'Age', NBT.SHORT, 0)); // b99 tiles99: an id 0 stack is the null-item EntityItem (inert-drops.js)
+      if (inertRecord && musicTiles.length >= IMPORT_DROP_LIMIT) { tally(entityLost, 'Item (over drop limit)'); continue; }
+      if (inertRecord) { musicTiles.push(inertRecord); tally(entityConverted, 'Item (null item, inert)'); continue; }
       const stack = convertItem(item, { allowEmpty: true }); // EntityItem.readEntityFromNBT keeps Count 0 (attributes2-reference.json itemRead)
       if (!stack) { tally(entityLost, 'Item (unsupported stack)'); continue; }
       const m = motion && motion.every(Number.isFinite) ? motion : [0, 0, 0];
