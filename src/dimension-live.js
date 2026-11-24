@@ -503,7 +503,11 @@ export class DimensionLive {
       this.awayIdle = null;
       const root = h.worlds().find((w) => w.id === rootIdOf(rec));
       if (!root) return false;
-      if (exit) await h.showCredits?.();
+      // b100 spcopy100: GuiWinGame.doesGuiPauseGame is true (bytecode), so the integrated server stops for the credits unless the LAN server is public (Minecraft.isGamePaused);
+      // a public one keeps ticking, so the credits' wall time counts like a loading screen's (creditsRuns: lan.js).
+      let creditsMs = 0;
+      if (exit) { const c0 = performance.now(); await h.showCredits?.(); if (h.creditsRuns?.()) creditsMs = performance.now() - c0; }
+      if (this.away) this.away.tripMs += creditsMs;
       if (!target && dimensionOf(rec) !== OVERWORLD && this.away) { if (await this.finishAway(root)) await h.save(); }
       else if (target && dimensionOf(rec) === OVERWORLD) await this.beginAway(root);
       const next = { ...root, transit: { from: dimensionOf(rec), x: p.x, y: p.y, z: p.z, yaw: p.yaw, dir: this.state.teleportDirection, exit, death } };
@@ -516,7 +520,7 @@ export class DimensionLive {
       const ms = performance.now() - t0;
       if (this.away) this.away.tripMs += ms;
       this.tripLog = { ms: Math.round(ms), to: target };
-      h.advanceTicks?.(Math.round(ms / 50)); // the loading screen's ticks the Overworld clock and weather timers did not run (every trip, not only the return)
+      h.advanceTicks?.(Math.round((ms + creditsMs) / 50)); // the loading screen's ticks the Overworld clock and weather timers did not run (every trip, not only the return)
       return true;
     } finally { this.busy = false; this.quiet = false; this.setOverlay(0); }
   }

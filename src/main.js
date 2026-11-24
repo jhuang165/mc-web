@@ -235,6 +235,7 @@ import { difficultySetting, localDifficulty, InhabitedTime } from "./difficulty.
 import { isInvisible } from "./mob-effects.js";
 import { DimensionWorld } from './dimension-world.js';
 import { showEndCredits } from './end-credits.js';
+import { gamePaused, TickClock } from "./screen-pause.js";
 import { DimensionLive, TILE_KEYS, storedRecord, dimensionOf, rootIdOf, viewId, bedExplosion, mcYaw, advanceWorldClock } from './dimension-live.js'; // Nether/End travel (dimensions track)
 import { awayCatchUp } from "./away-track.js"; // batch 60: the tracker ticks of the entities that stayed loaded while the player was away
 import { PortalTimer, splashBreak, NIGHT_VISION, BLINDNESS, NAUSEA, INVISIBILITY } from "./potion-fx.js";
@@ -3209,6 +3210,7 @@ const dims = new DimensionLive({
   arrivalHint: (hint) => { if (mobs?.ai?.player) mobs.ai.player.depart(hint); }, // b95 spcopy95: the Teleporter's result, known before the old world's save point (dimension-live.js announceArrival)
   player: () => ({ x: position.x, y: position.y, z: position.z, yaw, motion: mobs?.ai?.player?.motion }), // b89 spcopy89: the server copy's motion rides the transit
   sound: (n, o) => sounds.play(n, o),
+  creditsRuns: () => lan.public, // GuiWinGame pauses the integrated server unless the LAN server is public (screen-pause.js)
   showCredits: async () => {
     screen = "credits";
     keys.clear();
@@ -4663,6 +4665,7 @@ function debugHitboxList() {
     player: thirdPersonView > 0 ? { x: position.x, y: position.y - motion.ySize, z: position.z } : null,
   });
 }
+const pausedGui = new TickClock(PHYSICS.tick);
 function animate(now) {
   requestAnimationFrame(animate);
   // Max Framerate: Display.sync(getLimitFramerate()) below Unlimited (frame-limit.js).
@@ -4681,7 +4684,7 @@ function animate(now) {
     fpsTime = elapsed;
   }
   // Minecraft.isGamePaused: the game menu stops the world unless the LAN server is public (lan.js).
-  const running = () => screen === "playing" || screen === "inventory" || (screen === "paused" && (multiplayer || !lan.paused(true)));
+  const running = () => !gamePaused({ screen, multiplayer: !!multiplayer, lanPublic: lan.public, guiId: gui.screen?.id, chat: chatOpen, sleeping: bedSleep.sleeping, container: !!containerView, modal: !$("#modal").classList.contains("hidden") }); // screen-pause.js: GuiScreen.doesGuiPauseGame per screen
   { const want = debug && debugChart; if (clientProfiler.enabled !== want) { clientProfiler.clear(); clientProfiler.enabled = want; } clientProfiler.section = ""; clientProfiler.sections.length = 0; clientProfiler.stamps.length = 0; clientProfiler.start("root"); } // Minecraft.runGameLoop: profiler on while Shift+F3
   tickMusic(dt);
   if (running()) {
@@ -4821,7 +4824,8 @@ function animate(now) {
     if (debug) updateDebugOverlay();
     if (elapsed - lastSave > 5) save();
     scene.effects.crack(mining?.block, mining?.progress);
-  } else if (screen === "dead") {
+  } else if (screen === "inventory") pausedGui.run(dt, () => gui.tick()); // a pausing screen (sign, book, command block): updateScreen still runs each client tick
+  else if (screen === "dead") {
     // GuiGameOver does not pause the game. Here only EntityLivingBase.onDeathUpdate and the
     // particles keep ticking (the rest of the world waits on the death screen): at deathTime
     // 20 the client player, still 0.6 x 1.8 (onDeath's setSize runs on the server), goes up
