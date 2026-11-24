@@ -31,6 +31,13 @@ export const visualRandom = (e) => {
 };
 // Seeds the visual Random (the particle replay in villager-polish.test.js).
 export const setVisualRandom = (e, rand) => VISUAL.set(e, rand);
+// EntityIronGolem.setHoldingRose (wt.a(boolean), bytecode-read): holdRoseTick = 400 or 0 and ALWAYS world.setEntityState(this, 11), even when the value does not change
+// (EntityAILookAtVillager's reset after its 400 ticks, EntityAIFollowGolem's take at holdRoseTick 1). `ew.golemRoseSet` lets the dedicated server send that status.
+function setHoldingRose(ew, golem, on) {
+  golem.holdRose = on ? 400 : 0;
+  ew?.golemRoseSet?.(golem);
+}
+
 export function villagerParticles(m, name) {
   // EntityWorld.burst (entities.js owns the fx import; fx.js reaches back into entities.js).
   m.ai.ew.villageBurst?.(name, m.e, { width: m.width, height: m.height }, m.ai.ew.statusRand?.(m.e, visualRandom(m.e)) ?? visualRandom(m.e)); // batch 61: the copy's Random
@@ -255,7 +262,7 @@ export function villageTasks(K) {
         this.taking = true;
       }
       if (this.taking && m.distSq(g) < 4) {
-        g.e.holdRose = 0;
+        setHoldingRose(m.ai.ew, g.e, false);
         m.navigator.clearPathEntity();
       }
     }
@@ -337,10 +344,10 @@ export function villageTasks(K) {
     }
     startExecuting() {
       this.time = 400;
-      this.m.e.holdRose = 400;
+      setHoldingRose(this.m.ai.ew, this.m.e, true);
     }
     resetTask() {
-      this.m.e.holdRose = 0;
+      setHoldingRose(this.m.ai.ew, this.m.e, false);
       this.villager = null;
     }
     updateTask() {

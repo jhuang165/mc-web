@@ -63,11 +63,12 @@ export function installServerGolems(sm, limit) {
   };
   // EntityIronGolem's state 4 / 11: the counters are set by the AI (attackTimer 10 on a strike, holdRose 400 / 0 around the poppy offer) and count down once a tick in golemTailTick,
   // so a value that is not the previous one minus one (down to 0) was set by the server this tick.
-  const tail = mobs.golemTailTick;
+  const tail = mobs.golemTailTick, rose = new WeakSet();
+  mobs.golemRoseSet = (e) => rose.add(e); // b99 mpobjects99: wt.a(boolean) sends state 11 on every call, a set that leaves the counter where the countdown would have put it included
   mobs.golemTailTick = function (e) {
     const r = tail.call(this, e), was = seen.get(e) ?? { attackTimer: 0, holdRose: 0 };
     if (e.attackTimer !== Math.max(was.attackTimer - 1, 0) && e.attackTimer > 0) sm.status(e, 4);
-    if (e.holdRose !== Math.max(was.holdRose - 1, 0)) sm.status(e, 11);
+    if (rose.delete(e) || e.holdRose !== Math.max(was.holdRose - 1, 0)) sm.status(e, 11);
     seen.set(e, { attackTimer: e.attackTimer, holdRose: e.holdRose });
     return r;
   };
