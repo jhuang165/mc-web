@@ -76,6 +76,9 @@ export class ServerSurvival {
    * b99 credit99 (bytecode-read sv.a(ro, F) 453-528, mw.a(ph, int), oi.e(mw)): the hit also plays the hurt sound (the death sound when lethal) through yz.a(String, F, F), a playSoundToNearExcept
    * from the removed body's world; and onDeath runs addStat(deaths) and, for the mob that dealt the hit, the killed-by stat plus the deathCount objectives. The StatisticsFile and the scoreboard
    * are server-side and outlive the logout, so the saved record's stats are refreshed (the damage-taken stat of any hit too, non-lethal included).
+   * b100 credit100 (bytecode-read mp.b, oi.e(mw), mt.a(sa, B) -> mn.b, ahb.h): the Thorns hit of an online player (hit by the removed shooter's arrow) can kill the body too and credits him with
+   * playerKills. Death throw, S19 and XP orbs stay absent natively: oi.e removes the body from the tracker (mn.b finds no entry for setEntityState), ahb.h skips an isDead entity so
+   * onDeathUpdate never runs, and yz.a(ro)'s motion is never ticked or sent.
    */
   goneHit(p, attacker) {
     const s = p.survival, sim = this.sim, names = s.hurtSounds, lethal = s.health <= 0;
@@ -89,11 +92,13 @@ export class ServerSurvival {
   dieGone(p, attacker) {
     if (p.dead || p.survival.health > 0) return false;
     p.dead = true; p.survival.hurtSounds.length = 0;
-    if (attacker?.type) p.statsLive?.hurtBy(attacker.type); // sv.aX is the mob whose Thorns killed it (sg.a(entity): entityKilledBy)
+    if (attacker?.type && !attacker.isPlayer) p.statsLive?.hurtBy(attacker.type); // sv.aX is the mob whose Thorns killed it (sg.a(entity): entityKilledBy; a player has no EntityList name, so no stat)
     this.sim.stats?.death(p);
     this.dropOnDeath(p); p.deathXp = null;
     const component = deathComponent(p.survival.combat, this.sim.scoreboard?.formatName(p.name) ?? p.name, { rawName: p.name });
-    (this.sim.events ??= []).push({ type: 'death', id: p.id, component });
+    const killer = this.killerOf(p); // b100 credit100 (bytecode-read sv.a(ro): aX().b(this, ba) -> yz.b(sa, int)): a player's Thorns that killed the removed body credit him like any kill (a mob credits nothing: sa.b(sa, int) is empty)
+    (this.sim.events ??= []).push({ type: 'death', id: p.id, component, ...(killer !== undefined && killer !== p.id ? { killer } : {}) });
+    if (killer !== undefined && killer !== p.id) { const k = this.sim.players.get(killer); if (k) this.sim.stats?.add(k, STAT.playerKills); }
     return true;
   }
   /**

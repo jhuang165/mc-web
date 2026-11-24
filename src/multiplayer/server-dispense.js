@@ -193,9 +193,14 @@ export class ServerDispense {
     if (shooter && typeof shooter === 'object' && mobs?.entities?.includes(shooter)) // a hit by a mob's arrow runs the wearer's Thorns on the shooter
       s.thorns?.({ hurt: d => mobs.attackEntityFrom(shooter, d, { from: { x: p.position.x, z: p.position.z }, player: true, name: 'thorns' }),
         sound: () => this.fx.push({ k: 'sound', name: 'damage.thorns', x: shooter.x, y: shooter.y, z: shooter.z, volume: 0.5, pitch: 1, dim: 0 }) });
-    else if (who && p.survival.thorns) { // b91 credit91 (bytecode-read zc.h 1065-1088, afv.a(sv, sa), agj.b): EnchantmentHelper.func_151384_a(victim, shooter) runs for any living shooter, a player's arrow too; a dead old body takes no damage (sv.a: health <= 0) but the sound still plays at it
+    else if (!who && p.survival.thorns && shooter === 'player' && a.owner?.survival && !a.ownerBody && this.sim.players.get(a.owner.id) !== a.owner) { // b100 credit100 (bytecode-read zc.h 1065-1088, afv.a, ahb.e(sa)): the removed shooter is still the arrow's living shooter, so the wearer's Thorns run on it (byPlayer visits the held item); the body takes the damage, a lethal one credits the wearer
+      const gone = a.owner, vFrom = () => this.sim.pvpRules.fromOf(p);
+      s.thorns({ byPlayer: true,
+        hurt: d => { if (gone.dead || gone.survival.health <= 0) return false; const hit = gone.survival.damage(d, 'thorns', true, 'thorns', vFrom()) !== false; if (hit) this.sim.serverSurvival?.goneHit(gone, vFrom()); return hit; },
+        sound: () => this.fx.push({ k: 'sound', name: 'damage.thorns', x: gone.position.x, y: gone.position.y, z: gone.position.z, volume: 0.5, pitch: 1, dim: gone.dimension | 0 }) });
+    } else if (who && p.survival.thorns) { // b91 credit91 (bytecode-read zc.h 1065-1088, afv.a(sv, sa), agj.b): EnchantmentHelper.func_151384_a(victim, shooter) runs for any living shooter, a player's arrow too; a dead old body takes no damage (sv.a: health <= 0) but the sound still plays at it
       const body = a.ownerBody, at = (body ?? who).position, vFrom = () => this.sim.pvpRules.fromOf(p);
-      s.thorns({ hurt: d => { if (!body) this.sim.damagePlayer(who, d, { name: 'thorns', from: vFrom(), call: () => who.survival.damage(d, 'thorns', true, 'thorns', vFrom()) }); },
+      s.thorns({ byPlayer: true /* b100 credit100 (afv.a: attacker instanceof yz) */, hurt: d => { if (!body) this.sim.damagePlayer(who, d, { name: 'thorns', from: vFrom(), call: () => who.survival.damage(d, 'thorns', true, 'thorns', vFrom()) }); },
         sound: () => this.fx.push({ k: 'sound', name: 'damage.thorns', x: at.x, y: at.y, z: at.z, volume: 0.5, pitch: 1, dim: who.dimension | 0 }) });
     }
     return true;
