@@ -145,6 +145,22 @@ Batch 79 (2026-11-16/18, ten tracks in `../wt79-<name>` on `batch79-<name>`, cut
 - Verification: the first full run hung on those two files; after the fix one full `npm test` on 536376793: 8964 tests, 8964 pass. Build and bridge tests ok. No browser checks.
 - Open: "Still open from batch 79" in `public/research/remaining-gaps.md`.
 
+Batch 98 (2026-11-23, ten tracks in `../wt98-<name>` on `batch98-<track>98`, cut from 3dd97fce9, merged --no-ff on `batch98-lead`; track agents ran on Sonnet; shared rules `../artifacts/b98-lead/track-rules.md`; lead note `b98-lead-track.md`; no browser checks or full test runs in tracks):
+- 0.127.0, by track (details in the `*-b98-track.md` notes and "Done in batch 98" in `public/research/remaining-gaps.md`):
+  - horse98: server dismounts send S08, S1B, S08 (`dismount` message); pig and horse water records executed (`Horse98Probe`), already native.
+  - mpobjects98: the client predicts count-0 shears shearing; the snapshot's live lit set pinned.
+  - credit98: Thorns damages a logged-out shooter's removed body (death broadcast and drops); player-victim Thorns after Knockback and Fire Aspect.
+  - console98: a skin/cape textures property counted in S0C (modelled); `watcherSig` is the watcher values; other attributes are not watched.
+  - mpperf98: literal-free `movePlayer`, beacon list on beacon ticks only, empty sound queue skipped, behind `MC_MPPERF98=on|off|verify`; hashes unchanged, gain within noise.
+  - spcopy98: short-wait and scripted Nether-to-Overworld trips wait (bounded) for the worker window and get the arrival hint.
+  - portals98: a mob ridden after touching a portal travels and drops its rider (`Portals98Probe`).
+  - tiles98: raw tag keys on mob helmet and cart item copies; command block and sign round trips already native; `inert-drops.js` not wired.
+  - entnbt98: projectile Invulnerable export, raw XP fields, NaN health/food, ability speeds drive movement, `playerState` whitelisted (`Entnbt98Probe`).
+  - mobrec98: 32 executed villager records; trade look timer and newborn villager bonus/yaw fixed.
+- Lead: ten clean merges (git auto-merged `dimension-live.js`, `net-packet-ids.js`, `server-survival.js`, `entities.js`, `player-physics.js`); every shared-file diff reviewed.
+- Verification: one full `npm test` on the merged tree: 10873/10873. Build and bridge tests ok. No browser checks.
+- Open: "Still open from batch 98" in `public/research/remaining-gaps.md`.
+
 Batch 97 (2026-11-22, ten tracks in `../wt97-<name>` on `batch97-<track>97`, cut from b5fa6dc3d, merged --no-ff on `batch97-lead`; track agents ran on Sonnet, by request; shared rules `../artifacts/b97-lead/track-rules.md`; lead note `b97-lead-track.md`; no browser checks or full test runs in tracks, by request):
 - 0.126.0, by track (details in the `*-b97-track.md` notes and "Done in batch 97" in `public/research/remaining-gaps.md`):
   - horse97: a dying rider keeps its seat on any mount in single player (`death-ride.js`) and in boats and carts on the server (`Kill97Probe`); water-dismount spots executed.

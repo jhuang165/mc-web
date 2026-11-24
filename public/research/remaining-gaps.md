@@ -2,6 +2,44 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 98
+
+Batch 98 covered these areas (track agents ran on Sonnet):
+- **Horses.** Every `mountEntity(null)` on the dedicated server (a sneak off a pig, horse, cart or boat, a horse's buck, a rider in water) queues a `dismount` message counted as the native S08, S1B, S08; a vanished mount, a death release and a logout stay silent. `Horse98Probe` (real classes): a pig rider stays linked in 1-deep water and is let go in 2 and 4 deep, a horse rider in 1 and 2 deep stays and in 4 deep is let go; the port already matched.
+- **Multiplayer objects.** The client predicts the shear with count-0 shears in hand (sheep and mooshroom), wearing the held stack as the server does. A joining client's snapshot keeps the live lit set, because its columns are live too (pinned, Port-read).
+- **Kill credit.** A Thorns hit on a logged-out shooter damages the removed body; a lethal one broadcasts the death and drops the inventory (`ServerSurvival.dieGone`, bytecode-read `mw.a(ro,F)`, `mw.a(ro)`). A player victim's Thorns now runs after the mob's Knockback and Fire Aspect (`yg.n`).
+- **The dedicated server.** A spawning player with a skin or cape counts a modelled textures property in its S0C (`profile-properties.js`). `watcherSig` is the nine watcher values, so an amplifier change with the same potion colour no longer forces the off-beat position. Other attribute modifiers need nothing: only max health and movement speed are watched (bytecode-read `yj`, `tq.a(tn)`).
+- **Server speed.** Behind `MC_MPPERF98=on|off|verify`: `movePlayer` stores fields without literals, the beacon player list is built only on a beacon's 80th tick, `deliverSounds` skips an empty queue. Hashes unchanged; whole-tick heap and time within noise.
+- **The single-player copy.** A Nether-to-Overworld trip whose portal wait ended before the exit window was built (or a scripted trip) waits for the worker-built 8 x 8 window, bounded at 15 s, and then gets the arrival hint before the old world's save; no generation on the page thread. The window covers the neighbouring cell of an arrival near a cell border.
+- **Portals.** Only a mob that rides something is held back; a mob ridden after it touched the portal travels at the threshold and its rider (player or mob) is let go and stays behind, in single player and on the server (`Portals98Probe`, 6 executed records). The cooldown audit for riding mobs, carts and boats found nothing diverging.
+- **Tiles.** Raw unknown tag keys survive mob helmet copies (`skullFields`) and cart item tags (`minecarts.js`). Command block LastOutput/SuccessCount/TrackOutput and sign records (`tiles95-reference.json`) already round-tripped. `inert-drops.js` holds an inert id-0 drop for a null-item jukebox eject but is not wired yet.
+- **Entity NBT.** `Entnbt98Probe` (20 entity ids, 48 edge tags): Fire, Air, PortalCooldown and Dimension were already native; projectile `Invulnerable` is now exported. XpP, XpLevel and XpTotal are kept raw; NaN HealF, saturation and exhaustion survive; loaded walkSpeed and flySpeed drive movement (two code-read `main.js` lines); `playerState` and `abilitySpeeds` pass the `world-import.js` whitelist.
+- **Mob records.** 32 executed villager records (wander, indoors, doors, zombie avoidance, breeding gates, restock, trading look, a birth) replay with no divergence. Fixes: the trade look task runs the native 40 + nextInt(40) timer and outlives the closed screen; a born villager draws its follow-range bonus on its own Random and faces yaw 0.
+
+Found wrong in the batch 97 list:
+- "Attributes beyond Health Boost / Speed / Slowness / sprint not modelled" needs nothing: no other attribute is watched.
+- A ridden mob that counted down in a portal is reachable, not "practically unreachable".
+- `playerState` never reached a real import (missing from the whitelist), so loaded Motion and speeds did not survive.
+- The `item-component.js` display extras and the sign / command block round trips were already native.
+- The horse95 probe gave its player yOffset 1.62 (`mw` has 0); its verdicts still hold.
+
+Still open from batch 98:
+- **Multiplayer.**
+  - Horses: the client ignores the `dismount` message; a mob carrying a player through a portal puts the rider down without it; the probe horse's 64.1 / 64.7 seat height is unexplained.
+  - The dedicated server: a default-skin player's empty textures property (online servers) is not counted; the textures size is modelled, not signed. Ability speeds and raw XP are not checked on the server.
+  - Kill credit: the removed body gets no death throw, XP orbs, stats or hurt sound.
+  - Speed: `moveEntityBody` / `moveWith` boxing, the `next` iterator tail, `bb.slice()` for own-bb entities, `tickSpawners`' per-tick player list.
+  - Server commands: /publish stays off. End island tails past 128 blocks are cut on some seeds (left for the user's decision). WebSocket compression stays off.
+  - Not seen in a browser: the client's count-0 shear sound and wool, plus the batch 67 to 97 lists.
+- **Single player.**
+  - The copy: a wait shorter than one cell build still gets no in-tick hint; a Teleporter read outside the 8 x 8 window is not covered.
+  - Tiles: the inert jukebox drop needs wiring (`main.js`, `server-music.js`, saves, export); a known tag key with the wrong type is still dropped.
+  - Entity NBT: a non-finite walk or fly speed is ignored (deliberate); `away-entities.js` still treats any mob link as riding (unreachable there).
+  - Mob records: one villager birth record only; hearts, villager sounds and the child's head yaw not compared; a bat in water.
+  - Not seen in a browser: the F3 walk/fly line still shows the defaults; the XP bar for a NaN or negative XpP; the loading screen while a short-wait trip waits for the worker; the batch 97 list.
+- **Rendering.** No native pixel capture.
+- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+
 ## Done in batch 97
 
 Batch 97 covered these areas (track agents ran on Sonnet):
@@ -24,25 +62,7 @@ Found wrong in the batch 96 list:
 - A batch 29 claim: an unusable Leash tag is not written back.
 - The finite real arrival used the wrong peek and disagreed with its hint.
 
-Still open from batch 97:
-- **Multiplayer.**
-  - Horses: the dismount's S08, S1B, S08 order is recorded but not sent as packets; a pig in water is still port-read.
-  - Objects: a joining client's snapshot carries the live lit set.
-  - The dedicated server: only the Health Boost, Speed, Slowness and sprint modifiers are modelled; profile texture properties at spawn are not counted.
-  - Kill credit: natively, Thorns damage reaches the removed body of a logged-out shooter and a lethal hit would broadcast a death and drop items.
-  - Speed: `movePlayer` and `moveEntityBody` number boxing, the `next` iterator tail, entity-portal `step`, `bb.slice()` at `entities.js:645`.
-  - Server commands: /publish stays off. End island tails past 128 blocks are cut on some seeds (left for the user's decision). WebSocket compression stays off.
-  - The multiplayer client does not predict a shear with count-0 shears (the server decides).
-  - Not seen in a browser: a repeater lit by an entity-pass change lighting a tick later, plus the batch 67 to 96 lists.
-- **Single player.**
-  - The copy: a Nether-to-Overworld wait shorter than the first cell's build gets no hint.
-  - Portals: a rider mounting after its mount touched a portal.
-  - Tiles: a null-item jukebox stack ejects nothing (native drops an inert id-0 item); hand-built stack copies (mob helmets, cart items) do not carry raw tags; sign and command-block edge cases not checked.
-  - Entity NBT: out-of-range XpP, XpLevel and XpTotal; NaN HealF, saturation and exhaustion; loaded fly and walk speeds do not change movement; `playerState` is not in the `world-import.js` whitelist; generic entity Fire, Air, PortalCooldown, Invulnerable and Dimension not audited.
-  - Mob records: villagers (trading, breeding, doors) are still not recorded; a bat in water.
-  - Not seen in a browser: the seated death on every mount, the finite-root hint's build stall, plus the batch 96 list.
-- **Rendering.** No native pixel capture.
-- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+Still open from batch 97: carried into the batch 98 list above, less what batch 98 fixed or found wrong.
 
 ## Done in batch 96
 
