@@ -31,7 +31,7 @@ export const makeStack = (id, count = 1, damage = 0, stored, metadata = {}) => {
 };
 export const copyStack = (s) => (s ? makeStack(s.id, s.count, s.damage, s.stored, s) : null);
 const split = (s, n) => { s.count -= n; return copyStack({ ...s, count: n }); };
-const samePairs = (a, b) => Array.isArray(a) === Array.isArray(b) && (!Array.isArray(a) || (a.length === b.length && a.every((e, i) => e?.id === b[i]?.id && e?.lvl === b[i]?.lvl)));
+const samePairs = (a, b) => Array.isArray(a) === Array.isArray(b) && (!Array.isArray(a) || (a.length === b.length && a.every((e, i) => e?.id === b[i]?.id && e?.lvl === b[i]?.lvl && JSON.stringify(e?.raw) === JSON.stringify(b[i]?.raw))));
 const storedTag = (s) => Array.isArray(s.storedEnchantments) ? s.storedEnchantments : s.stored?.length ? s.stored : undefined;
 const sameTag = (a, b) => a.repairCost === b.repairCost && a.displayName === b.displayName && a.unbreakable === b.unbreakable && a.color === b.color &&
   samePairs(a.enchantments, b.enchantments) && samePairs(storedTag(a), storedTag(b)) && sameFireworkTag(a, b) && sameBookTag(a, b) && sameItemTags(a, b);
@@ -68,7 +68,7 @@ export class PlayerInventory {
       count = Math.floor(Number(s?.count));
     if (!item || !(allowEmpty ? count >= -128 : count > 0)) return null; // loadItemStackFromNBT keeps any Count byte, negative too (neg-stacks-reference.json)
     const metadata = {};
-    for (const key of TAG_LISTS) if (Array.isArray(s[key])) metadata[key] = s[key].filter((e) => Number.isFinite(e?.id) && Number.isFinite(e?.lvl)).slice(0, 64).map((e) => ({ id: (Math.trunc(e.id) << 16) >> 16, lvl: (Math.trunc(e.lvl) << 16) >> 16 }));
+    for (const key of TAG_LISTS) if (Array.isArray(s[key])) metadata[key] = s[key].filter((e) => Number.isFinite(e?.id) && Number.isFinite(e?.lvl)).slice(0, 64).map((e) => ({ id: (Math.trunc(e.id) << 16) >> 16, lvl: (Math.trunc(e.lvl) << 16) >> 16, ...(e.raw && typeof e.raw === "object" ? { raw: e.raw } : {}) })); // b100 tiles100: raw (int width / extra keys) survives a save
     if (Number.isFinite(s.repairCost)) metadata.repairCost = s.repairCost | 0;
     if (typeof s.displayName === "string") metadata.displayName = s.displayName;
     if (typeof s.unbreakable === "boolean") metadata.unbreakable = s.unbreakable;

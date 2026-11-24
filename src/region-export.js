@@ -1,4 +1,4 @@
-import { writeItemTags } from './item-tags.js';
+import { writeItemTags, enchantEntryMap, flagTag } from './item-tags.js';
 import { inertItemNbt } from './inert-drops.js'; // b99 tiles99
 import { skullOwnerEntry } from './skull-profile.js';
 import { writeFireworkTags } from './fireworks-nbt.js';
@@ -57,7 +57,7 @@ export function stackNbt(s,slot,report,original=false) {
  const rawId=(s.rawId===8&&o.id===9)||(s.rawId===10&&o.id===11)?s.rawId:o.id; // b79 falling79: flowing water/lava ItemBlocks
  const entry={id:short(rawId),Count:byte(s.count),Damage:short(Number.isInteger(s.rawDamage)&&s.rawDamage>0?s.rawDamage:o.damage??s.damage??0)};
  if(slot!==undefined)entry.Slot=byte(slot>127?slot-256:slot);
- const enchantList=values=>list(NBT.COMPOUND,values.map(e=>new Map([['id',short(e.id)],['lvl',short(e.lvl)]])));
+ const enchantList=values=>list(NBT.COMPOUND,values.map(enchantEntryMap)); // b100 tiles100: an entry read with an int width / extra keys is written as read
  const tagEntries={};
  if(Array.isArray(s.enchantments))tagEntries.ench=enchantList(s.enchantments);
  const stored=s.storedEnchantments??(s.stored?.length?s.stored:undefined);
@@ -68,7 +68,7 @@ export function stackNbt(s,slot,report,original=false) {
  if(Number.isInteger(s.color)&&s.color>=0&&s.color<=0xffffff)display.color=int(s.color);
  if(Object.keys(display).length)tagEntries.display=comp(display);
  writeFireworkTags(s,tagEntries);writeBookTags(s,tagEntries);writeItemTags(s,tagEntries);
- if(typeof s.unbreakable==='boolean')tagEntries.Unbreakable=byte(s.unbreakable?1:0);
+ if(typeof s.unbreakable==='boolean')tagEntries.Unbreakable=flagTag(s,'Unbreakable',s.unbreakable);
  if(Object.keys(tagEntries).length||s.extraRaw)entry.tag=comp(tagEntries); // b97 tiles97: s.extraRaw (even {}) keeps the tag compound
  return new Map(Object.entries(entry));
 }
