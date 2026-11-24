@@ -123,7 +123,7 @@ export class ServerEnd {
     (p.dimOut ??= []).push({ type: 'dragonCredits', reason: 4 });
     return true;
   }
-  finishCredits(p) { p.conquered = false; return this.dims.arrive(p, OVERWORLD, { at: this.exitSpot(p) }); }
+  finishCredits(p) { p.conquered = false; p.flying = false; (p.dimOut ??= []).push(this.dims.sim.abilitiesOf(p)); /* b100 abilities100: recreatePlayerEntity's S39 */ return this.dims.arrive(p, OVERWORLD, { at: this.exitSpot(p) }); }
   // The respawn after the End: the bed (or /spawnpoint) in the Overworld, else the world spawn.
   exitSpot(p) {
     return this.dims.sim.sleep.respawnPoint(p); // b66 mpsleep: the verified bed or /spawnpoint, else the world spawn

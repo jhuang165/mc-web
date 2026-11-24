@@ -3,6 +3,7 @@ import { capeFields } from './cape-wire.js'; // b71 mpcapes
 import { isFence } from '../fences.js'; // b62: the fence lead click
 import { Survival, ITEMS, GAME_MODE_IDS } from '../survival.js';
 import { PlayerMotion, normalAbilitySpeeds } from '../player-movement.js';
+import { abilitiesMessage } from './abilities.js'; // b100 abilities100: S39
 import { vectorOf } from '../mpperf83-fast.js'; // b83 mpperf83
 import { eachValue89 } from '../mpperf89-fast.js'; // b89 mpperf89
 import { fast97, fail97 } from '../mpperf97-fast.js'; // b97 mpperf97
@@ -790,6 +791,7 @@ export class DedicatedSimulation {
   presenceRef(dimension = 0) { return [...this.players.values()].filter(p => (p.dimension | 0) === dimension).map(p => ({ id: p.id, name: p.name, x: p.position.x, y: p.position.y, z: p.position.z,
     yaw: p.yaw, pitch: p.pitch, flying: p.flying, grounded: p.grounded, sneak: p.input.sneak, sprinting: p.motion.sprinting, swing: p.swing,
     held: p.survival.held, ySize: p.motion.ySize, skin: p.skin, ...capeFields(p), using: !!p.itemInUse, ...(p.mount ? { riding: p.mount.key } : {}), ...(p.dead ? { dead: true } : {}), ...this.sleep.field(p), ...(p.vitals?.hurt ? { hurt: true } : {}), ...velocityField(p, this.ticks), ...(p.survival.effects?.has?.(14) ? { invisible: true } : {}) })); } // b65 mpinvis: entity flag 0 bit 5 (Invisibility effect) // b61: `hurt` = S19 status 2 for the other players' copies
+  abilitiesOf(p) { return abilitiesMessage(p); } // b100 abilities100: S39PacketPlayerAbilities (join, respawn)
   snapshot(playerId) { const other = this.dimensions.snapshotFor(playerId); if (other) return other; /* b61: a Nether player's world */ const w = this.world; return { gameMode: this.gameMode, ...(w.mapFeatures === false ? { mapFeatures: false } : {}), ...(this.hardcore ? { hardcore: true } : {}), /* b77: S01PacketJoinGame's hardcore bit (game-type byte & 8) */ ...(this.worldSpawn ? { worldSpawn: this.worldSpawn } : {}), items: this.itemList(), seed: w.seed, biome: w.biome, generationVersion: w.generationVersion,
     time: this.time, ticks: this.ticks, columns: this.chunkViews.columnsFor(playerId, w) /* b71 mpchunks: the first view-distance square */, chunkView: true, players: this.presence(), weather: this.weather.save(), redstone: { lit: [...this.redstone.lit] }, contTiles: this.containers.describeAll() }; }
   save() {

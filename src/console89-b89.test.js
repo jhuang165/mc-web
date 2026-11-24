@@ -83,7 +83,7 @@ test("the port's columns (run-length cells, a light source) give the same data a
   // a welcome / dimension change of more than five columns is several S26 (gz.c(): five columns a packet)
   const cols = Array.from({ length: 7 }, (_, i) => portColumn(2, i));
   const w = writePackets({ type: "welcome", world: { columns: cols } }, ctx);
-  assert.deepEqual(w.map((r) => r[0]), [1, 38, 38]); assert.equal(w[0][1], C[1]);
+  assert.deepEqual(w.map((r) => r[0]), [1, 57, 38, 38]); assert.equal(w[0][1], C[1]); // b100 abilities100: the join also sends S39 (oi.a(ej, mw))
   assert.deepEqual(writePackets({ type: "dimRespawn", world: { columns: cols.slice(0, 5) } }, ctx).map((r) => r[0]), [7, 38]);
 });
 

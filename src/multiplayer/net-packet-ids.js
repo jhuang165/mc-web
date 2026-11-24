@@ -54,6 +54,7 @@ export const CLIENTBOUND = {
   chat: 2, sleepMsg: 2, // S02PacketChat
   health: 6, // S06PacketUpdateHealth
   dimRespawn: 7, // S07PacketRespawn
+  abilities: 57, // S39PacketPlayerAbilities (b100 abilities100: join and respawn; the welcome / respawn message carries it)
   sleepIn: 10, // S0APacketUseBed
   sleepWake: 11, pfx73: 11, // S0BPacketAnimation (2 wake up, 4/5 critical hits)
   collect: 13, projCollect: 13, // S0DPacketCollectItem
@@ -304,7 +305,7 @@ export const drainDestroyed = (q) => {
 const sbPacket = (p) => { let n = C[SB_PACKET[p?.type ?? p?.k] ?? 59]; for (const [k, v] of Object.entries(p ?? {})) if (k !== 'type' && k !== 'k') { if (typeof v === 'string') n += stringSize(v) - 1; else if (Array.isArray(v)) n += v.reduce((a, s) => a + stringSize(s), 0); } return n; };
 const payload = (channel, data) => 1 + stringSize(channel) + 2 + data; // C17/S3F: string channel, short length, data
 const CLIENT_BYTES = {
-  pingKeepAlive: C[0], pingProbeReply: 9,
+  pingKeepAlive: C[0], pingProbeReply: 9, abilities: C[57],
   pingStatusReply: (m) => 1 + jsonString(utf8Length(JSON.stringify({ description: m.description, players: m.players, version: m.version, ...(m.favicon ? { favicon: m.favicon } : {}) }))), // S00ServerInfo
   chat: (m) => s02(typeof m.json === 'string' ? utf8Length(m.json) : textJson(m.text)), sleepMsg: (m) => s02(utf8Length(JSON.stringify({ translate: `tile.bed.${m.key ?? ''}` }))),
   health: C[6], sleepIn: C[10], sleepWake: C[11], pfx73: C[11],
@@ -342,7 +343,7 @@ const SERVER_BYTES = {
 const each = (id, xs, f) => list(xs).map((x) => [id, f(x)]);
 const s30 = (slots) => C[48] + slots.reduce((n, s) => n + itemSize(s), 0), cursor = (s) => [47, C[47] - 2 + itemSize(s)]; // S30, then the cursor's S2F (window -1)
 const CLIENT_PACKETS = {
-  welcome: (m, ctx) => [[1, C[1]] /* S01 with WorldType "default" (the base row's static instance) */, ...bulks(m.world?.columns, ctx)],
+  welcome: (m, ctx) => [[1, C[1]] /* S01 with WorldType "default" (the base row's static instance) */, [57, C[57]] /* b100 abilities100: S39 after S05, from initializeConnectionToPlayer */, ...bulks(m.world?.columns, ctx)],
   dimRespawn: (m, ctx) => [[7, C[7]], ...bulks(m.world?.columns, ctx)],
   // S03 every 20 ticks (MinecraftServer.v: tickCounter % 20; `ctx.tick` is the server's counter, from 0 at launch, else the world's tick count); an S18 per pose of another
   // player (the tracker sends nobody their own); the cells; the S21 resends (partial, the changed sections)

@@ -205,6 +205,7 @@ export class ServerSurvival {
     p.previous.copy(p.position);
     Object.assign(p.velocity, { x: 0, y: 0, z: 0 });
     Object.assign(p, { dead: false, fallDistance: 0, landedFall: 0, flying: false, grounded: false });
+    (p.dimOut ??= []).push(this.sim.abilitiesOf(p)); // b100 abilities100: oi.a(mw, int, boolean) -> setGameType -> S39, before the respawn's S07
     return true;
   }
   /**
