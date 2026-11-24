@@ -23,6 +23,7 @@ import { bowEffects } from "./mob-equipment.js";
 import { arrowPunch } from "./player-knockback.js";
 import { getLootingModifier } from "./enchantments.js"; // b88 blast88
 import { applyBowEnchantments, bowEnchantments, setMobFire } from "./armor-enchantments.js";
+import { fast100, fail100 } from "./mpperf100-fast.js"; // b100 mpperf100
 import { keptBaseSave, keptBaseRestore, tickPortalCooldown } from "./entity-base-nbt.js"; // b88 entnbt88
 
 const f = Math.fround;
@@ -525,6 +526,25 @@ export class Arrows {
   }
   // The stuck arrows EntityPlayer.onLivingUpdate's trigger box meets, as order-sortable targets (b73: the pickup pass interleaves them with items, pickup-order.js).
   pickupCandidates(playerBox, ridingBox = null) {
+    if (fast100.mode !== "off") { // b100 mpperf100: the trigger box in locals; an arrow's box array only for a candidate (the same comparisons)
+      let n0, n1, n2, n3, n4, n5;
+      if (ridingBox) { n0 = Math.min(playerBox[0], ridingBox[0]) - 1; n1 = Math.min(playerBox[1], ridingBox[1]); n2 = Math.min(playerBox[2], ridingBox[2]) - 1; n3 = Math.max(playerBox[3], ridingBox[3]) + 1; n4 = Math.max(playerBox[4], ridingBox[4]); n5 = Math.max(playerBox[5], ridingBox[5]) + 1; }
+      else { n0 = playerBox[0] - 1; n1 = playerBox[1] - 0.5; n2 = playerBox[2] - 1; n3 = playerBox[3] + 1; n4 = playerBox[4] + 0.5; n5 = playerBox[5] + 1; }
+      const out = [], list = this.list;
+      for (let i = 0; i < list.length; i++) {
+        const a = list[i];
+        if (a.dead || isFrozen(a)) continue;
+        if (a.x + HALF > n0 && a.x - HALF < n3 && a.y + HEIGHT_ARROW > n1 && a.y < n4 && a.z + HALF > n2 && a.z - HALF < n5) out.push({ key: a, ref: a, box: box(a) });
+      }
+      if (fast100.mode === "verify") {
+        const ref = this.pickupCandidatesOld100(playerBox, ridingBox);
+        if (ref.length !== out.length || ref.some((r, k) => r.ref !== out[k].ref || r.box.some((v, m) => !Object.is(v, out[k].box[m])))) fail100("arrow candidates");
+      }
+      return out;
+    }
+    return this.pickupCandidatesOld100(playerBox, ridingBox);
+  }
+  pickupCandidatesOld100(playerBox, ridingBox = null) {
     const near = ridingBox
       ? [Math.min(playerBox[0], ridingBox[0]) - 1, Math.min(playerBox[1], ridingBox[1]), Math.min(playerBox[2], ridingBox[2]) - 1, Math.max(playerBox[3], ridingBox[3]) + 1, Math.max(playerBox[4], ridingBox[4]), Math.max(playerBox[5], ridingBox[5]) + 1]
       : [playerBox[0] - 1, playerBox[1] - 0.5, playerBox[2] - 1, playerBox[3] + 1, playerBox[4] + 0.5, playerBox[5] + 1];

@@ -46,7 +46,7 @@ test("the move scratch list is empty after a reset in every mode and keeps worki
 test("bench hashes are identical off / on / verify and the bench prints mode97", () => {
   const out = {};
   for (const m of modes) out[m] = spawnSync(process.execPath, ["tools/bench-alloc81.mjs", "--scene=pen", "--state", "--ticks=50", "--mobs=20"], { env: { ...process.env, MC_MPPERF97: m }, encoding: "utf8" }).stdout;
-  for (const m of modes) assert.match(out[m], new RegExp(`mode97=${m} (mode98=\\w+ )?(mode99=\\w+ )?mobs=\\d+ \\[`));
+  for (const m of modes) assert.match(out[m], new RegExp(`mode97=${m} (mode98=\\w+ )?(mode99=\\w+ )?(mode100=\\w+ )?mobs=\\d+ \\[`));
   const h = (s) => s.slice(s.indexOf("["));
   assert.equal(h(out.on), h(out.off)); assert.equal(h(out.verify), h(out.off));
   const tr = modes.map((m) => spawnSync(process.execPath, ["tools/bench-alloc81.mjs", "--scene=travel", "--state", "--ticks=50"], { env: { ...process.env, MC_MPPERF97: m }, encoding: "utf8" }).stdout);

@@ -123,7 +123,7 @@ test("seeded server scenes hash the same off / on / verify (MC_MPPERF83..90 all 
   for (const scene of ["pen", "terrain", "travel"]) {
     const hash = (m) => spawnSync(process.execPath, ["tools/bench-alloc81.mjs", `--scene=${scene}`, "--state", "--ticks=100", "--mobs=70"], { env: { ...process.env, MC_MPPERF90: m, ...(m === "verify" ? verifyAll : {}) }, encoding: "utf8" }).stdout.trim();
     const off = hash("off");
-    assert.match(off, /mode90=off (mode91=\w+ )?(mode92=\w+ )?(mode93=\w+ )?(mode94=\w+ )?(mode95=\w+ )?(mode96=\w+ )?(mode97=\w+ )?(mode98=\w+ )?(mode99=\w+ )?mobs=\d+ \[/);
+    assert.match(off, /mode90=off (mode91=\w+ )?(mode92=\w+ )?(mode93=\w+ )?(mode94=\w+ )?(mode95=\w+ )?(mode96=\w+ )?(mode97=\w+ )?(mode98=\w+ )?(mode99=\w+ )?(mode100=\w+ )?mobs=\d+ \[/);
     assert.equal(tail(hash("on")), tail(off));
     assert.equal(tail(hash("verify")), tail(off));
   }
