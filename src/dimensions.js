@@ -162,18 +162,21 @@ export class Teleporter {
     const hit = this.cache.get(key);
     if (hit) { best = 0; i = hit.x; j = hit.y; k = hit.z; hit.time = w.time; fresh = false; }
     else {
+      // b99 spcopy99: a world that lists its portal columns (`portalColumns`) also answers the search's own reads from saved data (`searchGet`: edits and stored
+      // columns, never terrain), so a saved portal far from the target is read without building its terrain column; terrain holds no portal block.
+      const only = w.portalColumns?.(ids.portal, l - R, l + R, i1 - R, i1 + R), only0 = !!only;
+      const read = (only0 && w.searchGet) ? (x, y, z) => w.searchGet(x, y, z) : (x, y, z) => w.get(x, y, z);
       const visit = (l1, i2) => {
         const d4 = l1 + 0.5 - e.x, d5 = i2 + 0.5 - e.z;
         for (let j2 = w.actualHeight - 1; j2 >= 0; j2--) {
-          if (w.get(l1, j2, i2) !== ids.portal) continue;
-          while (w.get(l1, j2 - 1, i2) === ids.portal) j2--;
+          if (read(l1, j2, i2) !== ids.portal) continue;
+          while (read(l1, j2 - 1, i2) === ids.portal) j2--;
           const d6 = j2 + 0.5 - e.y, d7 = d4 * d4 + d6 * d6 + d5 * d5;
           if (best < 0 || d7 < best) { best = d7; i = l1; j = j2; k = i2; }
         }
       };
       // A world that knows its portal blocks all come from its own edits (terrain never contains one) lists the columns that can
       // hold one, in the search's own order (x, then z): the scan skips the empty columns and finds the same portal.
-      const only = w.portalColumns?.(ids.portal, l - R, l + R, i1 - R, i1 + R);
       if (only) for (const [l1, i2] of only) { visit(l1, i2); yield; }
       else for (let l1 = l - R; l1 <= l + R; l1++) for (let i2 = i1 - R; i2 <= i1 + R; i2++) { visit(l1, i2); yield; }
     }
