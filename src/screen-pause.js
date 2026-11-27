@@ -24,13 +24,22 @@ export function screenKind({ screen, guiId = null, chat = false, sleeping = fals
   return "container";
 }
 
-// True while the integrated server's world is stopped by the open screen (Minecraft.isGamePaused). `home` and `dead` keep the port's own loops
-// (the death screen's world wait is a known gap, GuiGameOver pauses nothing natively).
+// True while the integrated server's world is stopped by the open screen (Minecraft.isGamePaused). `home` keeps the port's own loop; `dead` is
+// never paused (GuiGameOver.doesGuiPauseGame is false, b101 spcopy101), so the world keeps ticking under the death screen (see deadTickPlan).
 export function gamePaused({ screen, multiplayer = false, lanPublic = false, ...state }) {
   if (screen === "playing") return false;
-  if (screen === "home" || screen === "dead") return true;
+  if (screen === "home") return true;
+  if (screen === "dead") return false;
   if (multiplayer || lanPublic) return screen === "credits"; // the credits are a port-side trip step: the server clock is credited afterwards (dimension-live.js)
   return guiPausesGame(screenKind({ screen, ...state }));
+}
+
+// What one client tick does while the death screen is open (main.js "dead" branch). Native: the world, the time, the mobs, items and fire keep ticking and the dead
+// player is still in the entity list (EntityLivingBase.onDeathUpdate: deathTime to 20, then the body goes up in "explode" particles). In single player the port's full
+// player/world tick (movementTick: the dead body's idle move, survival clock, world systems, mobs, items) runs; over a connection the server ticks the world itself, so
+// no world tick runs here. `deathTime` counts in both.
+export function deadTickPlan({ multiplayer = false } = {}) {
+  return { worldTick: !multiplayer, deathTime: true };
 }
 
 // updateScreen runs every client tick whether or not the game is paused (Minecraft.runTick); this drives it while the world loop is stopped.
