@@ -212,7 +212,7 @@ export class Hanging {
     if (e.kind !== "frame" || e.dead) return { action: null };
     if (!e.item) {
       if (!held?.count) return { action: null };
-      e.item = { ...held, count: 1 };
+      e.item = { ...structuredClone(held), count: 1 }; // b101 tiles101: deep copy (rawForms, enchantment entries), not the held stack's own arrays
       e.rotation = e.rotation % 4;
       return { action: "insert", item: e.item };
     }
