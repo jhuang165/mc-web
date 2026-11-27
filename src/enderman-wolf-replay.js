@@ -95,6 +95,9 @@ export function replayEndermanWolf(r, opts = {}) {
 function run(r, opts) {
   const types = r.types, n = types.length;
   const ew = new EntityWorld(plain(r.blocks), [], () => 0.5);
+  // b101 mobrec101: the record's java.lang.Math.random calls outside a constructor (SeedMath) feed the knockback nudge of a coincident attacker (a witch hit by its own potion), as village-fight-replay.js. The values are taken by tick: the probe's player takes its own poison damage through the same method (an attacker-less hit draws one unused value), which the port's survival does not draw, so a plain queue would fall out of step.
+  const mathLeft = (r.mathRandom ?? []).slice(), mathCalls = []; let mathTick = 0;
+  if (r.mathRandom) ew.mathRandom = () => { const k = mathLeft.findIndex((x) => x[0] === mathTick), m = k >= 0 ? mathLeft.splice(k, 1)[0] : null; mathCalls.push([mathTick, m ? m[1] : null]); return m ? m[1] : Math.random(); };
   const x96 = /^b9[67]mr/.test(r.name), x95 = /^b9[567]mr/.test(r.name), preEat = []; // preEat: each sheep's grazing timer as the last tick ended
   const x92 = /^b9[234567]mr/.test(r.name); // b92 mobrec92: EndermanWolfProbe B92 ticks the entities a split slime or magma cube spawns (as World.updateEntities does), and row element 12 holds their rows
   ew.probeFixedList = !x92 || x95; // b95: the b95mr records have no slime children, and the probe never ticks a lamb the mating task spawns; b91: EndermanWolfProbe never ticks a spawned entity (its loop walks the fixed `ents` array; the b44 babies and the b45 foals are only added to the push lists), so a born baby is not updated in the pass (not what World.updateEntities does)
@@ -264,6 +267,7 @@ function run(r, opts) {
   // sees the window already counted down; a harm splash 10 ticks after a poison tick hits (window 20 - 10 = 10, not above 10).
   if (/^b97mr-witch100/.test(r.name) && ew.potions) { const po = ew.potions.tickOne.bind(ew.potions); ew.potions.tickOne = (...a) => { if (!decDone) { decrement(); decDone = true; } return po(...a); }; }
   for (let t = 0; t < r.ticks; t++) {
+    mathTick = t;
     for (const p of script) {
       if (Number(p[0]) !== t) continue;
       const op = p[1];
@@ -455,7 +459,7 @@ function run(r, opts) {
     if (x96) { const h = survival.inventory.held; state[13] = h ? [ORIGINAL96(h), h.damage ?? 0, h.count] : null; } // b96: row element 13, the held stack [original id, damage, count]
     states.push(state);
   }
-  return { states, init };
+  return { states, init, mathCalls };
 }
 const f32 = Math.fround;
 // b96: ItemStack.damageItem leaves a broken stack in the slot with count 0 (damage 0) and nothing on the interact path clears it (the probe never runs the client's cleanup); the port empties the slot, as the client shows it
