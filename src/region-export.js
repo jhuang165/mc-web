@@ -48,6 +48,8 @@ import { exportPlayerUuid, ownerText, playerLeashTag } from './owner-links.js';
 // A [type, value] pair of cart-variants.js variantNBT (compound [10, {key: pair}], list [9, elementType, items]) as a tag.
 const pairTag=p=>p[0]===NBT.COMPOUND?comp(Object.fromEntries(Object.entries(p[1]).map(([k,v])=>[k,pairTag(v)]))):p[0]===NBT.LIST?tag(NBT.LIST,{elementType:p[2].length?p[1]:NBT.END,items:p[1]===NBT.COMPOUND?p[2].map(i=>new Map(Object.entries(i).map(([k,v])=>[k,pairTag(v)]))):p[2]}):tag(p[0],p[0]===NBT.SHORT?(p[1]<<16)>>16:p[1]);
 const tag=(type,value)=>({type,value}), comp=value=>tag(NBT.COMPOUND,new Map(Object.entries(value))), list=(type,items)=>tag(NBT.LIST,{elementType:items.length?type:NBT.END,items});
+// b101 entnbt101 (executed, Entnbt101Probe maxHealth 1.0E12 -> Health -1s, 2.0E9 -> -27648s): writeEntityToNBT's (short)Math.ceil(health) is a double-to-int cast (NaN 0, out of range saturates) then the low 16 bits; a mob with a huge maximum health threw 'Invalid NBT integer' and failed the whole export.
+const javaShort=v=>{const i=Number.isNaN(v)?0:v>=2147483647?2147483647:v<=-2147483648?-2147483648:Math.trunc(v);return (i<<16)>>16;};
 const byte=v=>tag(NBT.BYTE,(v<<24)>>24), short=v=>tag(NBT.SHORT,v), int=v=>tag(NBT.INT,v), str=v=>tag(NBT.STRING,v), float=v=>tag(NBT.FLOAT,v), long=v=>tag(NBT.LONG,BigInt(Math.trunc(v)));
 const reverse=new Map();
 for(const [k,id] of Object.entries(ORIGINAL_ITEMS)) {const [o,damage]=k.split(':').map(Number);if(!reverse.has(id)||damage===undefined)reverse.set(id,{id:o,damage});}
@@ -104,9 +106,9 @@ function payloadIn(state,ox,oz,report,blockAt) {
   const n=entity(e,name,ox,oz);
   // EntityEnderCrystal is no EntityLivingBase: writeEntityToNBT adds nothing to Entity.writeToNBT, and a fresh crystal's Fire is 0, not a mob's -1 (object-nbt-reference.json).
   if(e.type==='ender_crystal'){n.Fire=short(e.fire>0?e.fire:0);n.Invulnerable=byte(e.invulnerable?1:0);built.push({e,n});continue;}
-  Object.assign(n,{HealF:float(e.health??20),Health:short(Math.ceil(e.health??20)),AbsorptionAmount:float(e.absorption>0?e.absorption:0),HurtTime:short(Number.isInteger(e.hurt)?e.hurt:0),DeathTime:short(Number.isInteger(e.deathKept)?e.deathKept:e.type!=='ender_dragon'&&e.health<=0&&Number.isInteger(e.death)?e.death:0),AttackTime:short(Number.isInteger(e.attackTime)?e.attackTime:0),Age:int(e.growingAge??0),InLove:int(e.love??0)});
+  Object.assign(n,{HealF:float(e.health??20),Health:short(javaShort(Math.ceil(e.health??20))),AbsorptionAmount:float(e.absorption>0?e.absorption:0),HurtTime:short(Number.isInteger(e.hurt)?e.hurt:0),DeathTime:short(Number.isInteger(e.deathKept)?e.deathKept:e.type!=='ender_dragon'&&e.health<=0&&Number.isInteger(e.death)?e.death:0),AttackTime:short(Number.isInteger(e.attackTime)?e.attackTime:0),Age:int(e.growingAge??0),InLove:int(e.love??0)});
   // EntityLiving.writeEntityToNBT (sw.b, bytecode-read; entnbt91-reference.json: every unnamed mob writes CustomName "" and CustomNameVisible 0): both keys always, b91 entnbt91. PersistenceRequired and Leashed with its Leash compound (a knot's X/Y/Z, or the holder's UUID).
-  n.CustomName=str(e.customName??'');n.CustomNameVisible=byte(e.customName&&e.customNameVisible?1:0);
+  n.CustomName=str(e.customName??'');n.CustomNameVisible=byte(e.customNameVisible?1:0);
   {const attributes=livingAttributesNbt(e,name);if(attributes)n.Attributes=attributes;} // EntityLivingBase.writeEntityToNBT: the full native list per class with the modeled modifiers (mob-attribute-list.js, probed)
   n.PersistenceRequired=byte(e.persistent?1:0);n.Leashed=byte(e.leash?1:0);
   if(e.leash?.lost){/* b97 entnbt97 (executed, Entnbt97MobProbe): an unticked Leashed mob writes Leashed 1b and no Leash compound (EntityLiving keeps no copy of the tag), whatever it held */}

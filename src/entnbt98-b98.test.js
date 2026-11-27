@@ -112,7 +112,7 @@ test("adding experience to a loaded out-of-range bar follows addExperience (no t
   assert.equal(nan.total, 15);
   const inf = new Experience({ total: 5, level: 3, progress: Infinity });
   inf.add(10);
-  assert.equal(inf.level, 3);
+  assert.equal(inf.level, 306783400); // b101: native's loop does not hang on Infinity, it ends at the first level with a negative cap (bar -Infinity); was level 3 (the port never entered the loop)
   const big = new Experience({ total: 2147483647, level: 7, progress: 0.25 });
   big.add(1);
   assert.equal(big.total, 2147483647); // b100: yz.v clamps n to MAX_INT - total (bytecode-read), the old -2147483648 wrapped
