@@ -8,6 +8,7 @@
 // The client (bjb.a(hk)) copies flying, creative, invulnerable, allowFlying, flySpeed and walkSpeed into its capabilities.
 import { normalAbilitySpeeds } from '../player-movement.js';
 import { GAME_MODE_IDS } from '../survival.js';
+import { setAbilityFlags } from '../ability-flags.js'; // b101 abilities101
 
 /** The `abilities` message of a server player: creative players may fly and are invulnerable, everyone else gets none of them (ahk.a(yw)). walk is the raw walkSpeed float. */
 export function abilitiesMessage(p) {
@@ -19,7 +20,7 @@ export function abilitySpeedsOf(m) {
   return m && typeof m === 'object' && typeof m.fly === 'number' && typeof m.walk === 'number' ? { fly: m.fly, walk: m.walk } : undefined;
 }
 /** Record fields for the client's launch: the speeds of a welcome / dimRespawn `abilities` (nothing keeps the defaults). */
-export function abilityRecordFields(m) { const s = abilitySpeedsOf(m); return s ? { abilitySpeeds: s } : {}; }
+export function abilityRecordFields(m) { setAbilityFlags(m); /* b101 abilities101: the welcome / dimRespawn S39's flags are the client's capabilities (no S39: the game-mode rule) */ const s = abilitySpeedsOf(m); return s ? { abilitySpeeds: s } : {}; }
 /** The game mode the client starts in: the player's own (a loaded creative or adventure player), else the server's default (the old snapshot rule). */
 export function clientModeOf(snapshot, self) {
   const own = self?.player?.gameMode;

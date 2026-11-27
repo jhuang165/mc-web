@@ -264,6 +264,7 @@ const finishDrinking = (player) => finishDrinkingItem(player, finishBucketDrinki
 import { captureBucketTarget } from "./buckets-simulation.js";
 import { HUNGER, POISON } from "./status-effects.js";
 import { PlayerMotion, fovMultiplier, setAbilitySpeeds, shownAbilitySpeeds } from "./player-movement.js";
+import { setAbilityFlags, allowsFlight } from "./ability-flags.js"; // b101 abilities101
 import { abilitySpeedsOf, abilityRecordFields, clientModeOf } from "./multiplayer/abilities.js"; // b100 abilities100
 import { drainKnockback } from "./player-knockback.js";
 import { deathThrow, hitPoseSource } from "./death-throw.js";
@@ -735,7 +736,7 @@ function showMultiplayer() {
 }
 let mpServerList = null; // b68 mpping
 function leaveMultiplayer() {
-  setAbilitySpeeds(); // b100 abilities100: single player uses the default speeds again
+  setAbilityFlags(); setAbilitySpeeds(); // b101 abilities101: flags back to the game-mode rule; b100 abilities100: single player uses the default speeds again
   disconnectMaps(); // b69 mpmaps
   multiplayer?.close(); multiplayer = null; remoteItems.clear(); requestedPickups.clear(); takenDrops.clear(); remoteOrbs.clear(); for (const k of Object.keys(mpInv)) delete mpInv[k]; xpOrbs.orbs = []; remoteMobs = null; remotePistons = null; aimedRemoteMob = null;
   remoteVehicles?.clear(); remoteVehicles = null; aimedRemoteVeh = null; mpRiding = false; mpHorse = null; // b61
@@ -1003,7 +1004,7 @@ async function joinMultiplayer(settings) {
   client.onChunks = m => { if (multiplayer?.ready && active?.remote) applyChunkMessage(m, { world, scene, blockCount: BLOCKS.length, entities: cols => { remoteMobs?.dropColumns(cols); remoteVehicles?.dropColumns(cols); remotePlayers?.dropColumns(cols); /* b73 streamfix73 */ } /* b72 mpstream72 */, tiles: list => applyTiles(list, { world, signs, skulls: SKULLS, beacons, spawners, chests: survival.chests, enders: survival.enderTiles, commandBlocks: redstoneRuntime?.commandBlocks /* b80 mpcmd80 */ }), dropTiles: cols => dropTilesIn(cols, { signs, skulls: SKULLS, beacons, spawners, chests: survival.chests, enders: survival.enderTiles, pistons: remotePistons }) /* b73 streamfix73: Chunk.onChunkUnload drops the tile entities */ }); }; // b71 mpchunks: S26 bulk columns and S21 unloads
   connectMaps(); client.onMaps = m => applyMapMessage(m); // b69 mpmaps: S34 map updates fill the page's map store (multiplayer/client-maps.js)
   client.onMusic = e => noteEvent(e, { sound: (name, x, y, z, volume, pitch) => sounds.play(name, { volume, pitch, position: { x, y, z } }), particle: (...a) => scene.fx.spawn(...a) }); // b66 mpbooks: S24 note block
-  client.onAbilities = a => { setAbilitySpeeds(abilitySpeedsOf(a)); if (!(a.allowFlying && a.flying)) flying = false; }; // b100 abilities100: S39 on a respawn (code-read only)
+  client.onAbilities = a => { setAbilitySpeeds(abilitySpeedsOf(a)); setAbilityFlags(a); flying = a.flying === true; }; /* b101 abilities101: handlePlayerAbilities copies the flags verbatim */ // b100 abilities100: S39 on a respawn (code-read only)
   client.onDragonCredits = () => multiplayerCredits(client); // b64 mpdragon: S2B game state 4 (the End poem), then C16 respawn
   client.onBolt = message => remoteLightning?.apply(message); // b66 mplightning: the server's lightning bolt
   client.onTabReply = options => chatUi.tabReply(options); // b69 mptabcomplete: S3A
@@ -4516,7 +4517,7 @@ $("#touch-break").onclick = () => clickEdit(false);
 $("#touch-place").onclick = () => clickEdit(true);
 $("#touch-inventory").onclick = () => inventory();
 $("#touch-fly").onclick = () => {
-  if (survival.creative) {
+  if (allowsFlight(survival.creative)) { // b101 abilities101
     flying = !flying;
     velocity.y = 0;
   }
