@@ -1,4 +1,5 @@
 import { World, PHYSICS, WATER, LAVA, MOB_SPAWNER, BED, TNT, raycast, collides } from '../world.js';
+import { gateSwing } from './server-swing.js';
 import { capeFields } from './cape-wire.js'; // b71 mpcapes
 import { isFence } from '../fences.js'; // b62: the fence lead click
 import { Survival, ITEMS, GAME_MODE_IDS } from '../survival.js';
@@ -280,6 +281,7 @@ export class DedicatedSimulation {
       yaw: saved?.yaw ?? 0, pitch: saved?.pitch ?? 0, grounded: false, collidedH: false, flying: false, fallDistance: 0, landedFall: 0, eating: null,
       input: { ...IDLE_INPUT }, lastInput: this.ticks, swing: 0, skin, cape, itemInUse: null, achievementsSaved: saved?.achievements ?? null, spawnpoint: saved?.spawnpoint ?? null, spawnForced: saved?.spawnForced, rand: seeded(), ...(saved?.abilitySpeeds ? { abilitySpeeds: normalAbilitySpeeds(saved.abilitySpeeds) } : {}), // b99 entnbt99: loaded walkSpeed/flySpeed drive this player's server movement
       dig: createServerDig({ crack: (cell, stage) => this.crack(id, cell, stage) }) };
+    gateSwing(player); // b101 console101: a C0A swing is only taken when sv.ba's condition holds
     this.serverItems.join(player, saved);
     this.sleep.join(player); // b66 mpsleep: damage wakes a sleeper
     this.stats.join(player, saved); // b63 mpstats

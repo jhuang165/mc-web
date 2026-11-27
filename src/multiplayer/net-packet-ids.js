@@ -281,7 +281,10 @@ const peerRemovals = (m, ctx) => {
   const mem = ctx?.peers; if (!mem || !Array.isArray(m.players)) return [];
   const rows = m.players.filter((p) => p && p.id !== ctx.self && !p.far), now = new Set(rows.map((p) => p.id)), out = [];
   for (const id of [...mem]) if (!now.has(id)) { mem.delete(id); out.push([19, s13(1)]); }
-  for (const p of rows) if (!mem.has(p.id)) { mem.add(p.id); out.push(...spawnRecords(p)); }
+  for (const p of rows) {
+    if (!mem.has(p.id)) { mem.add(p.id); out.push(...spawnRecords(p)); }
+    else if (p.rs) { if (p.rs === 1) out.push([19, s13(1)]); out.push(...spawnRecords(p)); } // b101 console101: a respawn replaced the entry (S13 of the old one, then the new first pass); rs 2 = the respawner's own new entries
+  }
   return out;
 };
 /**
@@ -291,7 +294,8 @@ const peerRemovals = (m, ctx) => {
  * bypasses the tracker) keeps the old one S18 per tick.
  */
 const PLAYER_KIND = { move: 21, look: 22, moveLook: 23, teleport: 24, head: 25, attach: 27, velocity: 18 };
-const playerPackets = (p) => [...(p.swing === 6 ? [[11, 2 + varIntSize(p.id | 0)]] : []), ...(!Array.isArray(p.pk) ? [[24, C[24]]] : p.pk.filter((k) => PLAYER_KIND[k] !== undefined).map((k) => [PLAYER_KIND[k], C[PLAYER_KIND[k]]])), ...list(p.pw), ...(p.vel || p.velSent ? [[18, C[18]]] : [])]; // b100 console100: first the S0B(0) of EntityLivingBase.swingItem (sv.ba: mn.a(entity, S0B) to every tracker but the swinger, in packet handling before the tracker pass; the port's `swing` is 6 on the tick a swing was accepted, 5 and down after);
+const playerPackets = (p) => [...(p.swing === 6 || p.woke ? [[11, 2 + varIntSize(p.id | 0)]] : []), ...(p.hurt ? [[26, C[26]]] : []), // b101 console101: S0B(2) of wakeUpPlayer and S19 status 2 of a hurt player go to every tracker (mn.b -> my.b)
+   ...(!Array.isArray(p.pk) ? [[24, C[24]]] : p.pk.filter((k) => PLAYER_KIND[k] !== undefined).map((k) => [PLAYER_KIND[k], C[PLAYER_KIND[k]]])), ...list(p.pw), ...(p.vel || p.velSent ? [[18, C[18]]] : [])]; // b100 console100: first the S0B(0) of EntityLivingBase.swingItem (sv.ba: mn.a(entity, S0B) to every tracker but the swinger, in packet handling before the tracker pass; the port's `swing` is 6 on the tick a swing was accepted, 5 and down after);
 // b97: then the S1C / S20 of EntityTrackerEntry.b(); b100 console100: then the S12 of Entity.velocityChanged (my.a(List) ends with it, my.b(ft) sends it to every tracker, 11 bytes executed)
 /**
  * b93 console93: the S13s a connection queued (`ctx.destroyed = { n }`, the player's destroyedItemsNetCache) go out in the player's next onUpdate (mw.h): the ids in packets of at most 127

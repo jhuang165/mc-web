@@ -54,8 +54,27 @@ const spawnByte = deg => (Math.trunc(Math.fround(Math.fround(Math.fround(deg) * 
 
 export class ServerPlayerTracker {
   // `host`: { players: Map, rules } (the Simulation). `watches(pid, cx, cz)`: isPlayerWatchingChunk for viewer `pid` (the chunk view's `sees`). `fresh(pid)`: true once after the viewer's columns changed.
-  constructor(host, watches = everywhere, fresh = () => false) { this.host = host; this.watches = watches; this.fresh = fresh; this.dims = new Map(); this.done = new WeakMap(); this.masters = new Map(); this.joined = new Set(); }
+  constructor(host, watches = everywhere, fresh = () => false) { this.host = host; this.watches = watches; this.fresh = fresh; this.dims = new Map(); this.done = new WeakMap(); this.masters = new Map(); this.joined = new Set(); this.pending = new Set(); }
   get limit() { return this.host.rules?.trackerLimit ?? 144; }
+  // b101 console101: ServerConfigurationManager.respawnPlayer (oi.a(mw, int, boolean), bytecode-read) calls EntityTracker.untrackPlayer + untrackEntity(old) (mn.a(mw), mn.b(sa): my.a() queues an S13 for every tracker,
+  // 6 bytes), builds a NEW EntityPlayerMP, and spawnEntityInWorld adds a new entry (first pass S0C, S1C, S20, S04, S1D) and a first pass of every other entry to the new viewer. The port keeps one entry per
+  // player id, so the respawn drops both: the shared entry (and its `joined` mark, the new constructor leaves movementSpeed dirty again), the viewers' entries of him and his own entries.
+  respawned(id) { this.pending.add(id); }
+  takeRespawns(dim, here) {
+    let out = null;
+    for (const id of [...this.pending]) {
+      if (!here.has(id)) continue;
+      this.pending.delete(id);
+      out ??= { ids: new Set(), prior: new Set() };
+      out.ids.add(id);
+      const s = this.state(dim);
+      for (const [vid, v] of s) if (vid !== id) { if (v.entries.get(id)?.tracked) out.prior.add(`${vid}:${id}`); v.entries.delete(id); }
+      s.delete(id);
+      this.masters.get(dim)?.byId.delete(id);
+      this.joined.delete(id);
+    }
+    return out;
+  }
   state(dim) { let s = this.dims.get(dim); if (!s) this.dims.set(dim, s = new Map()); return s; }
 
   // b74 mptrack74: the shared position entry of each player in `dim`; advanced once per server tick (per `host.ticks`; without a tick counter, once per update key).
@@ -118,6 +137,7 @@ export class ServerPlayerTracker {
     const s = this.state(dim), here = new Map(), out = new Map();
     for (const [id, p] of this.host.players) if ((p.dimension | 0) === dim) here.set(id, p);
     for (const id of [...s.keys()]) if (!here.has(id)) s.delete(id); // left the dimension or the server: the client rebuilt its world
+    const reborn = this.pending.size ? this.takeRespawns(dim, here) : null; // b101
     for (const [vid, viewer] of here) {
       let v = s.get(vid);
       const pos = viewer.position;
@@ -139,6 +159,11 @@ export class ServerPlayerTracker {
         if (en.tracked && !this.watches(vid, Math.floor(e.x / 16), Math.floor(e.z / 16))) { en.tracked = false; en.packets.length = 0; }
         if (en.tracked) { tracked.add(tid); if (!was) entered.add(tid); }
       }
+      if (reborn) { // b101: who gets the S13 + new spawn of a respawned player (those that tracked the old entry), and the respawner's own spawns (his client rebuilt its world)
+        const again = tracked.reborn = new Set();
+        for (const id of reborn.ids) if (id !== vid && tracked.has(id) && reborn.prior.has(`${vid}:${id}`)) again.add(id);
+        if (reborn.ids.has(vid)) tracked.selfReborn = true;
+      }
       out.set(vid, tracked);
     }
     this.advance(dim, here, this.host.ticks); // b74 mptrack74: the shared entries run once a tick
@@ -158,7 +183,8 @@ export class ServerPlayerTracker {
       const st = this.masters.get(dim)?.byId.get(r.id), arm = st?.armour?.length ? { arm: st.armour } : {}, wp = st?.wp?.length ? { pw: st.wp } : {};
       const spawn = tracked.entered?.has(r.id) && st, // b97: only the row that spawns the player for this viewer carries what spawnRecords reads (armour S04s, one S1D per effect, the modifiers in the S20)
         extra = st ? { ...(spawn ? { ...arm, ...(st.fxn ? { fxn: st.fxn } : {}), am: st.we.mods.maxHealth + st.we.mods.movementSpeed } : {}), ...wp } : {};
-      return rel || pk || st ? { ...r, ...rel, ...(pk ? { pk } : {}), ...extra } : r;
+      const rs = tracked.reborn?.has(r.id) ? 1 : tracked.selfReborn && tracked.entered?.has(r.id) ? 2 : 0; // b101: 1 = S13 then a new spawn pass, 2 = a new spawn pass only
+      return rel || pk || st ? { ...r, ...rel, ...(pk ? { pk } : {}), ...extra, ...(rs ? { rs } : {}) } : r;
     });
   }
   messageFor(pid, message, dim = 0, key = message) {

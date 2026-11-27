@@ -118,6 +118,7 @@ export class ServerSleep {
     Object.assign(p.velocity, { x: 0, y: 0, z: 0 });
     if (setSpawn) { p.spawnpoint = [head[0], head[1], head[2]]; p.spawnForced = false; } // setSpawnChunk(playerLocation, false)
     this.out(p, { type: 'sleepWake' });
+    p.woke = {}; // b101 console101: S0B animation 2 also goes to the trackers; `field` carries it on one presence row
     return true;
   }
   // C0B action 3 (leave bed): wakeUpPlayer(false, true, true).
@@ -139,7 +140,11 @@ export class ServerSleep {
     return world.spawn();
   }
   // The presence row field (EntityTrackerEntry's S0A for a sleeper): the head cell and the facing.
-  field(p) { const s = p.bedSleep; return p.sleeping && s?.sleeping ? { sleep: [s.bed[0], s.bed[1], s.bed[2], s.facing] } : {}; }
+  field(p) {
+    const s = p.bedSleep, lying = p.sleeping && s?.sleeping ? { sleep: [s.bed[0], s.bed[1], s.bed[2], s.facing] } : {};
+    if (p.woke) { p.woke.t ??= this.sim.ticks; if (p.woke.t === this.sim.ticks) lying.woke = true; else p.woke = null; } // b101: the tick of the first presence build after the wake-up (idempotent within it)
+    return lying;
+  }
   // Targets for EntityFishHook: every other player of the dimension is collidable (a lying one has the 0.2 box on the mattress).
   fishTargets(angler) {
     const out = [];
