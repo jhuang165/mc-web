@@ -12,16 +12,38 @@ export const S0E_FRAME = 21;
 export const GHOST_DROP_REASON = 'Internal Exception: io.netty.handler.codec.EncoderException: java.lang.NullPointerException';
 const dropped = new WeakSet();
 
-/** One pass of EntityTrackerEntry.updatePlayerEntity for each inert record of the dimension: a player in range that watches the column is dropped (once). */
+// b101 mpobjects101: the cadence. Bytecode-read (mn.a() = EntityTracker.updateTrackedEntities, my.a(List) = EntityTrackerEntry.updatePlayerList, my.b(List) = updatePlayerEntities,
+// my.b(mw) = updatePlayerEntity, mn.a(mw) / mn.a(mw, apx) = addPlayer / sendChunkEntities): a standing item is NOT re-listed every tick. my.a(List) re-lists only on its first pass
+// (the entry is created with one) or after the item moved more than 4 blocks (squared 16; an inert drop never moves). A player is tested against a standing item only when (1) the
+// entry is new (every player), (2) the player's own entry moved more than 4 blocks since its last list (mn.a() then calls my.b(player) on every entry), (3) the player joined or
+// changed dimension (addPlayer), or (4) the item's chunk was just sent to the player (sendChunkEntities). The tick pass models those four; a walk into range drops the player
+// at the first trigger after the walk-in: the range check is unchanged, only the trigger is rarer. Executed (mpobjects101-reference.json `cadence`): a list call after the first sends nothing for a player standing in range; my.b(player) does.
+const states = new WeakMap();
+const stateOf = (inert) => { let s = states.get(inert); if (!s) states.set(inert, s = { pass: 0, seen: new WeakSet(), players: new WeakMap() }); return s; };
+
+/** One tick of EntityTracker.updateTrackedEntities for each inert record of the dimension: a player the list triggers for, in range and watching the column, is dropped (once). */
 export function ghostItemDrops(sim, dim, inert) {
   if (!inert.list.length) return;
+  const st = stateOf(inert); st.pass++;
   const range = clampTrackRange(64, sim.rules?.viewDistance);
+  const trig = new Map(); // player -> the player's own entry moved (or is new to this dimension): one decision per tick
+  for (const p of sim.players.values()) {
+    if ((p.dimension | 0) !== (dim | 0) || dropped.has(p)) continue;
+    const ps = st.players.get(p), pos = p.position;
+    const fresh = !ps || ps.pass !== st.pass - 1 || ((pos.x - ps.x) ** 2 + (pos.y - ps.y) ** 2 + (pos.z - ps.z) ** 2) > 16;
+    if (fresh) st.players.set(p, { x: pos.x, y: pos.y, z: pos.z, pass: st.pass, sees: new WeakMap() });
+    else ps.pass = st.pass;
+    trig.set(p, fresh);
+  }
   for (const d of inert.list) {
+    const isNew = !st.seen.has(d); st.seen.add(d);
     const x = Math.floor(d.x * 32) / 32, z = Math.floor(d.z * 32) / 32; // the tracker's scaled position
-    for (const p of [...sim.players.values()]) {
-      if ((p.dimension | 0) !== (dim | 0) || dropped.has(p)) continue;
-      if (!trackedWithin(range, x, z, p.position)) continue;
-      if (sim.chunkViews?.sees && !sim.chunkViews.sees(p.id, Math.floor(d.x / 16), Math.floor(d.z / 16))) continue; // PlayerManager.isPlayerWatchingChunk
+    for (const [p, moved] of trig) {
+      if (dropped.has(p)) continue;
+      const watching = !sim.chunkViews?.sees || sim.chunkViews.sees(p.id, Math.floor(d.x / 16), Math.floor(d.z / 16)); // PlayerManager.isPlayerWatchingChunk
+      const ps = st.players.get(p), was = ps.sees.get(d); ps.sees.set(d, watching);
+      if (!(isNew || moved || (watching && !was))) continue; // no re-list this tick
+      if (!trackedWithin(range, x, z, p.position) || !watching) continue;
       dropped.add(p);
       sim.admin?.netStats?.write(14, S0E_FRAME + 6); // the S0E is written and counted; the S1C throws before eu.b counts it
       sim.admin?.host?.drop?.(p.id, GHOST_DROP_REASON);
