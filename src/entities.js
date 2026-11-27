@@ -6,6 +6,7 @@ import { blockBoxes } from "./mpperf79-fast.js"; // b79 mpperf79
 import { edgeClamp } from "./mpperf80-fast.js"; // b80 mpperf80
 import { fast84, fail84, moveSpeedQuick } from "./mpperf84-fast.js"; // b84 mpperf84
 import { boxStore } from "./mpperf84-fast.js"; import { bumpTargetEpoch92, carryTargets92 } from "./mpperf92-fast.js"; // b92 mpperf92
+import { fast101, fail101 } from "./mpperf101-fast.js"; // b101 mpperf101
 import { mobSizeObject, motionEnter, motionRelease, motionOf } from "./mpperf82-fast.js"; // b82 mpperf82
 import { typeSize, pushNearBox, pushNearDone, meetsArg, fast83 } from "./mpperf83-fast.js"; // b83 mpperf83
 import { fast87, fail87, attackEquipment87, dryEntity, dryBounds, addZero } from "./mpperf87-fast.js"; // b87 mpperf87
@@ -2439,9 +2440,17 @@ export class EntityWorld {
     const listed = new Set(order);
     for (const e of this.entities) if (!listed.has(e) && !this.walkOf?.has(e) && !e.lateHook && typeof e.health === "number") order.push(e);
   }
+  // b101 mpperf101: the copy of the entity list that tickMobs walks, in one kept array (tickOrder is null again when the pass ends); a fresh slice when off.
+  entities101() {
+    if (fast101.mode === "off") return this.entities.slice();
+    const src = this.entities, b = this.ent101 ??= [], n = src.length;
+    b.length = n; for (let i = 0; i < n; i++) b[i] = src[i];
+    if (fast101.mode === "verify") { const ref = src.slice(); if (ref.length !== b.length || ref.some((e, i) => e !== b[i])) fail101("entities copy"); }
+    return b;
+  }
   endTilePass() { this.tilePass = false; this.noteMobSpawns(false); }
-  withBalls(order) {
-    const balls = this._fireballs?.list, others = [];
+  withBalls(order, keep = false) {
+    const k101 = keep && fast101.mode !== "off", balls = this._fireballs?.list, others = k101 ? ((this.wbOthers101 ??= []).length = 0, this.wbOthers101) : []; // b101 mpperf101: tickMobs' call refills kept arrays
     if (this.walks?.size) {
       this.walkOf ??= new WeakMap();
       for (const w of this.walks.values()) for (const e of w.list()) if (!e.dead) { others.push(e); this.walkOf.set(e, w); }
@@ -2452,7 +2461,14 @@ export class EntityWorld {
     for (const o of others) if (!this.orderSeqs.has(o)) { this.orderSeqs.set(o, next - 0.5); this.takeId(o); } // a restored item, arrow or orb: Entity.<init> numbered it when its chunk loaded, so it has its id before the tracker sees it
     for (const b of balls ?? []) if (!b.dead) others.push(b);
     // stamps looked up once per entity (the walk runs every tick over every item, orb and arrow), then a numeric sort of the pairs
-    const seqs = this.orderSeqs, keyed = others.map((e) => [seqs.get(e) ?? 0, e]), out = [];
+    const seqs = this.orderSeqs;
+    let keyed, out;
+    if (k101) {
+      const rows = this.wbRows101 ??= [], n = others.length;
+      keyed = this.wbKeyed101 ??= []; keyed.length = n;
+      for (let j = 0; j < n; j++) { const r = rows[j] ??= [0, null]; r[0] = seqs.get(others[j]) ?? 0; r[1] = others[j]; keyed[j] = r; }
+      out = this.wbOut101 ??= []; out.length = 0;
+    } else { keyed = others.map((e) => [seqs.get(e) ?? 0, e]); out = []; }
     keyed.sort((a, b) => a[0] - b[0]);
     let i = 0;
     for (const m of order) {
@@ -2461,6 +2477,7 @@ export class EntityWorld {
       out.push(m);
     }
     while (i < keyed.length) out.push(keyed[i++][1]);
+    if (k101) for (let j = 0; j < keyed.length; j++) keyed[j][1] = null; // the kept rows hold no entity between ticks
     return this.seatRiders(out);
   }
   // World.updateEntities skips an entity riding a live mount and updateEntityWithOptionalForce updates the rider right after the mount's own update
@@ -2538,7 +2555,7 @@ export class EntityWorld {
     let farMark = -1; // index of the first event of the unticked-window mob being updated
     // World.spawnEntityInWorld adds to loadedEntityList at once and updateEntities walks it by index: a zombie that a kill converts a villager into updates in this same pass.
     this.noteMobSpawns(true); // a spawn before the loop (natural spawning in WorldServer.tick) sends before the flush
-    const order = this.tickOrder = liveOrder(this, this.withBalls(ridingOrder(this.entities.slice()))); // fireballs interleave with the mobs by when each joined the list (fireballs-b42-reference.json)
+    const order = this.tickOrder = liveOrder(this, this.withBalls(ridingOrder(this.entities101()), true)); // fireballs interleave with the mobs by when each joined the list (fireballs-b42-reference.json)
     if (this.walks?.size) for (const q of order) if (q && !q.lateHook && !hasCell(q)) stampWalked(q); // b73: a walked entity not yet filed gets its cell (stampEntity keeps those it knows)
     trackSections(this, order, true); // b53so: where each entity is filed when the pass starts (saved-order.js)
     if (this.lateEntity) order.push(this.lateEntity); // replay hook: a stand-in for the arrows at the end of the list, so a zombie one of them hurts into a reinforcement joins after it and ticks in this pass

@@ -7,6 +7,7 @@
 // and its rider; a changed array length, a moved list index, or a disabled grid falls back to the full scan (`lookup` returns null). MC_PUSHGRID=off disables it;
 // MC_PUSHGRID=verify runs both and throws on the first difference (tests and the benchmark use it to prove the two agree).
 import { fast90, recycleOf90, checkGrid90 } from "./mpperf90-fast.js"; // b90 mpperf90: FineGrid keeps the arrays of the grid before it
+import { fast101, checkCells101 } from "./mpperf101-fast.js"; // b101 mpperf101: kept cell lists
 import { fast93, recycleOf93, checkIdx93 } from "./mpperf93-fast.js"; // b93 mpperf93: FineGrid keeps the index and cell maps of a grid over the same list
 import { fineSorted } from "./mpperf83-fast.js"; // b83 mpperf83: FineGrid.query sorts short candidate lists in place
 const CELL = 8, REACH = 12 + 1e-6;
@@ -95,6 +96,19 @@ export class FineGrid {
       this.ents = ents; this.keyAt = keyAt; this.buf = re.buf; this.pool = re.pool; this.out = re.out;
     }
     this.n = 0;
+    if (re?.kept === true) { // b101 mpperf101: the cells still hold the retired grid's indices (same entities); move only those whose key changed
+      const keyAt = this.keyAt, cells = this.cells;
+      for (let i = 0; i < list.length; i++) {
+        const o = list[i], h = halfOf(o), was = keyAt[i]; let k;
+        if (!(h <= FBIG)) { this.big.push(i); k = -1; } else { if (h > this.maxHalf) this.maxHalf = h; k = this.keyOf(o); }
+        if (k === was || (k !== k && was !== was)) continue;
+        if (was === was && was !== -1) { const c = cells.get(was); const j = c ? c.indexOf(i) : -1; if (j >= 0) c.splice(j, 1); }
+        if (k === k && k !== -1) this.cellList(k).push(i);
+        keyAt[i] = k;
+      }
+      if (fast101.mode === "verify") checkCells101(this, list);
+      return;
+    }
     for (let i = 0; i < list.length; i++) {
       const o = list[i]; if (re?.idxOf == null) this.idxOf.set(o, i);
       const h = halfOf(o);
