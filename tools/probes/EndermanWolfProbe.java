@@ -478,6 +478,7 @@ public class EndermanWolfProbe {
     StringBuilder sc = new StringBuilder();
     for (String s : script) sc.append(sc.length() > 0 ? "," : "").append(q(s));
     System.out.println("{\"case\":\"endermanwolf\",\"name\":" + q(name) + ",\"seed\":" + seed + ",\"ticks\":" + ticks + ",\"types\":" + q(types) + ",\"bright\":" + bright + (B44 ? ",\"ext\":1" : "") + (B45 ? ",\"init\":[" + init + "]" : "") + (B92 ? ",\"kids\":[" + kidInfo + "]" : "") + (water ? ",\"water\":true" : "")
+      + (SeedMath.log.isEmpty() ? "" : ",\"mathRandom\":" + SeedMath.json()) // b101 mobrec101: every java.lang.Math.random() outside a constructor ([tick, value, caller]; the knockback nudge of a witch hit by its own potion)
       + ",\"roofs\":" + Arrays.deepToString(roofs) + ",\"blocks\":" + Arrays.deepToString(blocks) + ",\"pos\":" + Arrays.deepToString(pos) + ",\"script\":[" + sc + "],\"rows\":[" + rs + "]}");
     VillagerProbe.World.entities.clear();
   }
