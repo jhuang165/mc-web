@@ -3,6 +3,7 @@ import { PHYSICS, SIZE, slipperiness, fallingVelocity, collides } from './world.
 import { webMove } from './webs.js';
 import { moveEntity, pushOutOfBlocks } from './entities.js';
 import { entityWaterBox, waterAcceleration, inLava, liquidInBox } from './fluids.js';
+import { allowsFlight } from './ability-flags.js'; // b101 abilities101
 import { isOnLadder, ladderClamp, LADDER_CLIMB } from './ladders.js';
 import { SNEAK_YSIZE, moveWeights, groundAccel, airAccel, LIQUID_ACCEL, JUMP_MOTION,
   jumpExhaustion, sprintJumpPush, flySpeed, FLY_Y_DRAG, flyVertical } from './player-movement.js';
@@ -61,7 +62,7 @@ export function movePlayer(state, controls, toast = () => {}) {
   let slip = Math.fround(0.6);
   const jumpKey = controls.jump;
   // EntityPlayerSP.onLivingUpdate: a double tap of jump toggles Creative flight (tick-based).
-  if (motion.toggleFlight(jumpKey, survival.creative)) {
+  if (motion.toggleFlight(jumpKey, allowsFlight(survival.creative))) {
     flying = !flying;
   }
   // ... then, flying, the sneak and jump keys move 0.15 a tick down and up.

@@ -219,7 +219,7 @@ export class ServerSocial {
       position: () => ({ x: p.position.x, y: p.position.y, z: p.position.z }),
       playerMode: () => (p.survival.mode === "creative" ? 1 : p.survival.mode === "adventure" ? 2 : 0),
       teleport: (x, y, z, look) => { if (sim.vehicles?.riding(p)) sim.vehicles.dismount(p); p.position.copy({ x, y, z }); p.previous.copy(p.position); Object.assign(p.velocity, { x: 0, y: 0, z: 0 }); p.fallDistance = 0; p.moved = true; if (look && Number.isFinite(look.yaw) && Number.isFinite(look.pitch)) { p.yaw = look.yaw; p.pitch = look.pitch; op("look", look.yaw, look.pitch); } }, // b84 cmdfix84: S08 carries the target's yaw and pitch (/tp <player> <target>) // b83 cmdexec83: CommandTeleport mountEntity(null) first (executed)
-      setGameMode: (mode) => { p.survival.mode = mode; p.survival.inventory.creative = p.survival.creative; if (!p.survival.creative) p.flying = false; op("setGameMode", mode); },
+      setGameMode: (mode) => { p.survival.mode = mode; p.survival.inventory.creative = p.survival.creative; if (!p.survival.creative) p.flying = false; this.deliver(id, sim.abilitiesOf(p)); op("setGameMode", mode); /* b101 abilities101: setGameType sends S39 (mx.a -> q()), then S2B reason 3 (mw.a(ahk)) */ },
       kill: () => { op("kill"); (sim.events ??= []).push({ type: "death", id }); },
       give: (original, count, damage, tag) => {
         const item = itemFromOriginal(original, damage);

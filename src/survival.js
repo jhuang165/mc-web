@@ -16,6 +16,7 @@ import { installSignItems, installSignMaterials, installSignRecipes } from './si
 import { installSpawnEggItems, installSpawnEggRecipes } from './spawn-eggs.js';
 import { installCartItems, ITEM_FURNACE_CART, ITEM_TNT_CART, ITEM_HOPPER_CART } from './cart-variants.js';
 import { installStemCakeItems, installStemCakeMaterials, installStemCakeRecipes } from './stems-cake.js';
+import { disablesDamage } from './ability-flags.js'; // b101 abilities101
 import { installFishingItems, installFishingRecipes, installFishingSmelting } from './fishing-content.js';
 import { installPopulationItems, installPopulationMaterials, installPopulationRecipes, populationCraftingResult, installPopulationSmelting } from './population-content.js';
 
@@ -818,7 +819,7 @@ export class Survival {
   // spawn protection and Creative immunity reject the whole hit before helmet wear.
   // `kind` is the DamageSource, "anvil" or "fallingBlock": EntityLivingBase.attackEntityFrom gives both the helmet rule (probed).
   anvilDamage(amount, kind = "anvil") {
-    if (this.creative || this.health <= 0 || this.protection > 0 || !(amount > 0)) return false;
+    if (disablesDamage(this.creative) || this.health <= 0 || this.protection > 0 || !(amount > 0)) return false; // b101 abilities101: capabilities.disableDamage
     amount = Math.fround(amount);
     const helmet = this.inventory.getStack(39);
     if (helmet) {
@@ -847,7 +848,7 @@ export class Survival {
   // hit with one runs EntityLivingBase.knockBack, queued for the movement tick (player-knockback.js drainKnockback).
   damage(n, reason = "an accident", blockable = false, source = undefined, from = undefined, via = undefined) {
     const outOfWorld = reason === VOID;
-    if ((this.creative && !outOfWorld) || this.health <= 0 || n <= 0 || (this.protection > 0 && !outOfWorld))
+    if ((disablesDamage(this.creative) && !outOfWorld) || this.health <= 0 || n <= 0 || (this.protection > 0 && !outOfWorld))
       return false;
     this.onDamageTaken?.(Math.fround(n)); // EntityPlayer.attackEntityFrom: the damageTaken stat runs before the invulnerability frames
     // EntityLivingBase.attackEntityFrom: Fire Resistance refuses fire damage (the burning counter still runs).
