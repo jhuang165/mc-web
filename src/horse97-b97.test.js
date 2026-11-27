@@ -127,7 +127,7 @@ test("main.js (code-read contract): die() no longer detaches at once; the dead t
   assert.ok(die.includes("startDeathRide(vehicleState())"));
   assert.ok(!die.includes("detachPlayerVehicle"), "no immediate detach in die()");
   assert.ok(main.includes("tickDeathRide(v, deathTime)") && main.includes("releaseDeathRide(v)"));
-  assert.ok(main.includes("if (!multiplayer && !rider.vehicle) deadBodyTick();"));
+  assert.ok(main.includes("movementTick(IDLE_INPUT); // b101 spcopy101")); // b101: the dead tick is the full movementTick (idle input); a seated body goes through moveRidingPlayer, which keeps it at its seat
 });
 
 // ---- the water dismount's spot (mw.a((sa) null), Executed: Kill97Probe -Ddismount97, dismount97-reference.json) ----

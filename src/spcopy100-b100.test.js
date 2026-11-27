@@ -35,7 +35,7 @@ test("single player: sign, book, command block, game menu and credits stop the w
   assert.equal(paused({ screen: "inventory", container: true }), false);
   assert.equal(paused({ screen: "inventory", sleeping: true }), false);
   assert.equal(paused({ screen: "home" }), true);
-  assert.equal(paused({ screen: "dead" }), true);
+  assert.equal(paused({ screen: "dead" }), false); // b101: GuiGameOver pauses nothing (bytecode-read bdc.d false); b100 held true as a known gap
 });
 
 test("a public LAN server or a multiplayer session never pauses behind a screen (credits stay a port-side step)", () => {

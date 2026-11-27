@@ -235,7 +235,7 @@ import { difficultySetting, localDifficulty, InhabitedTime } from "./difficulty.
 import { isInvisible } from "./mob-effects.js";
 import { DimensionWorld } from './dimension-world.js';
 import { showEndCredits } from './end-credits.js';
-import { gamePaused, TickClock } from "./screen-pause.js";
+import { gamePaused, deadTickPlan, TickClock } from "./screen-pause.js";
 import { DimensionLive, TILE_KEYS, storedRecord, dimensionOf, rootIdOf, viewId, bedExplosion, mcYaw, advanceWorldClock } from './dimension-live.js'; // Nether/End travel (dimensions track)
 import { awayCatchUp } from "./away-track.js"; // batch 60: the tracker ticks of the entities that stayed loaded while the player was away
 import { PortalTimer, splashBreak, NIGHT_VISION, BLINDNESS, NAUSEA, INVISIBILITY } from "./potion-fx.js";
@@ -3040,11 +3040,6 @@ function applyHealthFx(m) {
   else applyEffectEnd(survival, m);
   renderVitals();
 }
-function deadBodyTick() {
-  const state = { world: clientWorld(), position, previous, velocity, motion, survival, yaw, eating: null, grounded, collidedH, flying: false, fallDistance, landedFall, sleeping: false };
-  movePlayer(state, IDLE_INPUT, toast);
-  ({ grounded, collidedH, fallDistance, landedFall } = state);
-}
 hitPoseSource.get = () => (multiplayer ? null : { x: position.x, z: position.z, yawDeg: 180 - (yaw * 180) / Math.PI }); // b75: attackedAtYaw is taken at each hit (death-throw.js)
 function die() {
   if (screen === "dead") return;
@@ -3062,6 +3057,7 @@ function die() {
   deathTime = 0;
   keys.clear();
   mining = null;
+  eating = null; // b101: the world ticks on under the death screen; a dead player finishes no meal
   mineHeld = false;
   // gamerule keepInventory: the inventory is not dropped and the experience is kept (EntityPlayerMP.clonePlayer copies both).
   const keep = !ruleOn(active, "keepInventory");
@@ -4189,7 +4185,7 @@ function movementTick(controls) {
     random: Math.random,
     predicted: !!multiplayer, // b64: a connected client's eat / drink is animation only
   }).use;
-  if (useHold.tick(binds.isDown("key.use"), !!eating, !survival.creative && !!ITEMS[heldId()]?.food)) clickEdit(true);
+  if (screen !== "dead" && useHold.tick(binds.isDown("key.use"), !!eating, !survival.creative && !!ITEMS[heldId()]?.food)) clickEdit(true);
   if (survival.health <= 0) die();
   // EntityRenderer.updateFovModifierHand: once a tick, toward getFOVMultiplier (flight, sprint, bow).
   easeFov(bowFovState, fovMultiplier({ flying, sprinting: motion.sprinting, potion: survival.effects?.moveSpeedMultiplier?.() ?? 1, bow: eating?.bow ? bowFov(eating.ticks) : 1 }));
@@ -4687,7 +4683,7 @@ function animate(now) {
     fpsTime = elapsed;
   }
   // Minecraft.isGamePaused: the game menu stops the world unless the LAN server is public (lan.js).
-  const running = () => !gamePaused({ screen, multiplayer: !!multiplayer, lanPublic: lan.public, guiId: gui.screen?.id, chat: chatOpen, sleeping: bedSleep.sleeping, container: !!containerView, modal: !$("#modal").classList.contains("hidden") }); // screen-pause.js: GuiScreen.doesGuiPauseGame per screen
+  const running = () => screen !== "dead" && !gamePaused({ screen, multiplayer: !!multiplayer, lanPublic: lan.public, guiId: gui.screen?.id, chat: chatOpen, sleeping: bedSleep.sleeping, container: !!containerView, modal: !$("#modal").classList.contains("hidden") }); // screen-pause.js: GuiScreen.doesGuiPauseGame per screen
   { const want = debug && debugChart; if (clientProfiler.enabled !== want) { clientProfiler.clear(); clientProfiler.enabled = want; } clientProfiler.section = ""; clientProfiler.sections.length = 0; clientProfiler.stamps.length = 0; clientProfiler.start("root"); } // Minecraft.runGameLoop: profiler on while Shift+F3
   tickMusic(dt);
   if (running()) {
@@ -4838,7 +4834,7 @@ function animate(now) {
     while (accumulator >= PHYSICS.tick) {
       gui.tick(); // GuiGameOver / GuiYesNo updateScreen: the 20-tick button delay counts these client ticks
       { const v = vehicleState(); if (tickDeathRide(v, deathTime)) applyVehicleState(v); } // b97 horse97: ahb.h's unlink of the dead rider, the tick after deathTime 20
-      if (!multiplayer && !rider.vehicle) deadBodyTick(); // b97: a seated body does not move; b74: the thrown body keeps moving (idle input) like the client player during GuiGameOver
+      if (deadTickPlan({ multiplayer: !!multiplayer }).worldTick) movementTick(IDLE_INPUT); // b101 spcopy101: GuiGameOver does not pause, so the world, clock, mobs and items tick (the thrown body moves by idle input as before; code-read only)
       survival.hurtTime = Math.max(0, survival.hurtTime - 1);
       { const feet = { x: position.x, y: position.y - motion.ySize, z: position.z }; playerBody.tick({ position: feet, previous: feet, yaw, pitch }); } // limb swing settles; the head and body stay put
       if (++deathTime === 20) burst(scene.fx, "explode", 20, { x: position.x, y: position.y + Math.fround(PHYSICS.eye), z: position.z, width: PHYSICS.width, height: PHYSICS.height }, playerRandom);
