@@ -1777,11 +1777,15 @@ export class EntityWorld {
     else if (e.type === "iron_golem" && !e.playerCreated && e.recentlyHit > 0) this.ai.brain(e).village?.changeReputation(source.playerName ?? PLAYER_NAME, -5);
     this.gearDeath(e); // horse-gear-live.js: the horse inventory (the lead stays on the corpse)
     // EntityLivingBase.onDeath (sv.a(ro), bytecode-read): Entity.onKillEntity of the attacker (a zombie's villager rule) runs BEFORE dropFewItems, so the converted zombie joins the list ahead of the loot.
-    if (e.type === "villager" && source.attacker?.type === "zombie") this.zombieKilledVillager(source.attacker, e);
+    // b101 credit101 (bytecode-read yq.a(sv), yh declares none; xz.a(ro): `ro.j() instanceof yl`): ro.j() is the shooter behind an arrow, so a pigman converts too, and the creeper's disc
+    // comes from any EntitySkeleton (wither skeleton included) by melee or arrow; `attacker` is the mob (melee) or only its type name (arrow), `shooter` the arrow's mob.
+    const killer = source.shooter && typeof source.shooter === "object" ? source.shooter : typeof source.attacker === "object" ? source.attacker : null;
+    const killerType = killer?.type ?? (typeof source.attacker === "string" ? source.attacker : null);
+    if (e.type === "villager" && killer && (killerType === "zombie" || killerType === "pigman")) this.zombieKilledVillager(killer, e);
     // ... and only while gamerule doMobLoot is true (dropFewItems, dropEquipment and the rare drop alike); each item joins the list now (emitLoot).
     if ((e.growingAge >= 0 || e.type === "zombie" || e.type === "pigman") && gameRule("doMobLoot")) {
       const at = { x: e.x, y: e.y, z: e.z };
-      for (const [drop, damage, enchantments] of mobDrops(e, { playerHit: e.recentlyHit > 0, burning: e.fire > 0, bySkeleton: source.attacker === "skeleton", looting: source.player ? source.looting || 0 : 0, toLive: toLiveStack }, entityRandom(e)))
+      for (const [drop, damage, enchantments] of mobDrops(e, { playerHit: e.recentlyHit > 0, burning: e.fire > 0, bySkeleton: killerType === "skeleton" || killerType === "wither_skeleton", looting: source.player ? source.looting || 0 : 0, toLive: toLiveStack }, entityRandom(e)))
         this.emitLoot({ drop, count: 1, ...(damage ? { damage } : {}), ...(enchantments ? { enchantments } : {}), position: at });
     }
     // b94 entnbt94: a live mob loaded with a DeathTime keeps counting from it (executed: it stays put while alive); 20 or more never reaches the removal
