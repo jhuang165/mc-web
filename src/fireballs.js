@@ -160,7 +160,10 @@ export class Fireballs {
       const t = hit.entity;
       if (t?.player) {
         const s = mobs.ai?.survival;
-        return !!s && s.damage(n, "fireball", true, "fireball", owner && owner !== "player" ? owner : undefined); // the source entity is the shooter
+        // b101 credit101 (bytecode-read ze.a(ro, F): the puncher becomes the shooter, zg.a / zi.a: causeFireballDamage(ball, shooter)): a deflected ball that later hits a player has the
+        // puncher as source entity, so the message names him and a kill is his (the server's `playerBallHit` also asks the pvp rules); the single player is the puncher himself.
+        if (byPlayer) return !!s && (this.playerBallHit ? this.playerBallHit(b, t, n) : s.damage(n, "fireball", true, "fireball", undefined, { self: true }));
+        return !!s && s.damage(n, "fireball", true, "fireball", owner ? owner : undefined); // the source entity is the shooter
       }
       // b88 blast88: ro.a(ze, shooter).j() is the shooter, so a punched ball turns the other ball to the puncher's look; a server ball's "player" is `punchedBy` (the server has no playerLook)
       if (t?.ball) return this.hitBall(t.ball, byPlayer && isServerPlayer(b.punchedBy) ? b.punchedBy : owner); // EntityFireball.attackEntityFrom from the other ball's DamageSource

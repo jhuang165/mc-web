@@ -183,7 +183,10 @@ export class ServerMobs {
     const fb = this.mobs.fireballs, tickOne = fb.tickOne.bind(fb), impact = fb.impact.bind(fb), ach = this.host.achievements;
     fb.tickOne = b => { b.track ??= skullEntry(b); this.target(b); return tickOne(b); }; // b82 mpball82: the entry's S0E angles at the join, as the skulls (skull-look.js)
     fb.impact = (b, hit) => {
-      this.useHit(hit); // b64: the player the sweep found is the one hurt
+      const victim = this.useHit(hit); // b64: the player the sweep found is the one hurt
+      // b101 credit101 (bytecode-read ze.a(ro, F), zg.a, mw.a(ro, F)): a deflected ball's shooter is its puncher, so the hit on a player is "fireball" with him as source entity (death message, playerKills)
+      // and goes through damagePlayer: the pvp rules (EntityPlayerMP.attackEntityFrom refuses a player source when PvP is off) and the spawn protection.
+      fb.playerBallHit = (ball, t, n) => { const who = ball.punchedBy, p = victim ?? [...this.views.values()].find(v => v.view === t.view)?.player, from = who && this.host.pvpRules?.fromOf?.(who), s = p?.survival; return !!s && this.host.damagePlayer(p, n, { name: 'fireball', from, call: () => s.damage(n, 'fireball', true, 'fireball', from) }) !== false; };
       const who = b.owner === 'player' ? b.punchedBy : null, v = who && (who.corpseOf ? this.corpseView(who) : this.views.get(who.id)), was = ach?.attacker; // b90 credit90: a dead body's ball keeps the body
       if (v) { this.use(v); if (ach) ach.attacker = who.corpseOf ?? who; }
       try { return impact(b, hit); } finally { if (v && ach) ach.attacker = was; }
@@ -252,7 +255,7 @@ export class ServerMobs {
   useHit(hit) {
     const view = hit?.entity?.view;
     if (!view) return;
-    for (const v of this.views.values()) if (v.view === view) { this.use(v); return; }
+    for (const v of this.views.values()) if (v.view === view) { this.use(v); return v.player; }
   }
   // b90 credit90 (bytecode-read oi.a(mw, int, boolean), sv.C 465-505): the AI's "player" for a dead body's blast is that dead entity (alive false, health 0), not the respawned record's view.
   corpseView(body) {
