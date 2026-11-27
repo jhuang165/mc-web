@@ -44,7 +44,7 @@ test("offline login profiles: the executed func_152506_a and the port's loginPro
 // The native class each port message kind stands for (PLAY unless the state is given).
 const SERVERBOUND_CLASS = {
   join: ["HANDSHAKING", "C00Handshake"], pingStatus: ["STATUS", "C00PacketServerQuery"], pingProbe: ["STATUS", "C01PacketPing"], pingKeepAliveAck: "C00PacketKeepAlive", chat: "C01PacketChatMessage",
-  attack: "C02PacketUseEntity", attackPlayer: "C02PacketUseEntity", animUse: "C02PacketUseEntity", vehUse: "C02PacketUseEntity", vehHit: "C02PacketUseEntity", input: "C03PacketPlayer",
+  attack: "C02PacketUseEntity", attackPlayer: "C02PacketUseEntity", animUse: "C02PacketUseEntity", vehUse: "C02PacketUseEntity", vehHit: "C02PacketUseEntity", input: "C03PacketPlayer", posLookAck: "C06PacketPlayerPosLook", // b101 horse101: a new serverbound kind
   dig: "C07PacketPlayerDigging", achDrop: "C07PacketPlayerDigging", sleepLeave: "C0BPacketEntityAction", horseJump: "C0BPacketEntityAction", horseInventory: "C0BPacketEntityAction",
   invClose: "C0DPacketCloseWindow", closeWindow: "C0DPacketCloseWindow", invClick: "C0EPacketClickWindow", clickWindow: "C0EPacketClickWindow", beaconPayment: "C0EPacketClickWindow",
   invAck: "C0FPacketConfirmTransaction", confirmTransaction: "C0FPacketConfirmTransaction", invCreative: "C10PacketCreativeInventoryAction", stationEnchant: "C11PacketEnchantItem",

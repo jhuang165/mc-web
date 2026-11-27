@@ -92,7 +92,7 @@ export class DedicatedClient {
   apply(message) {
     // b61 mpnether: S07 Respawn plus the new world. Messages that follow are buffered until the host has swapped worlds and calls start().
     if (message.type === 'dimRespawn') { this.ready = false; this.pending = null; this.onDimRespawn(message); return; }
-    if (message.type === 'dismount') this.onDismount(message); // b99 horse99: S08 + S1B + S08 (client-dismount.js)
+    if (message.type === 'dismount') { this.onDismount(message); if (this.socket) for (let i = 0; i < 2; i++) this.send({ type: 'posLookAck', x: message.x, y: message.y, z: message.z, yaw: message.yaw, pitch: message.pitch }); } // b101 horse101: C06 reply to each of the two S08 // b99 horse99: S08 + S1B + S08 (client-dismount.js)
     if (message.type === 'dragonCredits') this.onDragonCredits?.(message); // b64 mpdragon
     if (message.type === 'abilities') this.onAbilities?.(message); // b100 abilities100: S39 (speeds, flags)
     if (message.type === 'boltSpawn') this.onBolt?.(message); // b66 mplightning: S2C spawn global entity (a lightning bolt)

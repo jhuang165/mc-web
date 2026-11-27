@@ -293,6 +293,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
         }
         simulation.admin.activity(id, m, undefined, m.type !== 'chat' || chatSendAllowed(simulation.players.get(id))); // b68 mpadmin: idle clock (/setidletimeout)
         if (m.type === 'input') { if (!simulation.input(id, m)) ws.close(1008, 'Invalid input'); }
+        else if (m.type === 'posLookAck') { /* b101 horse101: C06 reply to S08, counted by /netstat above; the pose is the input message's */ }
         else if (m.type === 'edit') simulation.queueEdit(id, m);
         else if (m.type === 'pingKeepAliveAck') pings.ack(id, m.id); // b68 mpping: C00 KeepAlive
         else if (m.type === 'settingsClient') { ws.settingsId = id; if (!applyClientSettings(simulation.players.get(id), m)) throw new Error('Invalid client settings'); } // b72 mpsettings: the whole C15
