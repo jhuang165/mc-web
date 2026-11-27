@@ -4,6 +4,7 @@
 //      empty list is harmless: queries only `get` a cell and add its indices; the Map is dropped when it holds far more cells than entities).
 //   2. entity-portal.js step: the entity's last position is rewritten in place (one record per entity, not one per step) and the collision box is a scratch pair, not a new array.
 import { fast90 } from "./mpperf90-fast.js";
+import { fast101 } from "./mpperf101-fast.js"; // b101 mpperf101: kept cells keep their lists
 
 export const fast93 = { mode: (typeof process !== "undefined" && process.env?.MC_MPPERF93) || "on" };
 export const fail93 = (what) => { throw new Error(`mpperf93 ${what} mismatch`); };
@@ -16,10 +17,10 @@ export function recycleOf93(spare, list) {
   const pool = spare.pool ?? [], ents = spare.ents;
   let same = ents.length === list.length && spare.idxOf.size === list.length;
   for (let i = 0; same && i < list.length; i++) if (ents[i] !== list[i]) same = false;
-  let cells = null;
-  if (same && spare.cells.size <= 64 + 4 * list.length) { cells = spare.cells; cells.forEach((c) => { c.length = 0; }); }
+  let cells = null, kept = false;
+  if (same && spare.cells.size <= 64 + 4 * list.length) { cells = spare.cells; if (fast101.mode === "off") cells.forEach((c) => { c.length = 0; }); else kept = true; } // b101: a kept cell holds last tick's indices; the constructor moves the changed ones
   else spare.cells.forEach((c) => { c.length = 0; pool.push(c); });
-  return { ents, keyAt: spare.keyAt, buf: spare.buf, out: spare.out ?? [], pool, idxOf: same ? spare.idxOf : null, cells };
+  return { ents, keyAt: spare.keyAt, buf: spare.buf, out: spare.out ?? [], pool, idxOf: same ? spare.idxOf : null, cells, kept };
 }
 // verify: the kept map is the index map a fresh scan would build.
 export function checkIdx93(g, list) {
