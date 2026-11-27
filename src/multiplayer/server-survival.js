@@ -195,6 +195,7 @@ export class ServerSurvival {
   respawn(p) {
     if (!p?.dead) return false;
     this.sim.vehicles?.release?.(p); // b96 horse96: the dead rider's link ends with the removed EntityPlayerMP (ahb.f, then ahb.h's unlink): the respawned player is nowhere near the mount
+    this.sim.playerTracker?.respawned?.(p.id); // b101 console101: a new EntityPlayerMP means a new tracker entry
     this.leaveBody(p); // b89 credit89: before anything is reset, the dead entity's TNT stays his
     const s = p.survival, spawn = this.sim.sleep.respawnPoint(p); // b66 mpsleep: the bed or /spawnpoint verified in the Overworld (ServerConfigurationManager.respawnPlayer), else the world spawn
     Object.assign(s, { health: 20, food: 20, saturation: 5, exhaustion: 0, timer: 0, air: 300, fire: 0, absorption: 0, hurtTicks: 0, hurtAmount: 0, protection: 60, combat: new CombatTracker(), lastDamage: '', lastSource: null, lastAttacker: null });
