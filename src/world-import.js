@@ -25,7 +25,7 @@ const RUNTIME_FIELDS = [
 ];
 
 const int = Number.isInteger, finite = Number.isFinite;
-const stored = (v) => v.filter((e) => int(e?.id) && int(e?.lvl)).slice(0, 64).map((e) => ({ id: e.id, lvl: e.lvl }));
+const stored = (v) => v.filter((e) => int(e?.id) && int(e?.lvl)).slice(0, 64).map((e) => ({ id: e.id, lvl: e.lvl, ...(e.raw && typeof e.raw === "object" && !Array.isArray(e.raw) ? { raw: structuredClone(e.raw) } : {}) })); // b101 tiles101: entry raw (tiles100) survives an import
 const SPAWNER_NUMBERS = ["Delay", "MinSpawnDelay", "MaxSpawnDelay", "SpawnCount", "MaxNearbyEntities", "RequiredPlayerRange", "SpawnRange"];
 // Generated-structure state (structure-simulation.js) is rebuilt field by field: a record that is
 // not the expected shape is dropped, and an export without these fields gets the generation's

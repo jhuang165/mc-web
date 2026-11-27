@@ -17,6 +17,8 @@ import { smeltExperience } from '../experience.js';
 import { adoptChest, chestFacing, migrateChestFacing } from '../chest.js';
 import { newEnderTile } from '../chest-blocks.js';
 import { forgetTableName } from '../tile-names.js'; // b75
+import { readItemTags } from '../item-tags.js'; // b101 tiles101
+import { readFireworkTags } from '../fireworks.js';
 
 export const FURNACE = 14;
 const EXTRAS = ['enchantments', 'storedEnchantments', 'stored', 'displayName', 'repairCost', 'unbreakable', 'lore', 'color', 'pages', 'author', 'title']; // b66 mpbooks: the book tags (books.js)
@@ -34,6 +36,11 @@ export function cleanStack(s) {
   if (validRawDamage(s.rawDamage)) extra.rawDamage = s.rawDamage; // b82 pots82: a native damage the catalogue has no variant for (inventory.js read keeps it too)
   if (extra.pages !== undefined || extra.author !== undefined || extra.title !== undefined) { if (!validBookExtra(extra)) return undefined; }
   else if (JSON.stringify(extra).length > 1500) return undefined;
+  // b101 tiles101: the rest of the stack's NBT as the client holds it (a Creative slot, a window click): lore, skull, potion effects, map_is_scaling, Explosion / Fireworks and
+  // the raw forms (rawForms, extraRaw, displayExtraRaw, loreRaw, skullRaw) are validated by the same readers a save uses; natively the server keeps the NBT exactly. Bounded in size.
+  const tags = { ...readFireworkTags(s), ...readItemTags(s) };
+  if (JSON.stringify(tags).length > 32767) return undefined;
+  Object.assign(extra, tags);
   return makeStack(s.id, s.count, damage, undefined, extra);
 }
 export const wireStack = s => (s ? JSON.parse(JSON.stringify(s)) : null);
