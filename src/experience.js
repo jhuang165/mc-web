@@ -19,7 +19,7 @@ export class Experience {
  static readProgress(v){if(typeof v==='number')return Math.fround(v);if(v==='NaN'||v===null)return NaN;if(v==='Infinity')return Infinity;if(v==='-Infinity')return -Infinity;return undefined;}
  update(){let points=Math.max(0,this.total);this.level=0;while(points>=levelCost(this.level)){points-=levelCost(this.level++);}this.points=points;this.progress=points/levelCost(this.level);}
  // b100 entnbt100 (bytecode-read yz.v, yz.s): addExperience first adds n to the Score (a wrapping int add, DataWatcher 18), then clamps n to MAX_INT - experienceTotal, adds it to the total (int), and the bar by (float)n / (float)cap; each full bar is a(1): XpLevel + 1 (int, below 0 resets level, bar and total to 0).
- add(n){n=Number.isFinite(n)?Math.max(0,Math.min(2147483647,Math.floor(n))):0;this.score=(this.score+n)|0;const room=(2147483647-this.total)|0,m=n>room?room:n;this.total=(this.total+m)|0;if(!this.levelState){this.update();return;}const f=Math.fround;this.progress=f(this.progress+f(f(m)/f(levelCost(this.level))));for(let guard=0;this.progress>=1&&Number.isFinite(this.progress)&&guard<1000000;guard++){this.progress=f(f(this.progress-1)*f(levelCost(this.level)));this.level=(this.level+1)|0;if(this.level<0){this.level=0;this.progress=0;this.total=0;break;}this.progress=f(this.progress/f(levelCost(this.level)));}this.points=Math.floor(this.progress*levelCost(this.level));}
+ add(n){n=Number.isFinite(n)?Math.max(0,Math.min(2147483647,Math.floor(n))):0;this.score=(this.score+n)|0;const room=(2147483647-this.total)|0,m=n>room?room:n;this.total=(this.total+m)|0;if(!this.levelState){this.update();return;}const f=Math.fround;this.progress=f(this.progress+f(f(m)/f(levelCost(this.level))));if(this.progress===Infinity){const e=infiniteBarEnd(this.level);this.level=e.level;this.progress=e.progress;if(e.reset)this.total=0;}for(let guard=0;this.progress>=1&&Number.isFinite(this.progress)&&guard<1000000;guard++){this.progress=f(f(this.progress-1)*f(levelCost(this.level)));this.level=(this.level+1)|0;if(this.level<0){this.level=0;this.progress=0;this.total=0;break;}this.progress=f(this.progress/f(levelCost(this.level)));}this.points=Math.floor(this.progress*levelCost(this.level));}
  // EntityPlayer.addExperienceLevel: paying an anvil cost changes the level, retaining
  // experienceTotal and the fractional bar. Those fields no longer derive from total.
  addLevels(n){if(!Number.isInteger(n))return;this.level=(this.level+n)|0;if(this.level<0){this.level=0;this.progress=0;this.total=0;}this.levelState=true;this.points=Math.floor(this.progress*levelCost(this.level));}
@@ -215,4 +215,26 @@ export function xpBarFill(progress, level) {
   if (!(xpBarCap(level) > 0)) return 0;
   const x = Math.fround(Math.fround(progress) * 183), w = Number.isNaN(x) ? 0 : x >= 2147483647 ? 2147483647 : x <= -2147483648 ? -2147483648 : Math.trunc(x);
   return w > 0 ? w : 0;
+}
+
+// b101 entnbt101 (bytecode-read yz.v / yz.a(I) / yz.bP): native `while (bH >= 1F) { bH = (bH - 1F) * cap; addExperienceLevel(1); bH /= cap(new level); }` does NOT hang on an Infinity XpP: the
+// bar stays +Infinity while the cap is above 0 (Inf * c, Inf / c), and ends at the first level whose int-wrapped cap is below 0 (Inf / negative = -Infinity, the loop test fcmpl fails). A
+// negative cap flips the sign each step (Inf * negative = -Inf, -Inf / negative = +Inf) until the cap is 0 or above (-Inf / c = -Infinity); a cap of exactly 0 gives Inf * 0 = NaN, which also
+// ends the loop (NaN fails fcmpl). If the level counter passes MAX_INT first, yz.a(I) sees a negative level and resets level, bar and total to 0, so the bar is 0 and the loop ends. Native needs
+// about 3e8 iterations for this; the port jumps to the end state (the cap is plain int arithmetic with a step of 7 from level 30, so the crossing level is a division).
+// Returns {level, progress, reset} for a loop entered at `level` with progress +Infinity.
+export function infiniteBarEnd(level) {
+  const TWO31 = 2147483648, TWO32 = 4294967296, MAX = 2147483647;
+  const wrapped = L => (((62 + (L - 30) * 7) % TWO32) + TWO32) % TWO32; // cap(L) mod 2^32, for L >= 30
+  if (level + 1 < 0) return { level: 0, progress: 0, reset: true }; // a negative saved level: yz.a(1) still leaves it below 0, which resets level, bar and total
+  const cap = xpBarCap(level);
+  const cross = (from, negative) => { // first level >= from (>= 30) whose cap is negative / not negative
+    const r = wrapped(from);
+    if (negative) return r >= TWO31 ? from : from + Math.ceil((TWO31 - r) / 7);
+    return r < TWO31 ? from : from + Math.ceil((TWO32 - r) / 7);
+  };
+  if (cap === 0) return level + 1 > MAX ? { level: 0, progress: 0, reset: true } : { level: level + 1, progress: NaN, reset: false };
+  const L = cap > 0 ? cross(Math.max(level + 1, 30), true) : cross(level + 1, false);
+  if (L > MAX) return { level: 0, progress: 0, reset: true };
+  return { level: L, progress: -Infinity, reset: false };
 }

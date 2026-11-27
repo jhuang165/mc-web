@@ -36,7 +36,10 @@ export function readActiveEffects(entity) {
   const list = tagValue(entity, 'ActiveEffects', NBT.LIST);
   if (list?.elementType !== NBT.COMPOUND) return [];
   // b94 entnbt94 (executed, entnbt94-reference.json): PotionEffect.readCustomPotionEffectFromNBT drops an Id with no Potion (0, 24 to 31, 32 and up, negative); 1 to 23 exist in 1.7.10
-  return list.items.filter((e) => { const id = tagValue(e, 'Id', NBT.BYTE, 0); return id >= 1 && id <= 23; }).map((e) => ({ id: tagValue(e, 'Id', NBT.BYTE, 0), amplifier: tagValue(e, 'Amplifier', NBT.BYTE, 0), duration: tagValue(e, 'Duration', NBT.INT, 0), ...(tagValue(e, 'Ambient', NBT.BYTE, 0) !== 0 ? { ambient: true } : {}) }));
+  // b101 entnbt101 (executed, Entnbt101Probe): EntityLivingBase.readEntityFromNBT puts each effect into the activePotionsMap by id, so a second entry with the same Id replaces the first (the last one wins whatever its amplifier or duration)
+  const byId = new Map();
+  for (const e of list.items) { const id = tagValue(e, 'Id', NBT.BYTE, 0); if (id >= 1 && id <= 23) byId.set(id, e); }
+  return [...byId.values()].map((e) => ({ id: tagValue(e, 'Id', NBT.BYTE, 0), amplifier: tagValue(e, 'Amplifier', NBT.BYTE, 0), duration: tagValue(e, 'Duration', NBT.INT, 0), ...(tagValue(e, 'Ambient', NBT.BYTE, 0) !== 0 ? { ambient: true } : {}) }));
 }
 
 // `convertItem(compound)` is region-import's item converter (null for an unknown stack). Returns null when the id is not
@@ -97,8 +100,9 @@ export function leashRawTag(raw) {
 }
 export const GEAR_NBT_KEYS = ['CustomName', 'CustomNameVisible', 'PersistenceRequired', 'Leashed', 'Leash'];
 export function gearNbtFields(tag, shiftX = 0, shiftZ = 0) {
-  const out = {}, name = String(tagValue(tag, 'CustomName', NBT.STRING, '')).slice(0, 64);
-  if (name) { out.customName = name; if (tagValue(tag, 'CustomNameVisible', NBT.BYTE, 0)) out.customNameVisible = true; }
+  const out = {}, name = String(tagValue(tag, 'CustomName', NBT.STRING, '')).slice(0, 32767); // b101 entnbt101 (executed): a name of any length up to the NBT string limit is kept (was cut at 64), and CustomNameVisible is read on its own (an unnamed mob keeps the 1b)
+  if (name) out.customName = name;
+  if (tagValue(tag, 'CustomNameVisible', NBT.BYTE, 0)) out.customNameVisible = true;
   if (tagValue(tag, 'PersistenceRequired', NBT.BYTE, 0)) out.persistent = true;
   if (tagValue(tag, 'Leashed', NBT.BYTE, 0)) {
     // sw.bP (bytecode-read, probed leads2-reference.json leadRead): a UUIDMost/UUIDLeast pair of two long tags wins over X/Y/Z (a wrong UUID is not

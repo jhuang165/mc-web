@@ -76,7 +76,7 @@ function modifiersFor(e, javaId, name, base) {
   const out = stored.map((m) => ({ name: m.name, amount: m.amount, operation: m.operation, uuid: m.uuid }));
   if (name === N.S && isZombieLike(javaId) && (e.growingAge ?? 0) < 0 && !out.some((m) => m.uuid === BABY_BOOST.uuid)) out.push({ name: BABY_BOOST.name, amount: BABY_BOOST.amount, operation: BABY_BOOST.operation, uuid: BABY_BOOST.uuid });
   if (!stored.length) {
-    if (name === N.F && Number.isFinite(e.followRange) && base > 0 && Math.abs(e.followRange - base) > 1e-9) out.push({ name: SPAWN_BONUS, amount: e.followRange / base - 1, operation: 1, uuid: deriveUuid(`followRange|${e.uuid ?? e.id ?? ""}`) });
+    if (name === N.F && Number.isFinite(e.followRange) && base > 0 && Math.abs(e.followRange - Math.min(2048, base)) > 1e-9) /* b101 entnbt101 (executed): a saved base above the 2048 maximum is only clamped, it is no spawn bonus */ out.push({ name: SPAWN_BONUS, amount: e.followRange / base - 1, operation: 1, uuid: deriveUuid(`followRange|${e.uuid ?? e.id ?? ""}`) });
     // The final value less the base (an imported base override already counts once).
     if (name === N.K && Number.isFinite(e.knockbackResistance) && Math.abs(e.knockbackResistance - Math.min(1, Math.max(0, base))) > 1e-12) /* the final value is the base clamped to 0..1 (b97: a saved base above 1 stays the base) */ out.push({ name: SPAWN_BONUS, amount: e.knockbackResistance - base, operation: 0, uuid: deriveUuid(`knockback|${e.uuid ?? e.id ?? ""}`) });
   }
@@ -125,7 +125,7 @@ export function livingAttributeFields(compound, record, javaId) {
     if (Number.isFinite(base)) bases[name] = base;
     const mods = nbtGet(a, "Modifiers", NBT.LIST);
     for (const m of mods?.elementType === NBT.COMPOUND ? mods.items : []) {
-      const amount = nbtGet(m, "Amount", NBT.DOUBLE), operation = nbtGet(m, "Operation", NBT.INT);
+      const amount = nbtGet(m, "Amount", NBT.DOUBLE, 0), operation = nbtGet(m, "Operation", NBT.INT, 0); // b101 entnbt101 (executed): a missing or non-numeric Amount / Operation reads as 0 (getDouble / getInteger default) and the modifier is kept
       if (!Number.isFinite(amount) || ![0, 1, 2].includes(operation) || modifiers.length >= 32) continue;
       const most = nbtGet(m, "UUIDMost", NBT.LONG), least = nbtGet(m, "UUIDLeast", NBT.LONG);
       const uuid = longsUuid(most ?? 0n, least ?? 0n); // b97 entnbt97 (executed): a missing UUIDMost / UUIDLeast reads as 0 (getLong default), so the modifier keeps the zero UUID
