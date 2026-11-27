@@ -161,6 +161,22 @@ Batch 100 (2026-11-23, ten tracks in `../wt100-<name>` on `batch100-<track>100`,
 - Verification: one full `npm test` on the merged tree: 11000/11001; the one failure (`gui-screens.test.js` death-screen layout after spcopy100's `main.js` branch) and a build break (mpobjects100's `server-ghost-items.js` pulled `node:zlib` into the browser bundle through `net-packet-ids.js`) fixed in lead commit 814a2453d, then the failing and related tests (22/22) and the build rerun ok. Bridge tests ok. No browser checks.
 - Open: "Still open from batch 100" in `public/research/remaining-gaps.md`.
 
+Batch 101 (2026-11-27, ten tracks in `../wt101-<name>` on `batch101-<track>101`, cut from 776d5f8a4, merged --no-ff on `batch101-lead`; track agents ran on Sonnet; shared rules `../artifacts/b101-lead/track-rules.md`; lead note `b101-lead-track.md`; no browser checks or full test runs in tracks):
+- 0.130.0, by track (details in the `*-b101-track.md` notes and "Done in batch 101" in `public/research/remaining-gaps.md`):
+  - horse101: the `dismount` S08 carries yaw and pitch; the client answers each S08 with a C06 `posLookAck`.
+  - abilities101: the client takes S39 flags verbatim (`src/ability-flags.js`); server `/gamemode` sends S39 and counts S2B.
+  - console101: a respawn makes a new tracker entry (S13 plus a new first pass); hurt S19(2) and wake S0B(2) counted; the `sv.ba` swing gate (`server-swing.js`).
+  - mpobjects101: ghost-disc tracker cadence (`TrackerCadence101Probe`), end-to-end disconnect test, villager 12/13/14 executed; the birth heart is on the child.
+  - credit101: creeper disc for any skeleton kill, pigman villager conversion, deflected ghast ball credits the puncher, own splash is indirect magic.
+  - mpperf101: kept FineGrid cell lists and `tickMobs` order arrays behind `MC_MPPERF101=on|off|verify`; hashes unchanged.
+  - spcopy101: the death screen does not pause the world (code-read `main.js` lines).
+  - tiles101: client-sent stacks keep raw forms on the server; `world-import.js` cart items keep entry `raw`; item frames deep-copy.
+  - entnbt101: Infinity XpP end state (`Entnbt101XpProbe`), aria cap; `Entnbt101Probe` mob NBT fixes (CustomName length, CustomNameVisible, effect Id dedupe, huge health export, string Amount, followRange bonus).
+  - mobrec101: witch knockback `Math.random()` recorded and replayed (two records restored); 20 executed golem gating records (`VillageGate101Probe`).
+- Lead: merges reviewed file by file; no conflicts. Lead fix 504db175f drops 14 stray `*.test.js-E` sed backups committed by mpperf101.
+- Verification: one full `npm test` on the merged tree: 11071/11071. Build and bridge tests ok. No browser checks.
+- Open: "Still open from batch 101" in `public/research/remaining-gaps.md`.
+
 Batch 99 (2026-11-23, ten tracks in `../wt99-<name>` on `batch99-<track>99`, cut from 8df1376b7, merged --no-ff on `batch99-lead`; track agents ran on Sonnet; shared rules `../artifacts/b99-lead/track-rules.md`; lead note `b99-lead-track.md`; no browser checks or full test runs in tracks):
 - 0.128.0, by track (details in the `*-b99-track.md` notes and "Done in batch 99" in `public/research/remaining-gaps.md`):
   - horse99: the client applies the `dismount` message as S08, S1B, S08 (`client-dismount.js`); the probe seat height gap was a foal versus an adult (`Horse99Probe`).
