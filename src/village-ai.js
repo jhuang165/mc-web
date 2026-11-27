@@ -220,7 +220,8 @@ export function villageTasks(K) {
       if (!child) return;
       mate.e.growingAge = 6000;
       m.e.growingAge = 6000;
-      villagerParticles(m, "heart");
+      // up.g (bytecode-read, executed in mpobjects101-reference.json): World.setEntityState(CHILD, 12), not the parent's; the parent's 12s are the 1-in-35 rolls of updateTask
+      ew.villageBurst?.("heart", child, m.ai.size?.(child) ?? { width: m.width, height: m.height }, ew.statusRand?.(child, visualRandom(child)) ?? visualRandom(child));
     }
   }
 
