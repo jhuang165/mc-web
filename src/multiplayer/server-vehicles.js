@@ -288,7 +288,7 @@ export class ServerVehicles {
     Object.assign(p.previous, { x: m.rider.x, y: m.rider.y, z: m.rider.z });
     Object.assign(p.velocity, { x: 0, y: 0, z: 0 });
     Object.assign(p, { grounded: false, fallDistance: 0, landedFall: 0 });
-    if (mounted) (p.dimOut ??= []).push({ type: 'dismount', x: m.rider.x, y: m.rider.y, z: m.rider.z, vehicle: m.key ?? null });
+    if (mounted) (p.dimOut ??= []).push({ type: 'dismount', x: m.rider.x, y: m.rider.y, z: m.rider.z, yaw: p.yaw, pitch: p.pitch, vehicle: m.key ?? null }); // b101 horse101: S08 carries the player's own yaw and pitch (nh.a(x, y, z, mw.y, mw.z))
     p.mount = null;
     this.host.achievements?.stopRiding(p);
   }

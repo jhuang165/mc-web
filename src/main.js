@@ -993,7 +993,7 @@ async function joinMultiplayer(settings) {
     onStats: message => { applyStatsMessage(stats, message); const w = statsWaiter; statsWaiter = null; w?.(); }, // b63 mpstats: S37 fills the Statistics screen
     onChat: (message) => printChat(chatDisplay(message)), // S02PacketChat: the component JSON the server sent, else the legacy line
     onPlayerOp: applyServerPlayerOp,
-    onDismount: message => applyDismount(message, { position, previous, velocity, motion, setRiding: on => { mpRiding = on; } }), // b99 horse99: S08 / S1B / S08
+    onDismount: message => applyDismount(message, { setLook: (y, p) => { yaw = y; pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, p)); }, position, previous, velocity, motion, setRiding: on => { mpRiding = on; } }), // b99 horse99: S08 / S1B / S08
     onDimRespawn: message => multiplayerDimension(client, settings, message), // b61 mpnether: S07 Respawn, the server moved this player to another dimension
     onHealthFx: applyHealthFx,
     onHealth: message => { const r = applyHealthMessage(survival, message); if (r.hotbar) renderHotbar(); renderVitals(); if (r.died && screen !== 'dead') die(); }, // S06: the server's health, food and saturation; health 0 opens the death screen

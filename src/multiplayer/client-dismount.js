@@ -11,8 +11,10 @@ export function applyDismount(message, state) {
     state.position.set(x, y, z);
     state.previous.set(x, y, z);
   };
-  s08();
+  const { yaw, pitch } = message;
+  const look = () => { if (Number.isFinite(yaw) && Number.isFinite(pitch)) state.setLook?.(yaw, pitch); }; // b101 horse101: S08's yaw and pitch (absolute)
+  s08(); look();
   state.setRiding(false); // S1B
-  s08();
+  s08(); look();
   return true;
 }

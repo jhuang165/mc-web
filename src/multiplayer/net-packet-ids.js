@@ -24,6 +24,7 @@ export const SERVERBOUND = {
   pingKeepAliveAck: 0, // C00PacketKeepAlive
   chat: 1, // C01PacketChatMessage
   attack: 2, attackPlayer: 2, animUse: 2, vehUse: 2, vehHit: 2, // C02PacketUseEntity
+  posLookAck: 6, // b101 horse101: the C06 the client answers every S08 with (bjb.a(fu))
   input: 3, // C03PacketPlayer family (3-6): the port sends its controls and look each tick, the server moves the player
   dig: 7, achDrop: 7, // C07PacketPlayerDigging (status 0-2; 3/4 drop)
   edit: (m) => (m.place ? 8 : 7), // C08PacketPlayerBlockPlacement / C07 status 0
@@ -329,7 +330,7 @@ const CLIENT_BYTES = {
 };
 const SERVER_BYTES = {
   pingProbe: 9, pingKeepAliveAck: SV[0],
-  chat: (m) => 1 + stringSize(m.text ?? ''), input: SV[6],
+  chat: (m) => 1 + stringSize(m.text ?? ''), input: SV[6], posLookAck: SV[6],
   attack: SV[2], attackPlayer: SV[2], animUse: SV[2], vehUse: SV[2], vehHit: SV[2], dig: SV[7], achDrop: SV[7],
   edit: (m) => (m.place ? SV[8] : SV[7]), use: (m) => (m.active ? SV[8] : SV[7]),
   sleepLeave: SV[11], horseJump: SV[11], horseInventory: SV[11], invClose: SV[13], closeWindow: SV[13],
