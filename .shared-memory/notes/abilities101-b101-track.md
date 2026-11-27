@@ -15,7 +15,7 @@
 ## Verification
 - `node --test --test-concurrency=2 src/abilities101-b101.test.js`: 4 pass; with `server-broadcast.js` reverted 3 pass, 1 fail (S39 before S2B).
 - Related run, 55 files naming net-packet-ids / server-broadcast / abilities / playerOp / setGameMode / player-physics: 493 tests, 492 pass, 1 fail (`cmd-exec-b83` /summon Spider air), which passes alone (4/4): flake.
-- `npm run build`: see final reply.
+- `npm run build`: ok (once, no errors shown).
 
 ## Follow-ups
 - Item 3 (adventure on the MP client) not started.
