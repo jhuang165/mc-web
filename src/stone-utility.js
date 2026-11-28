@@ -164,6 +164,7 @@ export const potContentsOfMeta = (meta) => { const c = POT_META_CONTENTS[meta & 
 // item the client does not draw (b81), { id: 0, damage: 0, item, data, stack? }: `item`/`data` are the tile's Item and Data, `stack` the port stack of
 // that ItemStack (absent when the port has no such item).
 export function potNbtOf(content) {
+  if (content?.empty) return { Item: 0, Data: content.data | 0 }; // b102: an empty tile writes the Data it read
   if (content && Number.isInteger(content.item)) return { Item: content.item, Data: content.data | 0 }; // b81: an undrawn item writes back unchanged
   const native = content ? potPlantOf(content.id, content.damage) : null;
   // `data` is the exact native TileEntityFlowerPot Data a pot kept from an import or save; the plant drawn and dropped stays the one `damage` names.
@@ -215,6 +216,8 @@ export const potPlantTinted = (content, potMeta) => !!content && potPlantOf(cont
 // b84 cmdfix84: a pot tile whose readFromNBT left Item 0 (or an unregistered id). BlockFlowerPot.createNewTileEntity (ald.a(ahb,I), bytecode-read) makes the tile from the
 // block metadata's plant, so an untagged /setblock keeps the meta plant; a tag with no registered Item reads over it and leaves the tile empty whatever the metadata is.
 export const EMPTY_POT = Object.freeze({ id: 0, damage: 0, empty: true });
+// b102: an empty tile still keeps the Data it read (TileEntityFlowerPot.readFromNBT sets Data whatever Item is, and writeToNBT writes it back).
+export const emptyPot = (data) => (Number.isInteger(data) && data !== 0 ? { id: 0, damage: 0, empty: true, data } : EMPTY_POT);
 export const potKey = (x, y, z) => `${x},${y},${z}`;
 // The pot's plant: the explicit record (world.pots), or the one its metadata implies.
 export function potContents(world, x, y, z) {
@@ -227,7 +230,7 @@ const validStack = (s) => !!s && Number.isInteger(s.id) && s.id > 0 && Number.is
 export const validPotRecord = (p) => !!p && (p.empty === true || (Number.isInteger(p.item) ? nativeItemRegistered(p.item) && Number.isInteger(p.data) : !!potPlantOf(p.id, p.damage)));
 // A copy of a record with only the fields above (the drop stack copied too).
 function potRecord(content) {
-  if (content.empty) return { id: 0, damage: 0, empty: true };
+  if (content.empty) return { id: 0, damage: 0, empty: true, ...(Number.isInteger(content.data) && content.data !== 0 ? { data: content.data } : {}) };
   if (Number.isInteger(content.item)) {
     const s = content.stack;
     return { id: 0, damage: 0, item: content.item, data: content.data | 0, ...(validStack(s) ? { stack: { id: s.id, damage: s.damage, ...(s.rawDamage ? { rawDamage: s.rawDamage } : {}) } } : {}) };

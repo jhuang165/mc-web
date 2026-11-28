@@ -97,6 +97,12 @@ export function writeContainerTile(name,e,x,y,z,{report={unmappedItems:0},droppe
  if(typeof e.name==='string'&&(e.name.length>0||name==='dispensers'))n.CustomName=str(e.name); // a dispenser/dropper counts "" as named (k_ is name != null, probed)
  return new Map(Object.entries(n));
 }
+// TileEntitySkull.writeToNBT (bytecode-read, item-tags2-reference.json): SkullType and Rot bytes and the Owner GameProfile compound; 1.7.10 writes no ExtraType (skull-profile.js).
+export function skullTileNbt(e,x,y,z){const n=new Map(Object.entries({id:str('Skull'),x:int(x),y:int(y),z:int(z),SkullType:byte(e.rawType??e.type??0),Rot:byte(e.rawRot??e.rot??0)}));const owner=skullOwnerEntry(e);if(owner)n.set('Owner',owner);return n;}
+// TileEntityBeacon.writeToNBT: Primary, Secondary, Levels (ints).
+export const beaconTileNbt=(e,x,y,z)=>new Map(Object.entries({id:str('Beacon'),x:int(x),y:int(y),z:int(z),Primary:int(e.primary|0),Secondary:int(e.secondary|0),Levels:int(e.levels|0)}));
+// TileEntityMobSpawner.writeToNBT (MobSpawnerBaseLogic.b): the spawner JSON fields as shorts (EntityId a string), SpawnData / SpawnPotentials re-read through the logic.
+export function spawnerTileNbt(e,x,y,z){const n={id:str('MobSpawner'),x:int(x),y:int(y),z:int(z)};for(const [k,v] of Object.entries(e))if(!['x','y','z','SpawnData','SpawnPotentials'].includes(k))n[k]=typeof v==='string'?str(v):short(v);if(e.SpawnData||e.SpawnPotentials){const s=makeSpawner(0,0,0);readSpawnerNBT(s,e);const w=spawnerPairs(s);for(const k of ['SpawnData','SpawnPotentials'])if(w[k])n[k]=pairTag(w[k]);}return new Map(Object.entries(n));}
 function payload(state,ox,oz,report,blockAt,dimension=0) {
  exportDimension=dimension;try{return payloadIn(state,ox,oz,report,blockAt);}finally{exportDimension=0;}
 }
@@ -210,9 +216,9 @@ function payloadIn(state,ox,oz,report,blockAt) {
  // TileEntitySign.writeToNBT: Text1-Text4 (signs.js).
  for(const {value:e} of state.signs??[])tiles.push(new Map(Object.entries({id:str('Sign'),x:int(e.x+ox),y:int(e.y),z:int(e.z+oz),Text1:str(e.text?.[0]??''),Text2:str(e.text?.[1]??''),Text3:str(e.text?.[2]??''),Text4:str(e.text?.[3]??'')})));
  // TileEntitySkull.writeToNBT (bytecode-read, item-tags2-reference.json): SkullType and Rot bytes and the Owner GameProfile compound; 1.7.10 writes no ExtraType (skull-profile.js).
- for(const {value:e} of state.skulls??[]){const n=new Map(Object.entries({id:str('Skull'),x:int(e.x+ox),y:int(e.y),z:int(e.z+oz),SkullType:byte(e.rawType??e.type??0),Rot:byte(e.rawRot??e.rot??0)}));const owner=skullOwnerEntry(e);if(owner)n.set('Owner',owner);tiles.push(n);}
- for(const {value:e} of state.beacons??[])tiles.push(new Map(Object.entries({id:str('Beacon'),x:int(e.x+ox),y:int(e.y),z:int(e.z+oz),Primary:int(e.primary|0),Secondary:int(e.secondary|0),Levels:int(e.levels|0)}))); // pyramid.js
- for(const {value:e} of state.spawners??[]) {const n={id:str('MobSpawner'),x:int(e.x+ox),y:int(e.y),z:int(e.z+oz)};for(const [k,v] of Object.entries(e))if(!['x','y','z','SpawnData','SpawnPotentials'].includes(k))n[k]=typeof v==='string'?str(v):short(v);if(e.SpawnData||e.SpawnPotentials){const s=makeSpawner(0,0,0);readSpawnerNBT(s,e);const w=spawnerPairs(s);for(const k of ['SpawnData','SpawnPotentials'])if(w[k])n[k]=pairTag(w[k]);}tiles.push(new Map(Object.entries(n)));}
+ for(const {value:e} of state.skulls??[])tiles.push(skullTileNbt(e,e.x+ox,e.y,e.z+oz));
+ for(const {value:e} of state.beacons??[])tiles.push(beaconTileNbt(e,e.x+ox,e.y,e.z+oz)); // pyramid.js
+ for(const {value:e} of state.spawners??[])tiles.push(spawnerTileNbt(e,e.x+ox,e.y,e.z+oz));
  // TileEntityPiston.writeToNBT: blockId, blockData, facing, progress, extending (original ids; renderHead is not saved by Java).
  for(const w of state.pistons??[]){const e=w.value??w;tiles.push(new Map(Object.entries({id:str('Piston'),x:int(e.x+ox),y:int(e.y),z:int(e.z+oz),blockId:int(e.block),blockData:int(e.meta),facing:int(e.facing),progress:float(e.progress??0),extending:byte(e.extending?1:0)})));}
  // TileTicks (tile-ticks.js): {i, x, y, z, t, p} per pending tick, in tree order (t, p, then the list and its order); a fluid keeps the original id
