@@ -12,6 +12,7 @@
 // A record keeps what the port models (maxHealth, followRange, knockbackResistance, modifiers, horse speed and jump) and `attributeBases` for any
 // other base that differs from the class default, so export -> import -> export is stable.
 import { NBT } from "./nbt.js";
+import { javaFloat } from "./options-txt.js";
 import { nbtGet } from "./nbt-get.js";
 import { longsUuid, uuidLongs, newUuid, deriveUuid } from "./entity-uuid.js";
 import { cleanModifiers, modifiedValue, LEADER_BONUS } from "./mob-attributes.js";
@@ -53,6 +54,31 @@ export const JAVA_ATTRIBUTE_BASES = Object.freeze(Object.fromEntries(Object.entr
 export const REINFORCEMENTS = "zombie.spawnReinforcements";
 export const BABY_BOOST = Object.freeze({ name: "Baby speed boost", attribute: "generic.movementSpeed", amount: 0.5, operation: 1, uuid: "b9766b59-9566-4402-bc1f-2ee2a276d836" });
 export const SPAWN_BONUS = "Random spawn bonus";
+// NBTBase.toString of a tag, the text native writes for a modifier Name that is not a string tag (b102 entnbt102, executed: Name:5 -> "5", 5b -> "5b", 5s, 5L, 1.5f, 2.5d, [1] -> "[1,]", {a:1} -> "{a:1,}").
+const javaDoubleText = (d) => {
+  if (!Number.isFinite(d) || d === 0) return Number.isNaN(d) ? "NaN" : !Number.isFinite(d) ? (d > 0 ? "Infinity" : "-Infinity") : Object.is(d, -0) ? "-0.0" : "0.0";
+  const a = Math.abs(d);
+  if (a >= 1e-3 && a < 1e7) return Number.isInteger(d) ? d.toFixed(1) : String(d);
+  const [m, e] = d.toExponential().split("e");
+  return (m.includes(".") ? m : m + ".0") + "E" + Number(e);
+};
+export function nbtTagText(t) {
+  switch (t.type) {
+    case NBT.BYTE: return `${t.value}b`;
+    case NBT.SHORT: return `${t.value}s`;
+    case NBT.INT: return String(t.value);
+    case NBT.LONG: return `${t.value}L`;
+    case NBT.FLOAT: return `${javaFloat(t.value)}f`;
+    case NBT.DOUBLE: return `${javaDoubleText(t.value)}d`;
+    case NBT.STRING: return `"${t.value}"`;
+    case NBT.BYTE_ARRAY: return `[${t.value.length} bytes]`;
+    case NBT.INT_ARRAY: return `[${[...t.value].join(",")},]`;
+    case NBT.LIST: return `[${t.value.items.map((v) => nbtTagText({ type: t.value.elementType, value: v }) + ",").join("")}]`;
+    case NBT.COMPOUND: return `{${[...t.value].map(([k, v]) => `${k}:${nbtTagText(v)},`).join("")}}`;
+    default: return "";
+  }
+}
+const modifierName = (m) => { const t = m.get("Name"); return !t ? "" : t.type === NBT.STRING ? t.value : nbtTagText(t); };
 const OWN_MAX_HEALTH_IDS = new Set(["Wolf", "Slime", "LavaSlime", "EntityHorse"]);
 const isZombieLike = (id) => id === "Zombie" || id === "PigZombie";
 const tag = (type, value) => ({ type, value });
@@ -134,7 +160,7 @@ export function livingAttributeFields(compound, record, javaId) {
       if (uuid === BABY_BOOST.uuid && name === BABY_BOOST.attribute && amount === BABY_BOOST.amount && operation === BABY_BOOST.operation && isZombieLike(javaId) && (record.growingAge ?? 0) < 0) continue;
       const at = modifiers.findIndex((x) => x.attribute === name && x.uuid === uuid);
       if (at >= 0) modifiers.splice(at, 1); // b97 entnbt97 (executed): a second modifier with the same UUID on one attribute replaces the first
-      modifiers.push({ attribute: name, name: nbtGet(m, "Name", NBT.STRING, ""), amount, operation, uuid });
+      modifiers.push({ attribute: name, name: modifierName(m), amount, operation, uuid });
     }
   }
   const out = {}, holder = { modifiers };
