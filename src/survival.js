@@ -972,15 +972,22 @@ export class Survival {
   }
   wearBlock(block,toolId){return this.wear(toolId,blockWear(block,MATERIALS[block]||{},ITEMS[toolId]));}
 
+  countDown() {
+    this.countersOwed = false;
+    this.protection = Math.max(0, this.protection - 1);
+    this.hurtTicks = Math.max(0, this.hurtTicks - 1);
+    this.hurtTime = Math.max(0, this.hurtTime - 1);
+  }
   tick({ underwater = false, inWater = false, inLava = false, inWall = false, outOfWorld = false } = {}) {
     if (!this.timeFrozen) this.time++; // gamerule doDaylightCycle false stops the world clock
     this.ticks++;
     this.combat.tick(this.ticks, (who) => !(who.raw?.health <= 0 || who.raw?.dead));
     // EntityPlayerMP.onUpdateEntity: --field_147101_bU and --hurtResistantTime (the latter is
     // skipped for the player in onEntityUpdate), before the update.
-    this.protection = Math.max(0, this.protection - 1);
-    this.hurtTicks = Math.max(0, this.hurtTicks - 1);
-    this.hurtTime = Math.max(0, this.hurtTime - 1);
+    // b102 mobrec102 (bytecode-read): natively the decrement is EntityPlayerMP.onUpdate (mw.h) at the player's place in the entity walk, and the effects/food/fall part is onUpdateEntity (mw.i), run by the
+    // movement packet in the network phase after the world tick. With `deferCounters` (main.js) the countdown runs at the player's turn in EntityWorld.tickMobs (countDown), after this tick's
+    // effects; a tick whose walk did not run settles the owed countdown here.
+    if (this.deferCounters) { if (this.countersOwed) this.countDown(); this.countersOwed = true; } else this.countDown();
     ({ count: this.arrowCount, timer: this.arrowHitTimer } = stepStuckArrows(this.arrowCount, this.arrowHitTimer));
     // EntityPlayerSP.setPlayerSPHealth for a change of health damage() did not report (regeneration, healing, commands).
     if (this.health !== this.syncedHealth) { this.clientResist = this.health < this.syncedHealth ? 20 : 10; this.syncedHealth = this.health; }
