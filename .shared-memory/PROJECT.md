@@ -177,6 +177,22 @@ Batch 101 (2026-11-27, ten tracks in `../wt101-<name>` on `batch101-<track>101`,
 - Verification: one full `npm test` on the merged tree: 11071/11071. Build and bridge tests ok. No browser checks.
 - Open: "Still open from batch 101" in `public/research/remaining-gaps.md`.
 
+Batch 102 (2026-11-28, ten tracks in `../wt102-<name>` on `batch102-<track>102`, cut from 5b89c24c3, merged --no-ff on `batch102-lead`; track agents ran on Sonnet; shared rules `../artifacts/b102-lead/track-rules.md`; lead note `b102-lead-track.md`; no browser checks or full test runs in tracks):
+- 0.131.0, by track (details in the `*-b102-track.md` notes and "Done in batch 102" in `public/research/remaining-gaps.md`):
+  - horse102: S08 `posLook` for /tp, pearls, beds and respawn (`server-pos-look.js`); join and portal S08 counted; one C06 per S08; movement input waits for the C06 (40-tick fallback).
+  - abilities102: the target client prints gameMode.changed from S2B (no server chat); middle-click pick reads the S39 creative flag; adventure rules audited.
+  - console102: same-dimension respawn packet records (S07, S08, S05, S1F, S03, S2B, S30, S2F, S1F); death S19(3) counted; explicit swingProgressInt.
+  - mpobjects102: S19 statuses in `setEntityState` order (seq stamps); golem strike's status 4 first; hanging entities follow the re-list cadence.
+  - credit102: ghast ball flight, fall messages and TNT placers checked native; tests only.
+  - mpperf102: integer-keyed column order and kept rows in `server-chunks.js` behind `MC_MPPERF102=on|off|verify`; hashes unchanged.
+  - spcopy102: no drowning when dead; plates see a listed corpse; stats/achievements pause after one tick.
+  - tiles102: `Tiles102Probe` (193 records); long spawner Weight; empty flower pot keeps Data.
+  - entnbt102: `Entnbt102Probe`; constructor max health default and clamp; non-string modifier Name; cure Strength effect; Offers edge cases.
+  - mobrec102: golem gate replayed on the real `EntityWorld` (spawn search uses solid top surface); hurt countdown at the player's turn in single player.
+- Lead: merges reviewed file by file. Conflict between horse102 and console102 in `net-packet-ids.js` / `server-survival.js` resolved so a same-dimension respawn counts its S08 once (`posLook` with `inRespawn`). Post-merge fix bf8d5c024: the held slot and steer still apply while an S08 waits; five older tests updated for horse102 and abilities102.
+- Verification: one full `npm test` on the merged tree: 11132/11137; the five failures (horse102's movement gate in harnesses that never ack, the new `posLook` id mapping, abilities102's chat line in `serverbroadcast-b58`) fixed in bf8d5c024, then those files and 167 neighbour tests rerun ok. Build and bridge tests ok. No browser checks.
+- Open: "Still open from batch 102" in `public/research/remaining-gaps.md`.
+
 Batch 99 (2026-11-23, ten tracks in `../wt99-<name>` on `batch99-<track>99`, cut from 8df1376b7, merged --no-ff on `batch99-lead`; track agents ran on Sonnet; shared rules `../artifacts/b99-lead/track-rules.md`; lead note `b99-lead-track.md`; no browser checks or full test runs in tracks):
 - 0.128.0, by track (details in the `*-b99-track.md` notes and "Done in batch 99" in `public/research/remaining-gaps.md`):
   - horse99: the client applies the `dismount` message as S08, S1B, S08 (`client-dismount.js`); the probe seat height gap was a foal versus an adult (`Horse99Probe`).

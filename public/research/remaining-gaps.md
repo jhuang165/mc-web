@@ -2,6 +2,43 @@
 
 Verified against `src/`, the generated parity catalogues and the research docs on branch b11-catalogue. This list is not a parity claim: rows marked Partial elsewhere in the catalogues still need audits that are not listed here. Where a research doc contradicts the code (for example `slime.md` saying magma cubes are missing, `eye-of-ender.md` saying there is no End), the code and tests were treated as authoritative and the doc is stale.
 
+## Done in batch 102
+
+Batch 102 covered these areas (track agents ran on Sonnet):
+- **Horses and teleports.** The dedicated server sends an S08 `posLook` with the player's yaw and pitch for `/tp`, an ender pearl landing, lying down in and leaving a bed, and respawn (bytecode-read `nh.a(DDDFF)`); join and portal arrival count their S08 too. The client answers each S08 with one C06, and the server ignores movement input until that C06 arrives (40-tick fallback), as `nh.a(jd)` does.
+- **Abilities.** The "gameMode.changed" line is printed by the target client from S2B (reason 3), not sent as server chat. Middle-click pick reads the S39 creative flag. Adventure mode's dig and place rules were audited and are native.
+- **The dedicated server.** A same-dimension respawn counts S07, S08, S05, S1F, S03, the weather S2B while raining, S30, S2F and the first-update S1F (bytecode-read `oi.a(mw,int,boolean)`). Death S19(3) to trackers is counted. The swing gate keeps an explicit swingProgressInt, so it is exact for Mining Fatigue III and above.
+- **Multiplayer objects.** S19 statuses leave in the order `setEntityState` ran (a golem's 4 before the target's 2). Paintings, item frames and leash knots follow the tracker re-list cadence instead of a range test every tick. The ghost-item trigger model was re-read and is native.
+- **Kill credit.** A punched ghast ball through the real fireball tick, fall-message samples and the TNT placer rules (chain TNT, flint and steel, burning arrows) were checked and are native; tests added.
+- **Server speed.** Behind `MC_MPPERF102=on|off|verify`: `server-chunks.js` orders columns with integer keys and keeps per-player rows. Hashes unchanged.
+- **The single-player copy.** A dead player no longer drowns. Pressure plates and tripwires still see a dead player while the body is listed (deathTime under 20). The stats and achievements screens keep the world running for one tick before pausing, as natively they wait for the stats.
+- **Tiles.** `Tiles102Probe` (executed, 193 records): spawner, beacon, brewing stand, flower pot, skull, comparator, enchanting table, furnace and hopper edge tags; 174 rows match after import and export. Fixes: a long spawner `Weight` reads as an int; an empty flower pot keeps its `Data` and does not show the metadata's plant.
+- **Entity NBT.** `Entnbt102Probe` (executed): a mob with neither HealF nor Health reads its constructor maximum (bat 6, wither 300, ...), and a saved Health above it is clamped. A non-string modifier Name is written as the tag's text. A curing zombie gets the Strength effect; an `Offers` compound with empty or odd Recipes is an empty trade list; a `buyB` that loads as nothing keeps the trade.
+- **Mob records.** The 20 golem gate records replay on the real `EntityWorld`; fix: the golem spawn search uses `doesBlockHaveSolidTopSurface` (a door was a floor). The player's hurt countdown runs at the player's turn in the entity walk in single player (bytecode-read order).
+
+Found wrong in the batch 101 list:
+- "The golem gate replays with no divergence" held only on the fake world.
+- "Kill credit: no ball-flight test" was a test gap, not a behaviour gap.
+
+Still open from batch 102:
+- **Multiplayer.**
+  - Teleports: `travelToDimension`'s own S08 is not modelled separately; the three re-teleports inside `nh` (invalid moves) have no port equivalent.
+  - The dedicated server: the respawning player's chunk S26 bulks are not counted; the second S1F is not at its exact position; a `dimRespawn` lacks the S1F, S03 and S30 records; two C0A in one tick count one S0B; S1F is counted only for XP gains and level changes.
+  - Multiplayer objects: hanging entities are not gated on the sent column and their S13 is not delayed one tick; the seq order covers S19 only.
+  - Abilities: the creative inventory and item-use rules on the client still follow the game mode, not S39.
+  - Speed: the `next` tail, `moveEntityBody` boxing, `bb.slice()` non-scratch path.
+  - Server commands: /publish stays off. End island tails past 128 blocks are cut on some seeds (left for the user's decision). WebSocket compression stays off.
+  - Not seen in a browser: the S08 look on teleports, the target-only game mode line, plus the batch 67 to 101 lists.
+- **Single player.**
+  - The copy: the stats loading window is one tick of wall time (natively 1 to 2 ticks of the integrated server); the Teleporter's terrain read beside the picked portal still needs the worker; the pressure plate claim for a corpse is port-read.
+  - Kill credit: minecart TNT was read on the server side only.
+  - Tiles: the dedicated server's pot save record follows the shared code by reading only.
+  - Entity NBT: skeleton and pigman default gear with no Equipment; slime Size 127 and above; `Sitting` on an unowned wolf; cat type 4 or -1; the cure's Strength attribute modifier; horse Type outside 0 to 4, saddle and armour Count and Damage; trade stacks with Count 0; native crash rows load in the port; modifier order on save.
+  - Mob records: whether landing hits run before the walk is not re-checked; the multiplayer client keeps the old countdown order.
+  - Not seen in a browser: the world ticking under the death screen, plates under a corpse, the stats one-tick run, plus the batch 100 and 101 lists.
+- **Rendering.** No native pixel capture.
+- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+
 ## Done in batch 101
 
 Batch 101 covered these areas (track agents ran on Sonnet):
@@ -23,23 +60,7 @@ Found wrong in the batch 100 list:
 - "A native Infinity bar loops forever": it ends.
 - "FineGrid Map growth": the Maps were reused; the cost was the cell lists.
 
-Still open from batch 101:
-- **Multiplayer.**
-  - Horses: other ordered messages still apply after the merged tick at `start()`.
-  - Abilities: adventure mode on the client; the server still sends a separate "gameMode.changed" chat line (natively printed by the client from S2B).
-  - The dedicated server: a same-dimension respawn counts no S07; death S19(3) to trackers is not counted; the swing gate at count 0 with Mining Fatigue III and above; a default-skin player's textures property with a live session server.
-  - Multiplayer objects: the order of S19 13 and S19 2 for a player hit on a villager; a same-tick join and move may differ by one tick.
-  - Speed: the `next` tail, `moveEntityBody` boxing, `bb.slice()`, `server-chunks.js` iterators.
-  - Server commands: /publish stays off. End island tails past 128 blocks are cut on some seeds (left for the user's decision). WebSocket compression stays off.
-  - Not seen in a browser: flight and immunity with S39 flags that differ from the mode, prediction with non-default speeds, plus the batch 67 to 100 lists.
-- **Single player.**
-  - The copy: GuiAchievements and GuiStats pause only once the stats arrive natively (the port pauses at once); the Teleporter's terrain read beside the picked portal still needs the worker.
-  - Kill credit: a deflected ball hitting the player after the 25-tick grace has no ball-flight test.
-  - Entity NBT: a mob with neither HealF nor Health reads 20 (natively the type's maximum); a non-string modifier Name; modifier order on save; native crash rows load in the port.
-  - Mob records: the golem gate was replayed on a fake world, not the real `EntityWorld`; the shipped loop's order of the witch's potion hit and hurt countdown.
-  - Not seen in a browser: the world ticking under the death screen (mobs near, a seated dead rider, death in a portal), the XP bar at huge levels, plus the batch 100 list.
-- **Rendering.** No native pixel capture.
-- **Effects.** The game uses the Java 8 effect order; which JRE 1.7.10 players ran is not settled.
+Still open from batch 101: carried into "Still open from batch 102" above.
 
 ## Done in batch 100
 
