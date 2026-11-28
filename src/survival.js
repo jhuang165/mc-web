@@ -1008,7 +1008,7 @@ export class Survival {
     if (inWall && this.health > 0) this.damage(1, "suffocation");
     this.effects.tick(this);
     if (this.creative) return;
-    if (underwater && !this.effects.has(13)) { // Water Breathing: EntityLivingBase.onEntityUpdate refills the air
+    if (underwater && this.health > 0 && !this.effects.has(13)) { // b102 spcopy102: EntityLivingBase.onEntityUpdate drowns only while isEntityAlive (a corpse refills to 300, no bubbles); Water Breathing: EntityLivingBase.onEntityUpdate refills the air
       // EntityLivingBase.decreaseAirSupply: Respiration (best armour piece) may keep the air for a tick.
       this.air = decreaseAir(this.inventory.armor, this.air, this.inventory.random);
       if (this.air === -20) {
