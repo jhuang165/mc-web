@@ -330,7 +330,7 @@ export function createCommandRunner(host) {
       if (a.length < 1) usage("commands.gamemode.usage");
       const mode = gameMode(a[0]), target = targetArg(a, 1);
       host.setGameMode(mode);
-      (host.targetPrint ?? say)(tr("gameMode.changed"), translation("gameMode.changed")); // the target gets this line (S2B state 3), not the sender
+      if (!host.clientPrintsGameMode) (host.targetPrint ?? say)(tr("gameMode.changed"), translation("gameMode.changed")); // the target gets this line (S2B state 3), not the sender; b102 abilities102: a dedicated server sends no chat, the target's client prints it from the S2B (player-op.js)
       // b82 (bytecode-read, executed): "self" when the target is the sender, whatever the argument count; both with flag 1 and the mode as a ChatComponentTranslation.
       const self = target.toLowerCase() === name().toLowerCase() && !host.isCommandBlock; // name(): the sender, also in a redirected run
       if (self) feedbackFlags(1, "commands.gamemode.success.self", translation("gameMode." + mode));

@@ -1,12 +1,13 @@
 // A playerOp message of the dedicated server (src/server-broadcast.js playerOps): a command an operator ran on this player, applied to the client's own
 // survival state. The server mirrors only what it holds (game mode, hotbar, effects, position); the inventory, experience and health live here.
 import { clearMatcher } from "./command-host.js";
+import { translation } from "./chat-component.js";
 const ALLOWED = new Set(["setGameMode", "kill", "give", "clear", "addExperience", "addLevels", "addEffect", "removeEffect", "clearEffects", "enchant", "look"]);
 export function applyPlayerOp(message, { survival, experience, commandHost, renderHotbar, renderVitals, makeStack }) {
   if (!ALLOWED.has(message?.op) || !Array.isArray(message.args)) return false;
   const [a, b, c] = message.args;
   switch (message.op) {
-    case "setGameMode": if (["survival", "creative", "adventure"].includes(a)) commandHost.setGameMode(a); break;
+    case "setGameMode": if (["survival", "creative", "adventure"].includes(a)) { commandHost.setGameMode(a); commandHost.print?.("gameMode.changed", translation("gameMode.changed")); } break; // b102 abilities102: S2B reason 3 handler prints gameMode.changed to the target
     case "kill": commandHost.kill(); break;
     case "give": {
       if (!a || !Number.isInteger(a.id) || !Number.isInteger(a.count) || a.count < 1 || a.count > 64) return false;

@@ -216,6 +216,7 @@ export class ServerSocial {
     const sim = this.simulation, p = sim.players.get(id), self = this;
     const op = (name, ...args) => this.deliver(id, { type: "playerOp", op: name, args });
     return {
+      clientPrintsGameMode: true, // b102 abilities102: bjb.a(gv) prints gv.a[3] = gameMode.changed on the target's client for S2B reason 3 (CommandGameMode itself sends only the success.self/other notices)
       position: () => ({ x: p.position.x, y: p.position.y, z: p.position.z }),
       playerMode: () => (p.survival.mode === "creative" ? 1 : p.survival.mode === "adventure" ? 2 : 0),
       teleport: (x, y, z, look) => { if (sim.vehicles?.riding(p)) sim.vehicles.dismount(p); p.position.copy({ x, y, z }); p.previous.copy(p.position); Object.assign(p.velocity, { x: 0, y: 0, z: 0 }); p.fallDistance = 0; p.moved = true; if (look && Number.isFinite(look.yaw) && Number.isFinite(look.pitch)) { p.yaw = look.yaw; p.pitch = look.pitch; op("look", look.yaw, look.pitch); } }, // b84 cmdfix84: S08 carries the target's yaw and pitch (/tp <player> <target>) // b83 cmdexec83: CommandTeleport mountEntity(null) first (executed)
