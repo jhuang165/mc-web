@@ -46,7 +46,7 @@ export class ServerHanging {
     this.views = new Map(); // player id -> { known: Map(key -> JSON) }
   }
   get entities() { return this.h.entities; }
-  addPlayer(p) { this.views.set(p.id, { known: new Map() }); }
+  addPlayer(p) { this.views.set(p.id, { known: new Map(), seen: new Set(), ref: null }); }
   removePlayer(p) { this.views.delete(p.id); }
   save() { return this.h.toJSON(); }
   owns(e) { return this.h.entities.includes(e); }
@@ -131,6 +131,18 @@ export class ServerHanging {
   }
 
   // ---- the tracker ----
+  // b102 mpobjects102: EntityTracker.updateTrackedEntities for entries that never move (EntityHanging: range 160, frequency MAX_VALUE). my.a(List) re-lists only on an entry's first pass
+  // (a new entity) and the player's own entry re-lists the world only when it moved over 4 blocks (squared 16), is new, or had a column sent (mn.a() 82..159, my.a(List) bytecode-read):
+  // between those a tracked entity stays tracked and an untracked one stays untracked, whatever the distance. `view.ref` is the player's position at its last list.
+  relists(view, id, p) {
+    const pp = p.position, ref = view.ref;
+    const fresh = !!this.host.chunkViews?.takeFresh?.(id, 'hanging');
+    const relist = !ref || fresh || (pp.x - ref.x) ** 2 + ((pp.y ?? 0) - ref.y) ** 2 + (pp.z - ref.z) ** 2 > 16;
+    if (relist) view.ref = { x: pp.x, y: pp.y ?? 0, z: pp.z };
+    return relist;
+  }
+  // The key is tested when the player re-lists, the entity is new to the tracker (not in `view.seen`), or the player already tracks it (its record may change).
+  testable(view, relist, key) { return relist || !view.seen.has(key) || view.known.has(key); }
   // One `hset` / `hdel` delta for each player (their own packet fields to merge into `p.vehPackets`). Called after the tick; a dead entity has left `entities`.
   track(playerOf) {
     const live = this.h.entities.filter(e => !e.dead).map(e => ({ key: 'h' + e.id, x: e.x, z: e.z, record: () => hangingRecord(e) }));
@@ -145,15 +157,17 @@ export class ServerHanging {
     if (fast88.mode !== 'off') { this.views.forEach((view, id) => this.trackOne88(view, id, playerOf, live, range, out)); return out; } // b88 mpperf88: no entry pair, iterator or key copy per player
     for (const [id, view] of this.views) {
       const p = playerOf(id);
-      if (!p) { view.known.clear(); continue; } // a player of another dimension: the client rebuilt its world
-      const hset = [], hdel = [], seen = new Set();
+      if (!p) { view.known.clear(); view.seen.clear(); view.ref = null; continue; } // a player of another dimension: the client rebuilt its world
+      const hset = [], hdel = [], seen = new Set(), relist = this.relists(view, id, p);
       for (const t of live) {
-        if (Math.abs(t.x - p.position.x) > range || Math.abs(t.z - p.position.z) > range) continue;
+        if (!this.testable(view, relist, t.key)) continue;
+        if ((relist || !view.known.has(t.key)) && (Math.abs(t.x - p.position.x) > range || Math.abs(t.z - p.position.z) > range)) continue; // a tracked entity stays tracked until a re-list
         const record = t.record(), json = JSON.stringify(record);
         seen.add(t.key);
         if (view.known.get(t.key) !== json) { view.known.set(t.key, json); hset.push(record); }
       }
       for (const key of [...view.known.keys()]) if (!seen.has(key)) { view.known.delete(key); hdel.push(key); }
+      view.seen = new Set(live.map(t => t.key));
       if (hset.length || hdel.length) out.set(id, { ...(hset.length ? { hset } : {}), ...(hdel.length ? { hdel } : {}) });
     }
     return out;
@@ -161,16 +175,18 @@ export class ServerHanging {
   // b88 mpperf88: one player's pass of track() with index and forEach loops. Deleting the key being visited inside Map.forEach visits the rest as the copied key list did.
   trackOne88(view, id, playerOf, live, range, out) {
     const p = playerOf(id);
-    if (!p) { view.known.clear(); return; }
-    const hset = [], hdel = [], seen = new Set(), known = view.known;
+    if (!p) { view.known.clear(); view.seen.clear(); view.ref = null; return; }
+    const hset = [], hdel = [], seen = new Set(), known = view.known, relist = this.relists(view, id, p);
     for (let k = 0; k < live.length; k++) {
       const t = live[k];
-      if (Math.abs(t.x - p.position.x) > range || Math.abs(t.z - p.position.z) > range) continue;
+      if (!this.testable(view, relist, t.key)) continue;
+      if ((relist || !known.has(t.key)) && (Math.abs(t.x - p.position.x) > range || Math.abs(t.z - p.position.z) > range)) continue;
       const record = t.record(), json = JSON.stringify(record);
       seen.add(t.key);
       if (known.get(t.key) !== json) { known.set(t.key, json); hset.push(record); }
     }
     if (known.size !== seen.size) known.forEach((_, key) => { if (!seen.has(key)) { known.delete(key); hdel.push(key); } }); // every known key was seen when the sizes match
+    const now = new Set(); for (let k = 0; k < live.length; k++) now.add(live[k].key); view.seen = now;
     if (hset.length || hdel.length) out.set(id, { ...(hset.length ? { hset } : {}), ...(hdel.length ? { hdel } : {}) });
   }
 }

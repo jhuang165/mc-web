@@ -1272,12 +1272,12 @@ export class EntityWorld {
     // by combat-reference.json. A fresh hit also sends status 2 to the clients (handleHealthUpdate: the hurt sound at
     // (r - r) * 0.2 + 1, no child pitch) and onDeath sends status 3 (the die sound the same way): the client's own
     // sounds go to `clientSounds`, so a fresh hit is heard twice in 1.7.10 (damage-fx.md).
-    if (fresh) (this.clientSounds ??= []).push({ sound: hurtOf(e), ...sound, pitch: this.statusPitch(e, 2) });
+    if (fresh) (this.clientSounds ??= []).push({ sound: hurtOf(e), ...sound, pitch: this.statusPitch(e, 2), ...(this.mobStatus ? { seq: this.nextStatusSeq() } : null) }); // b102: the S19 2 keeps its place among the tick's other statuses
     if (e.health <= 0) {
       if (fresh && (deathOf(e) || e.type !== "squid")) this.events.push({ sound: deathOf(e), ...sound, pitch: soundPitch(rand, child) }); // b93 mobrec93: EntityLivingBase.attackEntityFrom reads getSoundPitch only for a non-null sound (executed b93mr-squid-hit: no pitch draws on the squid's hit; the snow golem's null here is the inherited default sound, which does draw: b88mr-snow-creeper-8862)
       if (fresh && e.type === "horse") e.mouthTicks = 1; // wi.aU (the death sound getter) calls cS()
       this.onDeath(e, source);
-      if (fresh) (this.clientSounds ??= []).push({ sound: deathOf(e), ...sound, pitch: this.statusPitch(e, 3) });
+      if (fresh) (this.clientSounds ??= []).push({ sound: deathOf(e), ...sound, pitch: this.statusPitch(e, 3), ...(this.mobStatus ? { seq: this.nextStatusSeq() } : null) });
     } else if (fresh) {
       if (e.type === "horse") this.horseHurt(e, rand); // EntityHorse.getHurtSound (wi.aT): cS (mouth open), nextInt(3) first, 0 makes it rear (no sound of its own)
       if (hurtOf(e) || e.type !== "squid") this.events.push({ sound: hurtOf(e), ...sound, pitch: soundPitch(rand, child) });
@@ -2114,6 +2114,7 @@ export class EntityWorld {
     if (hit) golemLift(survival); // EntityIronGolem.attackEntityAsMob: target.motionY += 0.4
     return hit;
   }
+  nextStatusSeq() { return this.statusSeq = (this.statusSeq | 0) + 1; } // b102 mpobjects102: one counter orders every S19 of a dedicated server by the moment World.setEntityState ran
   villageBurst(name, e, size, rand) {
     this.mobStatus?.(e, VILLAGER_STATUS[name]); // b100 mpobjects100: World.setEntityState(12 hearts / 13 angry / 14 happy) is an S19 on a dedicated server (the client copy draws it, copy-status.js)
     if (this.fx) burst(this.fx, name, 5, { x: e.x, y: e.y, z: e.z, width: size.width, height: size.height }, rand, 1);

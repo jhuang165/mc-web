@@ -617,6 +617,7 @@ export function villageTasks(K) {
 export function golemStrike(m, target) {
   const e = m.e, ew = m.ai.ew, rand = m.rand;
   e.attackTimer = 10;
+  if (ew.mobStatus) { ew.mobStatus(e, 4); ew.golemStruck?.(e); } // b102: wt.n sends setEntityState(4) BEFORE the target's attackEntityFrom (bytecode-read), so the target's S19 2 follows it
   const damage = golemAttackDamage(rand);
   let hit;
   if (target.isPlayer) hit = target.survival?.scaledDamage ? ew.hitGolemPlayer?.(e, damage, target.survival) : false;

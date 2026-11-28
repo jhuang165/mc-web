@@ -35,7 +35,7 @@ import { describeTiles } from '../tile-sync.js';
 import { fast88 } from '../mpperf88-fast.js'; // b88 mpperf88
 
 export const CHUNK_BULK_MAX = 5; // gz.c()
-const FRESH = ['mobs', 'objects', 'players', 'vehicles', 'thrown']; // b84 mpthrown84: + the thrown lane's re-list; // b83 tracker83: + the vehicle tracker's re-list; // b73 streamfix73: + the remote player tracker; // the trackers that re-list when columns change
+const FRESH = ['mobs', 'objects', 'players', 'vehicles', 'thrown', 'hanging']; // b102 mpobjects102: + the paintings / frames lane; b84 mpthrown84: + the thrown lane's re-list; // b83 tracker83: + the vehicle tracker's re-list; // b73 streamfix73: + the remote player tracker; // the trackers that re-list when columns change
 export const CHUNK_MOVE_SQ = 64; // mq.d: less than 8 blocks from the managed position changes nothing
 const DIRS = [[1, 0], [0, 1], [-1, 0], [0, -1]];
 export const chunkOf = v => Math.trunc(v) >> 4; // d2i, then ishr 4
