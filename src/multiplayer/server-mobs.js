@@ -475,10 +475,10 @@ export class ServerMobs {
   noteStatus(c) {
     const e = c.position;
     if (!e?.type || c.clientOnly || !this.mobs.entities.includes(e)) return;
-    if (c.sound === hurtOf(e)) this.statuses.push({ e, status: 2 }); else if (c.sound === deathOf(e)) this.statuses.push({ e, status: 3 });
+    if (c.sound === hurtOf(e)) this.statuses.push({ e, status: 2, seq: c.seq }); else if (c.sound === deathOf(e)) this.statuses.push({ e, status: 3, seq: c.seq });
   }
   // EntityWorld.mobStatus (World.setEntityState): 6 / 7 smoke or hearts of taming, 18 the hearts of love.
-  status(e, status) { this.statuses.push({ e, status }); }
+  status(e, status) { this.statuses.push({ e, status, seq: this.mobs.nextStatusSeq?.() }); }
   // Entity.velocityChanged knockback of a mob hit this tick is sent by `track`; for a PLAYER hit by a mob the server's copy takes it before the next movePlayer
   // (EntityPlayerMP.knockBack on the server entity, the S12 the client applies is the position stream here: the server moves the player). Dead players drop it.
   knock(p) {
@@ -569,6 +569,7 @@ export class ServerMobs {
       diffs = stateDiffs86(this.views.values(), t.entries, stateOf); // b86 mpperf86: without the Map entry pairs and Set iterators
       if (m86 === 'verify') { const ref = stateDiffs(this.views.values(), t.entries, stateOf); if (ref.size !== diffs.size || [...ref].some(([v, l]) => { const m = diffs.get(v); return !m || m.length !== l.length || l.some(([e, s], k) => m[k][0] !== e || m[k][1] !== s); })) fail86('stateDiffs'); }
     }
+    if (this.statuses.length > 1) this.statuses.sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0)); // b102: native order = the order setEntityState ran (stable for equal or missing seq)
     for (const v of this.views.values()) {
       const { out, later } = outs.get(v);
       if (f100) { v.later100 = v.destroys; v.destroys = later; } else v.destroys = later;
