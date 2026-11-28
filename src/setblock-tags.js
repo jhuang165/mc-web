@@ -11,7 +11,7 @@ import { nbtGet } from './nbt-get.js';
 import { getStringAny } from './nbt-string.js';
 import { readNoteTile } from './note-blocks.js';
 import { readJukeboxStack } from './jukebox.js';
-import { potFromNbt, setPotContents, EMPTY_POT } from './stone-utility.js';
+import { potFromNbt, setPotContents, emptyPot } from './stone-utility.js';
 import { itemFromOriginal, itemStackFromNbt, jukeboxStackFromNbt } from './region-import.js';
 
 // TileEntity.readFromNBT reads x, y and z (CommandSetBlock has just set them to the cell); "id" is only read by TileEntity.createAndLoadEntity.
@@ -23,7 +23,7 @@ const READERS = {
   // registered item the port does not draw). An item id that names no item (0 or unregistered) leaves the pot empty.
   140({ tag, x, y, z, stores }) {
     if (!stores.world) return null;
-    setPotContents(stores.world, x, y, z, potFromNbt({ Item: nbtGet(tag, 'Item', NBT.INT, 0), Data: nbtGet(tag, 'Data', NBT.INT, 0) }, itemFromOriginal) ?? EMPTY_POT); // b84 cmdfix84: an empty read is an empty tile, not the metadata's plant
+    setPotContents(stores.world, x, y, z, potFromNbt({ Item: nbtGet(tag, 'Item', NBT.INT, 0), Data: nbtGet(tag, 'Data', NBT.INT, 0) }, itemFromOriginal) ?? emptyPot(nbtGet(tag, 'Data', NBT.INT, 0))); // b84 cmdfix84: an empty read is an empty tile, not the metadata's plant
     return rest(tag, ['Item', 'Data']);
   },
   // TileEntitySign.readFromNBT: not editable, then Text1-Text4 through getString (any tag reads as its toString, "" when missing), cut to 15 characters.

@@ -24,7 +24,7 @@ import { readItemTagsNbt, readExtraRaw, rawOf, setRawForm, enchantEntryRaw } fro
 import { splitWrongTyped } from './tag-types.js';
 import { profileOfSkullTile, skullBytes } from './skull-profile.js';
 import { NBT } from './nbt.js';
-import { potFromNbt } from './stone-utility.js';
+import { potFromNbt, emptyPot, potContentsOfMeta } from './stone-utility.js';
 import { ITEMS, burnTime } from './survival.js';
 import { CHEST, CHEST_SLOTS } from './chest.js';
 import { TRAPPED_CHEST, ENDER_CHEST, isChestBlock } from './chest-blocks.js';
@@ -605,7 +605,9 @@ export async function importJavaRegionArea(regions, options = {}) {
         // TileEntityFlowerPot.readFromNBT: Item (int id) and Data (int). b81: a registered item the port does not draw is kept with its Item, Data and drop stack
         // (stone-utility.js potFromNbt); Item 0 or an unregistered id is an empty pot.
         const content = potFromNbt({ Item: get(tile, 'Item', NBT.INT, 0), Data: get(tile, 'Data', NBT.INT, 0) }, itemFromOriginal);
-        if (content) pots.push({ x: lx, y, z: lz, ...content });
+        const emptyData = get(tile, 'Data', NBT.INT, 0), metaPlant = potContentsOfMeta(originalState(chunk.sections[y >> 4], x & 15, y, z & 15) & 15);
+        // b102: an empty read is an empty tile (Data kept), not the metadata's plant; a record is needed only where it differs from the implied pot
+        if (content) pots.push({ x: lx, y, z: lz, ...content }); else if (metaPlant || emptyData !== 0) pots.push({ x: lx, y, z: lz, ...emptyPot(emptyData) });
         tally(tileConverted, id);
       } else if (inside && ((id === 'DLDetector' && block === fromOriginal(151, 0)?.id) || (id === 'EnchantTable' && block === fromOriginal(116, 0)?.id))) {
         // The sensor power is recomputed; a table's CustomName (read when a string) goes to player.tableNames (b74).

@@ -3,9 +3,10 @@
 // and region NBT feed it unchanged. JSON helpers keep a save free of Maps and BigInts. Notes: public/research/spawner-cart.md.
 import { NBT } from "./nbt.js";
 import { getStringAny } from "./nbt-string.js";
+import { nbtGet } from "./nbt-get.js";
 
 const MINECART_TYPES = ["MinecartRideable", "MinecartChest", "MinecartFurnace"];
-const int = (t) => (t && typeof t.value === "number" ? t.value | 0 : undefined);
+const int = (t) => (t ? nbtGet(new Map([["v", t]]), "v", NBT.INT, undefined) : undefined); // getInteger of any numeric tag (nbt-get.js: a long wraps, a double saturates); undefined for a non-number
 
 // agr(logic, compound): Weight (int, 0 when absent), Properties (compound) and Type (getString: "" when absent, any other tag as its toString; b95 tiles95, executed:
 // an entry with no Type is written back with Type "" and spawns nothing, it is not a Pig); the legacy Type "Minecart"
@@ -14,7 +15,7 @@ export function readEntry(tag, fallbackType = "") {
   const props = tag.get("Properties")?.type === NBT.COMPOUND ? tag.get("Properties").value : new Map();
   let type = getStringAny(tag, "Type", fallbackType);
   if (type === "Minecart") type = MINECART_TYPES[int(props.get("Type")) ?? 0] ?? type; // a Properties.Type outside 0..2 keeps "Minecart"
-  return { type, weight: tag.get("Weight") && typeof tag.get("Weight").value === "number" ? int(tag.get("Weight")) : 0, props };
+  return { type, weight: int(tag.get("Weight")) ?? 0, props };
 }
 // agq.a(dh) SpawnData: agr(logic, compound, EntityId) where the compound is itself the Properties and Type is the EntityId.
 export function readSpawnData(compound, entityId) {
