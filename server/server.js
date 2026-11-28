@@ -29,6 +29,7 @@ import { ServerPings, handleStatus, DEFAULT_MOTD } from '../src/multiplayer/serv
 import { socialTabComplete } from '../src/multiplayer/server-tabcomplete.js'; // b69 mptabcomplete
 import { installServerRules } from '../src/servercommands-b59.js';
 import { loadServerProperties, saveProperty, loadFavicon, hardcoreRespawn, overridesFrom, FULL_TEXT } from '../src/multiplayer/server-properties.js'; // b69 serverprops
+import { ackPosLook, expectPosLook } from '../src/multiplayer/server-pos-look.js'; // b102 horse102
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 export const DEFAULT_ORIGINS = ['https://jhuang165.github.io', 'http://localhost:5179', 'http://127.0.0.1:5179', 'https://ledoge0.tail92abaf.ts.net'];
@@ -286,6 +287,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
           ips.set(id, ip); joined = true; ws.chunks = m.chunks === true; clearTimeout(timer); sockets.set(id, ws); owners.set(id, account.id);
           ws.netId = id; // b89 console89: the receiver of what send() counts (its own pose is not sent; its world gives the chunk data)
           send(ws, { type: 'welcome', protocol: PROTOCOL, id, viewDistance: simulation.rules.chunkRadius, /* b69 serverprops */ world: simulation.playerTracker.snapshot(id, simulation.objectTracker.snapshot(id, simulation.snapshot(id))) /* b73 streamfix73 */ /* b71 mptrackers71 */, self: simulation.savePlayer(simulation.players.get(id)), abilities: simulation.abilitiesOf(simulation.players.get(id)) /* b100 abilities100: S39 */ });
+          expectPosLook(simulation, simulation.players.get(id)); // b102 horse102: oi.a(ej, mw) ends with setPlayerLocation (S08); the client answers once
           pings.join(id, account.name); // b68 mpping: S38 for the tab list
           social.scoreboardJoin(id); // b64 mpscoreboard: S3E teams and the displayed objectives with their scores
           if (previous === undefined) broadcast({ type: 'chat', name: '', text: `${account.name} joined the game` });
@@ -293,7 +295,7 @@ export async function createDedicatedServer({ port = 8089, bind = '127.0.0.1', t
         }
         simulation.admin.activity(id, m, undefined, m.type !== 'chat' || chatSendAllowed(simulation.players.get(id))); // b68 mpadmin: idle clock (/setidletimeout)
         if (m.type === 'input') { if (!simulation.input(id, m)) ws.close(1008, 'Invalid input'); }
-        else if (m.type === 'posLookAck') { /* b101 horse101: C06 reply to S08, counted by /netstat above; the pose is the input message's */ }
+        else if (m.type === 'posLookAck') ackPosLook(simulation.players.get(id)); // b101 horse101: C06 reply to S08, counted by /netstat above; b102 horse102: it releases the movement gate
         else if (m.type === 'edit') simulation.queueEdit(id, m);
         else if (m.type === 'pingKeepAliveAck') pings.ack(id, m.id); // b68 mpping: C00 KeepAlive
         else if (m.type === 'settingsClient') { ws.settingsId = id; if (!applyClientSettings(simulation.players.get(id), m)) throw new Error('Invalid client settings'); } // b72 mpsettings: the whole C15

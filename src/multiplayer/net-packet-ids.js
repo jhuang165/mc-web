@@ -65,6 +65,7 @@ export const CLIENTBOUND = {
   tick: 24, // S18PacketEntityTeleport: each tick's absolute player poses (with the bundled S03, S22/S23 and weather)
   healthHurt: 26, useDone: 26, mobStatus: 26, // S19PacketEntityStatus (2 hurt, 3 dead, 9 item use finished)
   attach: 27, // S1BPacketEntityAttach
+  posLook: 8, // b102 horse102: S08 of /tp, a pearl, bed, respawn
   dismount: 8, // b98 horse98: S08, S1B, S08 of EntityPlayerMP.mountEntity(null) (CLIENT_PACKETS)
   effect: 29, healthEffect: 29, // S1DPacketEntityEffect
   healthEffectEnd: 30, // S1EPacketRemoveEntityEffect
@@ -352,12 +353,13 @@ const each = (id, xs, f) => list(xs).map((x) => [id, f(x)]);
 const s30 = (slots) => C[48] + slots.reduce((n, s) => n + itemSize(s), 0), cursor = (s) => [47, C[47] - 2 + itemSize(s)]; // S30, then the cursor's S2F (window -1)
 const CLIENT_PACKETS = {
   playerOp: (m) => [[m.op === 'setGameMode' ? 43 : 31, m.op === 'setGameMode' ? C[43] : C[31]]], // b101 abilities101: the game-mode op stands for S2B reason 3 (S39 goes before it as its own `abilities` message)
-  welcome: (m, ctx) => [[1, C[1]] /* S01 with WorldType "default" (the base row's static instance) */, [57, C[57]] /* b100 abilities100: S39 after S05, from initializeConnectionToPlayer */, ...bulks(m.world?.columns, ctx)],
-  dimRespawn: (m, ctx) => [[7, C[7]], ...bulks(m.world?.columns, ctx)],
+  welcome: (m, ctx) => [[1, C[1]] /* S01 with WorldType "default" (the base row's static instance) */, [57, C[57]] /* b100 abilities100: S39 after S05, from initializeConnectionToPlayer */, [8, C[8]] /* b102 horse102: setPlayerLocation's S08 */, ...bulks(m.world?.columns, ctx)],
+  dimRespawn: (m, ctx) => [[7, C[7]], [8, C[8]] /* b102 horse102 */, ...bulks(m.world?.columns, ctx)],
   // S03 every 20 ticks (MinecraftServer.v: tickCounter % 20; `ctx.tick` is the server's counter, from 0 at launch, else the world's tick count); an S18 per pose of another
   // player (the tracker sends nobody their own); the cells; the S21 resends (partial, the changed sections)
   tick: (m, ctx) => { const t = ctx?.tick ?? m.tick; return [...(Number.isInteger(t) && t % 20 === 0 ? [[3, C[3]]] : []), ...peerRemovals(m, ctx), ...list(m.players).filter((p) => !p?.far && (ctx?.self === undefined || p?.id !== ctx.self)).flatMap(playerPackets), ...list(m.players).filter((p) => ctx?.self !== undefined && p?.id === ctx.self).flatMap((p) => [...list(p.pw), ...(p.vel ? [[18, C[18]]] : [])]), // b100: the player's own S12 (my.b(ft) sends to the entity's own connection too)
     ...cellRecords(m.changes), ...objectRecords(m.itrack, ctx), ...list(m.chunks).map((c) => [33, s21(c, ctx, false, Number.isInteger(c?.mask) ? c.mask : 0xffff)])]; },
+  posLook: () => [[8, C[8]]],
   dismount: () => [[8, C[8]], [27, C[27]], [8, C[8]]], // b98 horse98: yz.a(sa)'s S08 (setPlayerLocation), hx's S1B(0, player, -1), then mw.a(sa)'s own S08
   blocks: (m) => cellRecords(m.changes),
   chunkUnload: (m, ctx) => list(m.columns).map((c) => [33, unload(c, ctx)]),

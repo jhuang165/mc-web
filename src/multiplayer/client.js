@@ -37,7 +37,7 @@ export class DedicatedClient {
             if (message.protocol !== PROTOCOL) throw new Error('Server protocol differs from this game.');
             welcomed = true; clearTimeout(timeout);
             this.id = message.id; this.players = message.world.players;
-            resolve(message); return;
+            resolve(message); this.send({ type: 'posLookAck', yaw: message.self?.yaw, pitch: message.self?.pitch }); return; // b102 horse102: the join's S08 gets its C06
           }
           if (message.type === 'error') throw new Error(message.text);
           if (message.type === 'tabReply') { this.onTabReply?.(message.options); return; } // b69 mptabcomplete: S3A
@@ -60,7 +60,7 @@ export class DedicatedClient {
   // falls behind or holds an unbounded queue. Chat keeps the latest 100 lines.
   buffer(message) {
     if (message.type === 'dragonCredits' || message.type === 'abilities') { this.messages.push(message); return; } // b64 mpdragon: S2B state 4; b100 abilities100: S39, in order
-    if (message.type === 'dismount') { this.flushPending(); this.dismountQueued = true; this.messages.push(message); return; } // b100 horse100: S08/S1B/S08 keep their place after the ticks that came before them
+    if (message.type === 'dismount' || message.type === 'posLook') { this.flushPending(); this.dismountQueued = true; this.messages.push(message); return; } // b100 horse100: S08/S1B/S08 keep their place after the ticks that came before them
     if (message.type === 'dimRespawn') { this.messages = this.messages.filter(m => m.type !== 'chunkBulk' && m.type !== 'chunkUnload'); this.messages.push(message); this.pending = null; return; } /* b72 mpstream72: columns of the old world are void */ // b61 mpnether: the world swap keeps its place in the queue
     if (SLEEP_TYPES.has(message.type)) { this.messages.push(message); return; } // b66 mpsleep: S0A / S0B / bed messages, in order
     if (message.type === 'sb') { this.messages.push(message); return; } // b64 mpscoreboard: S3B-S3E, all must arrive in order
@@ -91,8 +91,9 @@ export class DedicatedClient {
   }
   apply(message) {
     // b61 mpnether: S07 Respawn plus the new world. Messages that follow are buffered until the host has swapped worlds and calls start().
-    if (message.type === 'dimRespawn') { this.ready = false; this.pending = null; this.onDimRespawn(message); return; }
+    if (message.type === 'dimRespawn') { this.ready = false; this.pending = null; this.onDimRespawn(message); if (this.socket) this.send({ type: 'posLookAck' }); return; } // b102 horse102: the S08 after S07 gets its C06
     if (message.type === 'dismount') { this.onDismount(message); if (this.socket) for (let i = 0; i < 2; i++) this.send({ type: 'posLookAck', x: message.x, y: message.y, z: message.z, yaw: message.yaw, pitch: message.pitch }); } // b101 horse101: C06 reply to each of the two S08 // b99 horse99: S08 + S1B + S08 (client-dismount.js)
+    if (message.type === 'posLook') { this.onPlayerOp({ type: 'playerOp', op: 'look', args: [message.yaw, message.pitch] }); if (this.socket) this.send({ type: 'posLookAck', x: message.x, y: message.y, z: message.z, yaw: message.yaw, pitch: message.pitch }); } // b102 horse102: S08 (look) and its C06
     if (message.type === 'dragonCredits') this.onDragonCredits?.(message); // b64 mpdragon
     if (message.type === 'abilities') this.onAbilities?.(message); // b100 abilities100: S39 (speeds, flags)
     if (message.type === 'boltSpawn') this.onBolt?.(message); // b66 mplightning: S2C spawn global entity (a lightning bolt)

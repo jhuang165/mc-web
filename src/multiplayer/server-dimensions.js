@@ -42,6 +42,7 @@ import { NETHER_CONTEXT, buildNetherSystems, buildNetherInside, saveNether, tick
 import { swapTiles } from './server-tile-swaps.js'; // b88 tiles88
 import { ServerPortalShots } from './server-portal-shots.js'; // b91 entnbt91: arrows and rockets through portals
 import { ServerPortalTravel } from './server-portal-travel.js'; // b92 portals92: mobs, items, orbs, carts and boats through portals
+import { expectPosLook } from './server-pos-look.js'; // b102 horse102
 
 const OVERWORLD = 0, END = 1, MIDDLE = 64, MARGIN = 24, SIZE = 128;
 const noop = () => {};
@@ -241,6 +242,7 @@ export class ServerDimensions {
     p.portal ??= new PortalState(); p.portal.timeUntilPortal = portalCooldown(true); p.portal.inPortal = false;
     if (!this.end.award(p, from, to, exit) && !at) sim.achievements.award(p, 'portal'); // b63: theEnd / theEnd2 for the End's trips // pc.y: every trip that is not to or from the End (bytecode-read)
     sim.serverSurvival?.resendEffects(p); // b61 lead: ServerConfigurationManager.transferPlayerToDimension sends every active effect as S1D (mphealth2's burst)
+    expectPosLook(sim, p); // b102 horse102: oi.a(mw, int) ends with setPlayerLocation (S08), answered by the client's apply of dimRespawn
     (p.dimOut ??= []).push({ type: 'dimRespawn', dimension: to, world: sim.playerTracker.snapshot(p.id, sim.objectTracker.snapshot(p.id, sim.snapshot(p.id)), to) /* b72 mpcadence72: cut by the item range; b74 mptrack74: and by the player tracker */, self: sim.savePlayer(p), abilities: sim.abilitiesOf(p) /* b100 abilities100: the relaunch keeps the speeds (no S39 of its own: a portal trip sends none) */ });
     return true;
   }

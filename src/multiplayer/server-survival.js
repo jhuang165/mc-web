@@ -18,6 +18,7 @@ import { finishPotion } from '../potion-use.js';
 import { setClientHealth } from './client-health.js';
 import { applyDeathThrow } from './server-death-throw.js'; // b75 mpplayerfx75
 import { markVelocityChanged } from './server-velocity.js'; // b77 mpvelocity77
+import { sendPosLook } from './server-pos-look.js'; // b102 horse102
 
 const APPLE = 260, DEATH_XP_TICKS = 20;
 
@@ -207,6 +208,7 @@ export class ServerSurvival {
     Object.assign(p.velocity, { x: 0, y: 0, z: 0 });
     Object.assign(p, { dead: false, fallDistance: 0, landedFall: 0, flying: false, grounded: false });
     (p.dimOut ??= []).push(this.sim.abilitiesOf(p)); // b100 abilities100: oi.a(mw, int, boolean) -> setGameType -> S39, before the respawn's S07
+    sendPosLook(this.sim, p); // b102 horse102: oi.a(mw, int, boolean) ends with setPlayerLocation (S08)
     return true;
   }
   /**

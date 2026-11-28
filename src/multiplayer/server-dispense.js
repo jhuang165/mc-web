@@ -36,6 +36,7 @@ import { ServerEyes } from './server-eyes.js'; // b64 mpend2: the flying eye of 
 
 import { s27Reaches, s27Of } from './server-explosion-packet.js'; // b78 mpexplosion78
 import { fast88 } from '../mpperf88-fast.js'; // b88 mpperf88
+import { sendPosLook } from './server-pos-look.js'; // b102 horse102
 const noRows88 = l => l === undefined || l === null || (Array.isArray(l) && l.length === 0); // b88 mpperf88: a list snapshot's loops would not enter
 const NEAR = 64 * 64, NEAR_TNT = 160 * 160; // EntityTracker ranges: arrows, thrown entities, rockets 64 blocks; primed TNT 160
 const f = Math.fround;
@@ -237,7 +238,7 @@ export class ServerDispense {
     impactEnderPearl(pearl, { world, owner, hit: hit?.survival ? null : hit }, {
       hit: (e) => { if (this.hangingOf(lane.dim)?.thrown(e, body ?? p)) return; if (e?.type) thrownHit(mobs, e, (body ?? p)?.position ?? null, pearl); }, // b89 credit89: an ownerless pearl's causeThrownDamage(this, null) has no entity
       dismount: () => this.sim.vehicles?.dismount?.(p),
-      teleport: (_o, x, y, z) => { p.position.copy({ x, y, z }); p.previous.copy(p.position); Object.assign(p.velocity, { x: 0, y: 0, z: 0 }); },
+      teleport: (_o, x, y, z) => { p.position.copy({ x, y, z }); p.previous.copy(p.position); Object.assign(p.velocity, { x: 0, y: 0, z: 0 }); sendPosLook(this.sim, p); /* b102 horse102: setPositionAndUpdate's S08 */ },
       damage: (_o, { amount }) => body ? false : this.sim.damagePlayer(p, amount, { name: 'a fall', from: undefined, call: () => p.survival.damage(amount, 'a fall', false) }),
     });
   }
