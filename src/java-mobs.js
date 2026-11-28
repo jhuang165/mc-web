@@ -7,7 +7,7 @@ import { readNbt as readHorseNbt } from './horse.js';
 import { uuidFields, invulnerableFields } from './entity-uuid.js';
 import { mobBaseOf } from './entity-base-nbt.js'; // b88 entnbt88
 import { attributeFieldsFromNbt } from './mob-attributes.js';
-import { livingAttributeFields } from './mob-attribute-list.js';
+import { livingAttributeFields, JAVA_ATTRIBUTE_BASES } from './mob-attribute-list.js';
 import { maxHealthOf, OWN_MAX_HEALTH } from './mob-riding.js';
 import { OWNED_TYPES, ownerFields, ownerFromNbt, leashHolderUuid } from './owner-links.js';
 import { ocelotFieldsFrom } from './ocelot.js';
@@ -157,6 +157,8 @@ function savedMaxHealth(entity) {
 }
 // EntityLivingBase.readEntityFromNBT: AbsorptionAmount (float) goes through setAbsorptionAmount, which floors at 0. Only a positive amount is kept on the record.
 export const absorptionFields = (tag) => { const a = tagValue(tag, 'AbsorptionAmount', NBT.FLOAT, 0); return a > 0 ? { absorption: a } : {}; };
+// b102 entnbt102 (executed, Entnbt102Probe): a mob with neither HealF nor Health keeps the maximum health its constructor set (bat 6, wither 300, ...); an ender crystal has 5.
+const nativeMaxHealth = (javaId, type) => JAVA_ATTRIBUTE_BASES[javaId]?.[0]?.[1] ?? (type === 'ender_crystal' ? 5 : 20);
 function javaMobFromNbtBase(entity, { shiftX = 0, shiftZ = 0, convertItem = () => null } = {}) {
   const summonType = JAVA_SUMMON_MOBS[tagValue(entity, 'id', NBT.STRING, '')];
   if (summonType) {
@@ -171,7 +173,7 @@ function javaMobFromNbtBase(entity, { shiftX = 0, shiftZ = 0, convertItem = () =
   const pos = numbers(entity, 'Pos', NBT.DOUBLE, 3);
   if (!type || !pos) return null;
   const rotation = numbers(entity, 'Rotation', NBT.FLOAT, 2);
-  const healF = tagValue(entity, 'HealF', NBT.FLOAT), health = healF !== undefined ? healF : tagValue(entity, 'Health', NBT.SHORT, type === 'ender_crystal' ? 5 : type === 'giant' ? 100 : 20);
+  const healF = tagValue(entity, 'HealF', NBT.FLOAT), health = healF !== undefined ? healF : tagValue(entity, 'Health', NBT.SHORT, nativeMaxHealth(tagValue(entity, 'id', NBT.STRING, ''), type));
   const record = {
     type, x: pos[0] + shiftX, y: pos[1], z: pos[2] + shiftZ, health,
     // Entity.rotationYaw is degrees counter-clockwise from +z toward -x; the browser yaw is the negated radian value.
@@ -183,12 +185,14 @@ function javaMobFromNbtBase(entity, { shiftX = 0, shiftZ = 0, convertItem = () =
     record.profession = tagValue(entity, 'Profession', NBT.INT, 0);
     record.riches = tagValue(entity, 'Riches', NBT.INT, 0);
     record.growingAge = tagValue(entity, 'Age', NBT.INT, 0);
-    const offers = tagValue(tagValue(entity, 'Offers', NBT.COMPOUND), 'Recipes', NBT.LIST);
-    if (offers?.elementType === NBT.COMPOUND) {
-      record.offers = offers.items.flatMap((r) => {
+    // b102 entnbt102 (executed): an Offers compound always makes a (possibly empty) recipe list, whatever Recipes holds (`Offers:{}`, an empty list, a non-list, non-compound items);
+    // only a villager with no Offers compound rolls its trades on first use (EntityVillager.getRecipes tests buyingList == null).
+    const offersTag = tagValue(entity, 'Offers', NBT.COMPOUND), offers = tagValue(offersTag, 'Recipes', NBT.LIST);
+    if (offersTag) {
+      record.offers = (offers?.elementType !== NBT.COMPOUND ? [] : offers.items).flatMap((r) => {
         const buy = tagValue(r, 'buy', NBT.COMPOUND), sell = tagValue(r, 'sell', NBT.COMPOUND), buyB = tagValue(r, 'buyB', NBT.COMPOUND);
         const b = buy && convertItem(buy), s = sell && convertItem(sell), b2 = buyB ? convertItem(buyB) : null;
-        if (!b || !s || (buyB && !b2)) return [];
+        if (!b || !s) return []; // b102 entnbt102 (executed): a buyB that loads as no stack (`buyB:{}`, an unknown id) is only absent, the trade stays (MerchantRecipe's buyB is null)
         const native = (stack, tag) => ({ ...stack, id: tagValue(tag, 'id', NBT.SHORT, 0), damage: Math.max(0, tagValue(tag, 'Damage', NBT.SHORT, 0)) });
         return [{ buy: native(b, buy), ...(b2 ? { buyB: native(b2, buyB) } : {}), sell: native(s, sell), uses: tagValue(r, 'uses', NBT.INT, 0), maxUses: tagValue(r, 'maxUses', NBT.INT, 7) }];
       });
@@ -231,7 +235,15 @@ function javaMobFromNbtBase(entity, { shiftX = 0, shiftZ = 0, convertItem = () =
     record.growingAge = tagValue(entity, 'IsBaby', NBT.BYTE, 0) !== 0 ? -1 : 0;
     record.villager = tagValue(entity, 'IsVillager', NBT.BYTE, 0) !== 0;
     const conversion = tagValue(entity, 'ConversionTime', NBT.INT, -1);
-    if (conversion > -1) record.conversionTime = conversion;
+    if (conversion > -1) {
+      record.conversionTime = conversion;
+      // b102 entnbt102 (executed, Entnbt102Probe): startConversion runs after ActiveEffects are read and adds Strength (id 5, amplifier 0, duration = the time; ambient 0) through
+      // addPotionEffect, so PotionEffect.combine applies to a saved Strength: the longer duration wins at an equal amplifier, a higher amplifier replaces.
+      const own = record.effects.find((x) => x.id === 5);
+      if (!own) record.effects.push({ id: 5, amplifier: 0, duration: conversion });
+      else if (own.amplifier < 0) { own.amplifier = 0; own.duration = conversion; }
+      else if (own.amplifier === 0 && own.duration < conversion) own.duration = conversion;
+    }
     record.canBreakDoors = tagValue(entity, 'CanBreakDoors', NBT.BYTE, 0) !== 0; // setBreakDoorsAItask(getBoolean): the break-door task
   }
   Object.assign(record, gearNbtFields(entity, shiftX, shiftZ), mobGearNbtFields(entity, type, convertItem), portalCooldownFields(entity));
@@ -335,6 +347,10 @@ export function javaMobFromNbt(entity, options) {
       const healF = tagValue(entity, 'HealF', NBT.FLOAT, tagValue(entity, 'Health', NBT.SHORT));
       if (Number.isFinite(healF)) record.health = Math.max(0, Math.min(healF, record.maxHealth));
       else if (!entity.has('HealF') && !entity.has('Health')) record.health = Math.max(0, record.maxHealth); // b97 entnbt97 (executed): no HealF and no Health tag sets health to the modified maximum (readEntityFromNBT)
+    }
+    else if (!OWN_MAX_HEALTH.has(record.type) && record.type !== 'ender_crystal' && Number.isFinite(record.health)) { // b102 entnbt102 (executed): setHealth clamps a saved HealF / Health to the constructor maximum too (Bat Health 7s reads 6, Chicken 4)
+      const cap = JAVA_ATTRIBUTE_BASES[tagValue(entity, 'id', NBT.STRING, '')]?.[0]?.[1];
+      if (Number.isFinite(cap)) record.health = Math.max(0, Math.min(record.health, cap));
     }
     // Wolves, slimes and horses: HealF is clamped to the maximum read from the list, then setTamed / setSlimeSize may reset the base; a slime is
     // healed to its full modified maximum (probed attributes2 `maxHealth`). mob-riding.js maxHealthOf is the live maximum afterwards.
