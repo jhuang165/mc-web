@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { World } from "./world.js";
 import { makeStack } from "./inventory.js";
 import { DedicatedSimulation } from "./multiplayer/simulation.js";
+import { ackPosLook } from './multiplayer/server-pos-look.js';
 import { dispenserAux } from "./multiplayer/client-containers.js";
 import { IDLE_INPUT } from "./multiplayer/protocol.js";
 import { SKULL, ITEM_SKULL } from "./skull.js";
@@ -29,6 +30,7 @@ test("a Nether player builds a wither with the Nether's own mob list; only Nethe
   const s = fixture();
   const a = s.addPlayer("a", "Alice", key(1)), b = join(s, "b", 2, 64.5, 64.5);
   s.dimensions.arrive(a, -1, { at: { x: 64.5, y: 70, z: 64.5 } });
+  ackPosLook(a); // b102 lead: the client's C06 for the arrival's S08 (horse102's movement gate)
   const n = s.dimensions.nether, w = n.world;
   n.mobs.spawning = false; n.mobs.mobs.entities.length = 0;
   for (let x = 40; x <= 90; x++) for (let z = 40; z <= 90; z++) for (let y = 60; y <= 90; y++) w.put(x, y, z, y === 69 ? NETHERRACK : 0, 0, false);

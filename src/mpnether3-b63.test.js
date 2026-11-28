@@ -5,6 +5,7 @@ import { World, RAIL, MOB_SPAWNER } from './world.js';
 import { DedicatedSimulation } from './multiplayer/simulation.js';
 import { IDLE_INPUT } from './multiplayer/protocol.js';
 import { makeStack } from './inventory.js';
+import { ackPosLook } from './multiplayer/server-pos-look.js';
 
 const key = n => `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`;
 const NETHERRACK = 150;
@@ -17,6 +18,7 @@ function fixture({ mobs = false, mode = 'creative', other = false } = {}) {
   s.rules.chunkStream = false; // b72: tracking needs the column sent; the whole square is in the snapshot here
   const a = s.addPlayer('a', 'Alice', key(1));
   s.dimensions.arrive(a, -1, { at: { x: 64.5, y: 70, z: 64.5 } });
+  ackPosLook(a); // b102 lead: the client's C06 for the arrival's S08 (horse102's movement gate)
   const n = s.dimensions.nether, w = n.world;
   for (let x = 40; x <= 90; x++) for (let z = 40; z <= 90; z++) for (let y = 60; y <= 90; y++) w.put(x, y, z, y === 69 ? NETHERRACK : 0, 0, false);
   s.input('a', input());

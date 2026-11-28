@@ -89,11 +89,14 @@ test("an operator's /tp, /give, /gamemode, /xp, /effect act on the named player'
   f.social.command("a", "/gamemode survival Bob");
   assert.equal(b.survival.mode, "survival"); assert.notEqual(a.survival.mode, "survival");
   const ops = (id) => f.log(id).filter((m) => m.type === "playerOp");
-  // b84 cmdfix84 (updated: this used to list only setGameMode): /tp Bob Alex also sends Alex's yaw and pitch (CommandTeleport -> setPlayerLocation) as a "look" op.
-  assert.deepEqual(ops("b").map((m) => m.op), ["look", "setGameMode"]);
-  assert.deepEqual(ops("b")[0].args, [a.yaw, a.pitch]);
+  // b84 cmdfix84: /tp Bob Alex also sends Alex's yaw and pitch (CommandTeleport -> setPlayerLocation). b102 horse102 (updated): that is now the S08 `posLook` message on the player's own
+  // queue (server-pos-look.js), one for each /tp, not a "look" playerOp.
+  assert.deepEqual(ops("b").map((m) => m.op), ["setGameMode"]);
+  const looks = (b.dimOut ?? []).filter((m) => m.type === "posLook");
+  assert.equal(looks.length, 2);
+  assert.deepEqual([looks[0].yaw, looks[0].pitch], [a.yaw, a.pitch]);
   assert.deepEqual([b.yaw, b.pitch], [a.yaw, a.pitch]);
-  assert.ok(texts(f.log("b")).includes("Your game mode has been updated"));
+  assert.ok(!texts(f.log("b")).includes("Your game mode has been updated")); // b102 abilities102 (updated): the target client prints gameMode.changed from S2B reason 3 (the setGameMode op), no server chat
   f.social.command("a", "/give Bob 1 5");
   assert.deepEqual(ops("b").at(-1), { type: "playerOp", op: "give", args: [{ id: ops("b").at(-1).args[0].id, count: 5, damage: 0 }] });
   assert.ok(texts(f.log("a")).some((t) => /Given \[.*\] \* 5 to Bob/.test(t)), texts(f.log("a")).join("|"));

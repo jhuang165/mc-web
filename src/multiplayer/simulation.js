@@ -315,8 +315,8 @@ export class DedicatedSimulation {
     const p = this.players.get(id), input = cleanInput(message.controls), look = cleanLook(message.yaw, message.pitch);
     if (!p || !input || !look || !Number.isInteger(message.current) || message.current < 0 || message.current > 8) return false;
     if (!p.window && !this.serverItems.adopt(p, message)) return false; // an open container window owns the server inventory (server-containers.js)
-    if (awaitingPosLook(this, p)) return true; // b102 horse102: nh.a(jd) ignores movement packets until the C06 for the last S08
-    Object.assign(p, look, { input, lastInput: this.ticks, moved: true });
+    // b102 horse102: nh.a(jd) ignores movement packets (C03) until the C06 for the last S08; b102 lead: the held slot (C09) and the steer (C0C) are separate packets and still apply
+    if (!awaitingPosLook(this, p)) Object.assign(p, look, { input, lastInput: this.ticks, moved: true });
     takeRideOrQueue(this, p, id, message.ride); // b86 seat86: a riding client's C0C (b92 horse92: read in arrival order, dropped unless mounted)
     p.survival.inventory.current = message.current;
     return true;

@@ -129,6 +129,7 @@ test('two WebSocket clients share authority, chat and departure; saves survive c
   const [legacyCode] = await once(legacy.ws, 'close'); assert.equal(legacyCode, 1008, 'the shared key no longer admits players');
   const alice = await connect('Alice'), bob = await connect('Bob');
   const a = await alice.next(m => m.type === 'welcome'), b = await bob.next(m => m.type === 'welcome');
+  for (const c of [alice, bob]) c.ws.send(JSON.stringify({ type: 'posLookAck' })); // b102 horse102: the C06 for the join's S08 (movement input waits for it)
   assert.deepEqual(a.world.columns, []); assert.equal(a.world.chunkView, true); assert.ok((await alice.next(m => m.type === 'chunkBulk')).columns.length > 0, 'b72: the world streams in after the welcome'); assert.equal(b.world.players.length, 2);
   alice.ws.send(JSON.stringify({ type: 'chat', text: 'hello Bob' }));
   assert.equal((await bob.next(m => m.type === 'chat' && m.text === 'hello Bob')).name, 'Alice');
