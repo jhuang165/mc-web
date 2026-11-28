@@ -4,6 +4,7 @@ import { liveOrder } from "./saved-order.js";
 import { VillageCollection } from "./village.js";
 import { WOODEN_DOOR, normalCube } from "./world.js";
 import { JavaRandom, celestialAngle } from "./lighting.js";
+import { solidTopSurface } from "./doors-panes.js";
 import { VillageSiege } from "./village-siege.js";
 
 export const PLAYER_NAME = "Player";
@@ -31,7 +32,8 @@ export function createVillageHost(ew) {
       return ((m & 8) !== 0 ? world.getMeta(x, y - 1, z) : m) & 3;
     },
     canSeeSky: (x, y, z) => !!ew.ai.deps.canSeeSky(x, y, z),
-    hasSolidTop: (x, y, z) => !!world.solid(x, y, z),
+    // World.doesBlockHaveSolidTopSurface (b102: not Block collision solidity: a wooden door, fence or slab-less cell below is no floor; the spawn box of a golem searched onto a door top before)
+    hasSolidTop: (x, y, z) => solidTopSurface(world, x, y, z),
     isNormalCube: (x, y, z) => normalCube(world.get(x, y, z)),
     // World.getEntitiesWithinAABB(EntityVillager / EntityIronGolem, box).size()
     countEntities(kind, x0, y0, z0, x1, y1, z1) {

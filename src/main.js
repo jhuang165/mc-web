@@ -3256,6 +3256,7 @@ function tickSurvival(inWater, oldPosition, inLavaNow = false) {
   // Game rules the Survival object reads (gamerule naturalRegeneration / doDaylightCycle).
   survival.naturalRegeneration = ruleOn(active, "naturalRegeneration");
   survival.timeFrozen = !ruleOn(active, "doDaylightCycle");
+  survival.deferCounters = !multiplayer; // b102 mobrec102: the hurt-window countdown runs at the player's turn in the entity walk (survival.js tick)
   // Nether/End portals (BlockPortal / BlockEndPortal collision, Entity.onEntityUpdate) and the overlay + sounds.
   const inPortalNow = dims.tick(world, oldPosition, position, { creative: survival.creative, riding: !!rider.vehicle, alive: survival.health > 0 });
   portalTimer.tick(survival.effects.get(NAUSEA)?.duration ?? 0, inPortalNow);

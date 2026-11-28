@@ -2570,7 +2570,7 @@ export class EntityWorld {
     for (let oi = 0; oi < order.length; oi++, this.remarkCured(), this.flushLoot(), this.adoptSpawns(order)) {
       if (this.spawnsPending()) this.noteMobSpawns(!!this.slot && this.beforePlayer(this.slot)); // b56tm: a mob the entity before this one spawned
       const e = this.slot = order[oi]; // b55dt: whose update this is (a spawn made now is early or late against the player's flush, `joined`)
-      if (!playerTurn && !this.beforePlayer(e)) { playerTurn = true; releaseSeats(seats); stampPlayerCell(player); skipOne = this.copyDeparts(); } // the player's place in the list: his mount no longer lists him. b92 spcopy92: a portal trip's transferPlayerToDimension runs here (copyDeparts)
+      if (!playerTurn && !this.beforePlayer(e)) { playerTurn = true; if (survival?.countersOwed) survival.countDown(); releaseSeats(seats); stampPlayerCell(player); skipOne = this.copyDeparts(); } // the player's place in the list: his mount no longer lists him. b92 spcopy92: a portal trip's transferPlayerToDimension runs here (copyDeparts)
       clearStaleRider(e, seats); // the mob's own turn: its mount does not list it either
       this.beforeMob?.(e); // host hook (multiplayer/server-mobs.js): the nearest of several players is the AI's player for this mob
       seat();
@@ -2729,7 +2729,7 @@ export class EntityWorld {
       if (e.rider?.sneakDismount) this.riderSneakOff(e); // b89 horse89: the sneaking player's updateRidden after its mount's update (a pig; a horse already did it in horseTick)
     }
     endPushGrid();
-    if (!playerTurn) { releaseSeats(seats); stampPlayerCell(player); this.copyDeparts(); } // the player's place is after every entity of this pass
+    if (!playerTurn) { if (survival?.countersOwed) survival.countDown(); releaseSeats(seats); stampPlayerCell(player); this.copyDeparts(); } // the player's place is after every entity of this pass
     if (farMark >= 0) this.dropFarEvents(farMark);
     // Entity.updateRidden's tail for each rider: updateRiderPosition, then the rider turns with its mount.
     seat();
