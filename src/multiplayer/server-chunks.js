@@ -20,6 +20,7 @@ import { JavaHashSetOrder } from '../java-hashset-order.js';
 import { chunkHash } from '../chunk-store.js';
 import { fast88 } from '../mpperf88-fast.js'; // b88 mpperf88
 import { fast99, fail99 } from '../mpperf99-fast.js'; // b99 mpperf99
+import { fast102, fail102 } from '../mpperf102-fast.js'; // b102 mpperf102
 
 export const VIEW_DISTANCE = 10;
 
@@ -42,6 +43,22 @@ export class ChunkSet {
     this.treeBins = set.table.reduce((n, b) => n + (b.tree ? 1 : 0), 0);
     return set.keys().map(k => k.split(',').map(Number));
   }
+  // b102 mpperf102: the same fill as order() with the key as one integer (x + 4096) * 8192 + (z + 4096) (Smi, same hash input chunkHash(x, z), same insert order); the answer is a flat [x0, z0, x1, z1, ...].
+  // null when a chunk number is outside +-4096 (then the string path runs).
+  orderNum102(centres, radius) {
+    for (let ci = 0; ci < centres.length; ci++) if (!(Math.abs(centres[ci][0]) + radius < 4096 && Math.abs(centres[ci][1]) + radius < 4096)) return null;
+    const set = new JavaHashSetOrder(this.mode);
+    if (this.capacity > set.capacity) set.table = new Array(this.capacity).fill(null).map(() => []);
+    for (let ci = 0; ci < centres.length; ci++) for (let cx = centres[ci][0], cz = centres[ci][1], i = -radius; i <= radius; i++) for (let j = -radius; j <= radius; j++) {
+      const x = cx + i, z = cz + j;
+      set.add((x + 4096) * 8192 + (z + 4096), chunkHash(x, z));
+    }
+    this.capacity = Math.max(this.capacity, set.capacity);
+    this.treeBins = set.table.reduce((n, b) => n + (b.tree ? 1 : 0), 0);
+    const keys = set.keys(), flat = new Array(keys.length * 2);
+    for (let i = 0; i < keys.length; i++) { const k = keys[i], x = Math.floor(k / 8192); flat[i * 2] = x - 4096; flat[i * 2 + 1] = k - x * 8192 - 4096; }
+    return flat;
+  }
   // players: [{ x, z }] in the world's local coordinates, in the native player-list order. Returns [[localCx, localCz]] in HashSet order, clipped to the world; a chunk off the 16-grid
   // (a legacy End window) is [localCx, localCz, dx, dz] (see above).
   chunks(players, world, radius = VIEW_DISTANCE) {
@@ -55,7 +72,11 @@ export class ChunkSet {
     const key = `${radius}|${size}|${ox},${oz}|${centres.join(';')}`;
     if (key === this.lastKey) return this.last;
     const out = [];
-    for (const [nx, nz] of this.order(centres, radius)) {
+    const cap0 = this.capacity, num = fast102.mode !== 'off' ? this.orderNum102(centres, radius) : null; // b102 mpperf102: Smi keys, no `x,z` string and no pair arrays per chunk
+    if (num !== null && fast102.mode === 'verify') { const cap1 = this.capacity; this.capacity = cap0; const ref = this.order(centres, radius); if (this.capacity !== cap1) fail102('chunk capacity'); if (ref.length * 2 !== num.length) fail102('chunk order length'); for (let i = 0; i < ref.length; i++) if (ref[i][0] !== num[i * 2] || ref[i][1] !== num[i * 2 + 1]) fail102('chunk order'); }
+    const flat = num !== null, n = flat ? num.length >> 1 : 0, pairs = flat ? null : this.order(centres, radius);
+    for (let pi = 0, pn = flat ? n : pairs.length; pi < pn; pi++) {
+      const nx = flat ? num[pi * 2] : pairs[pi][0], nz = flat ? num[pi * 2 + 1] : pairs[pi][1];
       const lx = nx * 16 - ox, lz = nz * 16 - oz; // the native chunk's first cell in local coordinates
       if (lx + 15 < 0 || lz + 15 < 0 || lx >= size || lz >= size) continue;
       const cx = Math.floor(lx / 16), cz = Math.floor(lz / 16), dx = lx - cx * 16, dz = lz - cz * 16;
@@ -87,8 +108,10 @@ export class ServerChunkSets {
   chunks(dim, world) {
     let s = this.sets.get(dim);
     if (!s) this.sets.set(dim, (s = new ChunkSet()));
-    const here = [];
-    if (fast88.mode !== 'off') this.sim.players.forEach(p => { if ((p.dimension | 0) === dim) here.push({ x: p.position.x, z: p.position.z }); }); // b88 mpperf88: Map.forEach, the same order without an iterator result per player
+    const keep = fast102.mode !== 'off', here = keep ? (s.here102 ??= []) : []; // b102 mpperf102: the player rows are refilled in place (ChunkSet.chunks keeps only numbers from them)
+    let used = 0;
+    if (keep) { this.sim.players.forEach(p => { if ((p.dimension | 0) === dim) { const r = here[used] ??= { x: 0, z: 0 }; r.x = p.position.x; r.z = p.position.z; used++; } }); here.length = used; }
+    else if (fast88.mode !== 'off') this.sim.players.forEach(p => { if ((p.dimension | 0) === dim) here.push({ x: p.position.x, z: p.position.z }); }); // b88 mpperf88: Map.forEach, the same order without an iterator result per player
     else for (const p of this.sim.players.values()) if ((p.dimension | 0) === dim) here.push({ x: p.position.x, z: p.position.z });
     return s.chunks(here, world, this.radius);
   }
