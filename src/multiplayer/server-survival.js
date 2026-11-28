@@ -206,7 +206,12 @@ export class ServerSurvival {
     p.previous.copy(p.position);
     Object.assign(p.velocity, { x: 0, y: 0, z: 0 });
     Object.assign(p, { dead: false, fallDistance: 0, landedFall: 0, flying: false, grounded: false });
-    (p.dimOut ??= []).push(this.sim.abilitiesOf(p)); // b100 abilities100: oi.a(mw, int, boolean) -> setGameType -> S39, before the respawn's S07
+    const ab = this.sim.abilitiesOf(p);
+    if (!(p.dimension | 0)) { // b102 console102: a same-dimension respawn also sends S07, S08, S05, S1F, S03, S30 ...; the Nether / End respawn is a `dimRespawn`
+      const inv = s.inventory, slots = [null, null, null, null, null, ...(inv?.armor ?? []), ...(inv?.main ?? [])];
+      ab.respawn = { rain: this.sim.weather?.isRaining?.() === true }; Object.defineProperty(ab.respawn, 'slots', { value: slots, enumerable: false });
+    }
+    (p.dimOut ??= []).push(ab); // b100 abilities100: oi.a(mw, int, boolean) -> setGameType -> S39, before the respawn's S07
     return true;
   }
   /**
