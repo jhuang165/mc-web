@@ -77,7 +77,7 @@ export function createRedstoneRuntime({ world, scene = null, game = {} }) {
     const tripwire = mode === "tripwire" || mode === "collider", collider = mode === "collider";
     if (tripwire) mode = "all";
     const out = [], p = game.player?.();
-    if (p && p.alive !== false && inside(pushBox(p.position, p.width ?? 0.6, p.height ?? 1.8), box)) out.push(p);
+    if (p && (p.alive !== false || p.listed) && inside(pushBox(p.position, p.width ?? 0.6, p.height ?? 1.8), box)) out.push(p);
     const mobs = game.mobs?.();
     for (const e of mobs?.entities ?? []) {
       if (!(e.health > 0) || !ENTITY_TYPES[e.type] || (tripwire && e.type === "bat")) continue;

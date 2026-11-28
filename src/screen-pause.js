@@ -26,11 +26,12 @@ export function screenKind({ screen, guiId = null, chat = false, sleeping = fals
 
 // True while the integrated server's world is stopped by the open screen (Minecraft.isGamePaused). `home` keeps the port's own loop; `dead` is
 // never paused (GuiGameOver.doesGuiPauseGame is false, b101 spcopy101), so the world keeps ticking under the death screen (see deadTickPlan).
-export function gamePaused({ screen, multiplayer = false, lanPublic = false, ...state }) {
+export function gamePaused({ screen, multiplayer = false, lanPublic = false, statsLoading = false, ...state }) {
   if (screen === "playing") return false;
   if (screen === "home") return true;
   if (screen === "dead") return false;
   if (multiplayer || lanPublic) return screen === "credits"; // the credits are a port-side trip step: the server clock is credited afterwards (dimension-live.js)
+  if (statsLoading && STATS_SCREENS.has(state.guiId)) return false; // b102: GuiStats / GuiAchievements.doesGuiPauseGame is !loading, until the S37 answer arrives
   return guiPausesGame(screenKind({ screen, ...state }));
 }
 
@@ -46,4 +47,17 @@ export function deadTickPlan({ multiplayer = false } = {}) {
 export class TickClock {
   constructor(step) { this.step = step; this.acc = 0; }
   run(dt, fn) { this.acc += dt; while (this.acc >= this.step) { this.acc -= this.step; fn(); } }
+}
+
+// b102 spcopy102: GuiAchievements (bei) and GuiStats (bej) return `!loading` from doesGuiPauseGame (bytecode-read, b101); `loading` is true from the constructor and cleared by
+// onStatsUpdated. initGui sends C16 REQUEST_STATS, which the integrated server answers in its next tick (Not executed: the integrated server is its own thread, so the true window
+// is one to two ticks). Modelled as one tick of wall time (50 ms) after the screen first shows, during which the world still runs.
+export const STATS_SCREENS = new Set(["stats", "achievements"]);
+export class StatsLoad {
+  constructor(windowMs = 50) { this.windowMs = windowMs; this.id = null; this.since = 0; }
+  // Call with the open gui screen's id and a clock in ms; true while the stats request is unanswered.
+  loading(id, now) {
+    if (id !== this.id) { this.id = id; this.since = now; }
+    return STATS_SCREENS.has(id) && now - this.since < this.windowMs;
+  }
 }

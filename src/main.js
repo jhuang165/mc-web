@@ -235,7 +235,7 @@ import { difficultySetting, localDifficulty, InhabitedTime } from "./difficulty.
 import { isInvisible } from "./mob-effects.js";
 import { DimensionWorld } from './dimension-world.js';
 import { showEndCredits } from './end-credits.js';
-import { gamePaused, deadTickPlan, TickClock } from "./screen-pause.js";
+import { gamePaused, deadTickPlan, TickClock, StatsLoad } from "./screen-pause.js";
 import { DimensionLive, TILE_KEYS, storedRecord, dimensionOf, rootIdOf, viewId, bedExplosion, mcYaw, advanceWorldClock } from './dimension-live.js'; // Nether/End travel (dimensions track)
 import { awayCatchUp } from "./away-track.js"; // batch 60: the tracker ticks of the entities that stayed loaded while the player was away
 import { PortalTimer, splashBreak, NIGHT_VISION, BLINDNESS, NAUSEA, INVISIBILITY } from "./potion-fx.js";
@@ -1831,7 +1831,7 @@ async function launch(record, prepared, { slice = false } = {}) {
       primeTnt: (x, y, z) => lightTnt(x, y, z, null),
       markUnsaved: () => { saved = false; },
       // Pistons push the player through its own moveEntity state (piston-push.js pushPlayer).
-      player: () => ({ position, velocity, motion, width: PHYSICS.width, height: PHYSICS.height, alive: survival.health > 0, flying, inWater: wasInWater, vehicle: rider.vehicle ?? null, rider,
+      player: () => ({ position, velocity, motion, width: PHYSICS.width, height: PHYSICS.height, alive: survival.health > 0, listed: !!mobs?.ai?.player?.inWorld, flying, inWater: wasInWater, vehicle: rider.vehicle ?? null, rider,
         get onGround() { return grounded; }, set onGround(v) { grounded = v; }, get collidedH() { return collidedH; }, set collidedH(v) { collidedH = v; },
         get fallDistance() { return fallDistance; }, set fallDistance(v) { fallDistance = v; },
         // The push's moveEntity tail (cactus, fire, webs) and its landing (fall damage), as in the player's own move.
@@ -4665,7 +4665,7 @@ function debugHitboxList() {
     player: thirdPersonView > 0 ? { x: position.x, y: position.y - motion.ySize, z: position.z } : null,
   });
 }
-const pausedGui = new TickClock(PHYSICS.tick);
+const pausedGui = new TickClock(PHYSICS.tick), statsLoad = new StatsLoad(PHYSICS.tick * 1000); // b102: stats/achievements pause only after the S37 answer
 function animate(now) {
   requestAnimationFrame(animate);
   // Max Framerate: Display.sync(getLimitFramerate()) below Unlimited (frame-limit.js).
@@ -4684,7 +4684,7 @@ function animate(now) {
     fpsTime = elapsed;
   }
   // Minecraft.isGamePaused: the game menu stops the world unless the LAN server is public (lan.js).
-  const running = () => screen !== "dead" && !gamePaused({ screen, multiplayer: !!multiplayer, lanPublic: lan.public, guiId: gui.screen?.id, chat: chatOpen, sleeping: bedSleep.sleeping, container: !!containerView, modal: !$("#modal").classList.contains("hidden") }); // screen-pause.js: GuiScreen.doesGuiPauseGame per screen
+  const running = () => screen !== "dead" && !gamePaused({ screen, multiplayer: !!multiplayer, lanPublic: lan.public, guiId: gui.screen?.id, statsLoading: statsLoad.loading(gui.screen?.id, performance.now()), chat: chatOpen, sleeping: bedSleep.sleeping, container: !!containerView, modal: !$("#modal").classList.contains("hidden") }); // screen-pause.js: GuiScreen.doesGuiPauseGame per screen
   { const want = debug && debugChart; if (clientProfiler.enabled !== want) { clientProfiler.clear(); clientProfiler.enabled = want; } clientProfiler.section = ""; clientProfiler.sections.length = 0; clientProfiler.stamps.length = 0; clientProfiler.start("root"); } // Minecraft.runGameLoop: profiler on while Shift+F3
   tickMusic(dt);
   if (running()) {
