@@ -296,7 +296,7 @@ const peerRemovals = (m, ctx) => {
  * bypasses the tracker) keeps the old one S18 per tick.
  */
 const PLAYER_KIND = { move: 21, look: 22, moveLook: 23, teleport: 24, head: 25, attach: 27, velocity: 18 };
-const playerPackets = (p) => [...(p.swing === 6 || p.woke ? [[11, 2 + varIntSize(p.id | 0)]] : []), ...(p.hurt ? [[26, C[26]]] : []), // b101 console101: S0B(2) of wakeUpPlayer and S19 status 2 of a hurt player go to every tracker (mn.b -> my.b)
+const playerPackets = (p) => [...(p.swing === 6 || p.woke ? [[11, 2 + varIntSize(p.id | 0)]] : []), ...(p.hurt ? [[26, C[26]]] : []), ...(p.died ? [[26, C[26]]] : []), // b102 console102: EntityLivingBase.onDeath's setEntityState(3) after the hurt's status 2; b101 console101: S0B(2) of wakeUpPlayer and S19 status 2 of a hurt player go to every tracker (mn.b -> my.b)
    ...(!Array.isArray(p.pk) ? [[24, C[24]]] : p.pk.filter((k) => PLAYER_KIND[k] !== undefined).map((k) => [PLAYER_KIND[k], C[PLAYER_KIND[k]]])), ...list(p.pw), ...(p.vel || p.velSent ? [[18, C[18]]] : [])]; // b100 console100: first the S0B(0) of EntityLivingBase.swingItem (sv.ba: mn.a(entity, S0B) to every tracker but the swinger, in packet handling before the tracker pass; the port's `swing` is 6 on the tick a swing was accepted, 5 and down after);
 // b97: then the S1C / S20 of EntityTrackerEntry.b(); b100 console100: then the S12 of Entity.velocityChanged (my.a(List) ends with it, my.b(ft) sends it to every tracker, 11 bytes executed)
 /**
@@ -354,12 +354,16 @@ const s30 = (slots) => C[48] + slots.reduce((n, s) => n + itemSize(s), 0), curso
 const CLIENT_PACKETS = {
   playerOp: (m) => [[m.op === 'setGameMode' ? 43 : 31, m.op === 'setGameMode' ? C[43] : C[31]]], // b101 abilities101: the game-mode op stands for S2B reason 3 (S39 goes before it as its own `abilities` message)
   welcome: (m, ctx) => [[1, C[1]] /* S01 with WorldType "default" (the base row's static instance) */, [57, C[57]] /* b100 abilities100: S39 after S05, from initializeConnectionToPlayer */, [8, C[8]] /* b102 horse102: setPlayerLocation's S08 */, ...bulks(m.world?.columns, ctx)],
+  // b102 console102 (bytecode-read oi.a(mw, int, boolean), oi.b(mw, mt), mw.l_): a same-dimension respawn sends S39 (setGameType), S07, S08, S05, S1F, then sendWorldInfo (S03, and S2B 1 / 7 / 8 while raining),
+  // addSelfToInternalCraftingInventory (S30, the cursor's S2F), and the first update sends S1F again (lastExperience starts at -99999999) and S06 (counted by its own `health` message).
+  abilities: (m) => [[57, C[57]], ...(m.respawn ? [[7, C[7]], [8, C[8]], [5, C[5]], [31, C[31]], [3, C[3]], ...(m.respawn.rain ? [[43, C[43]], [43, C[43]], [43, C[43]]] : []), [48, s30(list(m.respawn.slots))], cursor(null), [31, C[31]]] : [])],
+  healthHurt: (m) => (m.hurt && m.die ? [[26, C[26]], [26, C[26]]] : [[26, C[26]]]), // b102 console102: status 2 and status 3 are two packets
   dimRespawn: (m, ctx) => [[7, C[7]], [8, C[8]] /* b102 horse102 */, ...bulks(m.world?.columns, ctx)],
   // S03 every 20 ticks (MinecraftServer.v: tickCounter % 20; `ctx.tick` is the server's counter, from 0 at launch, else the world's tick count); an S18 per pose of another
   // player (the tracker sends nobody their own); the cells; the S21 resends (partial, the changed sections)
   tick: (m, ctx) => { const t = ctx?.tick ?? m.tick; return [...(Number.isInteger(t) && t % 20 === 0 ? [[3, C[3]]] : []), ...peerRemovals(m, ctx), ...list(m.players).filter((p) => !p?.far && (ctx?.self === undefined || p?.id !== ctx.self)).flatMap(playerPackets), ...list(m.players).filter((p) => ctx?.self !== undefined && p?.id === ctx.self).flatMap((p) => [...list(p.pw), ...(p.vel ? [[18, C[18]]] : [])]), // b100: the player's own S12 (my.b(ft) sends to the entity's own connection too)
     ...cellRecords(m.changes), ...objectRecords(m.itrack, ctx), ...list(m.chunks).map((c) => [33, s21(c, ctx, false, Number.isInteger(c?.mask) ? c.mask : 0xffff)])]; },
-  posLook: () => [[8, C[8]]],
+  posLook: (m) => (m.inRespawn ? [] : [[8, C[8]]]), // b102 lead: a same-dimension respawn's S08 is already in its `abilities` records (console102)
   dismount: () => [[8, C[8]], [27, C[27]], [8, C[8]]], // b98 horse98: yz.a(sa)'s S08 (setPlayerLocation), hx's S1B(0, player, -1), then mw.a(sa)'s own S08
   blocks: (m) => cellRecords(m.changes),
   chunkUnload: (m, ctx) => list(m.columns).map((c) => [33, unload(c, ctx)]),

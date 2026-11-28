@@ -8,10 +8,20 @@ export const swingEnd = (p) => {
   const list = p.survival?.effects?.ordered ? [...p.survival.effects.ordered()] : [], haste = list.find((e) => e.id === 3), slow = list.find((e) => e.id === 4);
   return haste ? 6 - (1 + haste.amplifier) : slow ? 6 + (1 + slow.amplifier) * 2 : 6;
 };
-export const swingAccepted = (p, current) => { const progress = 5 - current; return current <= 0 || progress < 0 || progress >= Math.trunc(swingEnd(p) / 2); };
-/** Replaces `p.swing` with a property whose assignment of 6 (a C0A) is ignored while the native condition fails; every other assignment (the per-tick countdown) is taken. */
+/** b102 console102: sv.ba's test on the explicit native counters (`state.progress` = swingProgressInt, `state.on` = isSwingInProgress). */
+export const swingTakes = (p, state) => !state.on || state.progress < 0 || state.progress >= Math.trunc(swingEnd(p) / 2);
+/** sv.bb (updateArmSwingProgress), once per entity update: ++swingProgressInt while swinging, ending the swing at progress >= end; 0 when idle. */
+export const swingAdvance = (p, state) => { if (state.on) { if (++state.progress >= swingEnd(p)) { state.progress = 0; state.on = false; } } else state.progress = 0; };
+/**
+ * Replaces `p.swing` with a property whose assignment of 6 (a C0A) is ignored while the native condition fails; every other assignment (the per-tick countdown) is taken.
+ * b102 console102: the condition reads an explicit swingProgressInt counter (`p.swingState`), advanced by `p.swingTick()` (one line in the player tick, before the countdown), so
+ * it is exact for every end (Mining Fatigue III and above included) instead of the countdown that rests at 0.
+ */
 export function gateSwing(p) {
   let value = p.swing | 0;
-  Object.defineProperty(p, 'swing', { enumerable: true, configurable: true, get: () => value, set: (v) => { if (v === 6 && !swingAccepted(p, value)) return; value = v; } });
+  const state = { on: false, progress: 0 };
+  Object.defineProperty(p, 'swingState', { enumerable: false, configurable: true, value: state });
+  Object.defineProperty(p, 'swingTick', { enumerable: false, configurable: true, value: () => swingAdvance(p, state) });
+  Object.defineProperty(p, 'swing', { enumerable: true, configurable: true, get: () => value, set: (v) => { if (v === 6) { if (!swingTakes(p, state)) return; state.on = true; state.progress = -1; } value = v; } });
   return p;
 }

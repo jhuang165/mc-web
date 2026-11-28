@@ -58,7 +58,7 @@ test("a respawn gives trackers S13 and a new first pass, and the respawner his o
 test("the swing gate follows sv.ba: a repeat C0A is taken from the 4th tick on", () => {
   const accepted = [];
   const q = gateSwing({ swing: 0, survival: { effects: new Effects() } });
-  for (let t = 0; t < 12; t++) { if (q.swing) q.swing--; const before = q.swing; q.swing = 6; if (q.swing === 6 && before !== 6) accepted.push(t); }
+  for (let t = 0; t < 12; t++) { q.swingTick?.(); if (q.swing) q.swing--; const before = q.swing; q.swing = 6; if (q.swing === 6 && before !== 6) accepted.push(t); }
   assert.deepEqual(accepted, [0, 4, 8]);
   assert.equal(swingEnd(q), 6);
 });

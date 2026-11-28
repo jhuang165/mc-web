@@ -4,9 +4,9 @@
 // The port's position is the server's own (the client sends controls and look only), so the S08 here carries yaw/pitch to the client, which answers with one `posLookAck` (C06) each.
 export const ACK_WAIT_TICKS = 40; // the port's fallback: a client that never answers is not ignored for good
 export function expectPosLook(sim, p, count = 1) { if (p) p.s08 = { n: (p.s08?.n | 0) + count, tick: sim.ticks | 0 }; }
-export function sendPosLook(sim, p) {
+export function sendPosLook(sim, p, extra = null) {
   if (!p) return;
-  (p.dimOut ??= []).push({ type: 'posLook', x: p.position.x, y: p.position.y, z: p.position.z, yaw: p.yaw, pitch: p.pitch });
+  (p.dimOut ??= []).push({ type: 'posLook', x: p.position.x, y: p.position.y, z: p.position.z, yaw: p.yaw, pitch: p.pitch, ...extra });
   expectPosLook(sim, p);
 }
 export function ackPosLook(p) { if (p?.s08 && p.s08.n > 0) p.s08.n--; }
