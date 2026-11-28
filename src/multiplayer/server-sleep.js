@@ -26,6 +26,7 @@
 import { BedSleep, BED, BED_TEXT, activateBed, bedRespawnPosition, isDaytime, mobInBox, nextMorning, verifyRespawn } from '../bed.js';
 import { bedExplosion } from '../dimension-live.js';
 import { ENTITY_TYPES } from '../entities.js';
+import { sendPosLook } from './server-pos-look.js'; // b102 horse102
 
 const KEYS = Object.freeze({ noSleep: () => BED_TEXT.noSleep, notSafe: () => BED_TEXT.notSafe, occupied: () => BED_TEXT.occupied, notValid: () => BED_TEXT.notValid });
 
@@ -107,6 +108,7 @@ export class ServerSleep {
     p.previous.copy(p.position);
     Object.assign(p.velocity, { x: 0, y: 0, z: 0 });
     this.out(p, { type: 'sleepIn', x: s.bed[0], y: s.bed[1], z: s.bed[2], facing: s.facing });
+    sendPosLook(sim, p); // b102 horse102: sleepInBedAt's setPlayerLocation S08
   }
   // EntityPlayer.wakeUpPlayer(resetTimer, updateWorld, setSpawn) with EntityPlayerMP's S0B and relocation. Returns true when the player was sleeping.
   wake(p, resetTimer, _updateWorld, setSpawn) {
@@ -118,6 +120,7 @@ export class ServerSleep {
     Object.assign(p.velocity, { x: 0, y: 0, z: 0 });
     if (setSpawn) { p.spawnpoint = [head[0], head[1], head[2]]; p.spawnForced = false; } // setSpawnChunk(playerLocation, false)
     this.out(p, { type: 'sleepWake' });
+    sendPosLook(this.sim, p); // b102 horse102: wakeUpPlayer's setPlayerLocation S08
     p.woke = {}; // b101 console101: S0B animation 2 also goes to the trackers; `field` carries it on one presence row
     return true;
   }

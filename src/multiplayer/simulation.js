@@ -103,6 +103,7 @@ import { ServerSleep } from './server-sleep.js'; // b66 mpsleep: beds, the night
 import { IDLE_INPUT, cleanInput, cleanLook, validName, encodeColumn, splitChanges } from './protocol.js';
 import { placementEntityBlocker } from '../placement-entities.js'; // b81 collide81
 import { serverCopyBefore, serverCopyAfter } from './server-copy-step.js'; // b82 mpplace82
+import { awaitingPosLook } from './server-pos-look.js'; // b102 horse102
 const SLEEP_HALF = SLEEP_BOX / 2; // b83 attack83: a lying player's half width
 
 const noop = () => {};
@@ -314,6 +315,7 @@ export class DedicatedSimulation {
     const p = this.players.get(id), input = cleanInput(message.controls), look = cleanLook(message.yaw, message.pitch);
     if (!p || !input || !look || !Number.isInteger(message.current) || message.current < 0 || message.current > 8) return false;
     if (!p.window && !this.serverItems.adopt(p, message)) return false; // an open container window owns the server inventory (server-containers.js)
+    if (awaitingPosLook(this, p)) return true; // b102 horse102: nh.a(jd) ignores movement packets until the C06 for the last S08
     Object.assign(p, look, { input, lastInput: this.ticks, moved: true });
     takeRideOrQueue(this, p, id, message.ride); // b86 seat86: a riding client's C0C (b92 horse92: read in arrival order, dropped unless mounted)
     p.survival.inventory.current = message.current;

@@ -35,8 +35,8 @@ test("a respawn queues S39 before the dimension message", () => {
   const s = sim({}, "creative"), p = s.addPlayer("a", "A", key);
   p.survival.health = 0; p.dead = true; p.flying = true;
   assert.equal(s.serverSurvival.respawn(p), true);
-  assert.equal(p.dimOut.at(-1).type, "abilities");
-  assert.equal(p.dimOut.at(-1).flying, false);
+  const ab = p.dimOut.find((m) => m.type === "abilities"); assert.ok(ab); assert.ok(p.dimOut.indexOf(ab) < p.dimOut.findIndex((m) => m.type === "posLook")); // b102: S08 follows (oi.a(mw, int, boolean))
+  assert.equal(ab.flying, false);
 });
 
 test("the client predicts with the server's speeds and resets them", () => {

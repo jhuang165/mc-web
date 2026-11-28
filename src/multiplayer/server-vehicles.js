@@ -37,6 +37,7 @@ import { CartTracker, setVehicleInfo, joinWatcher, stringChange } from './server
 import { ServerHanging } from './server-hanging.js'; // b68 mppaintings: paintings, item frames and knots of this dimension
 import { boatPlaceEntities, mobBallLists, playerListed, crystalBox } from '../boat-place-entities.js'; // b87 boatcheck87 (b88 boatray88: playerListed)
 import { serverPosY, SLEEP_BOX } from '../sleeper-eye.js';
+import { expectPosLook } from './server-pos-look.js'; // b102 horse102
 
 const f = Math.fround;
 export const PLACEABLE_CARTS = new Set([0, 1, 2, 3, 5, 6]); // plain, chest, furnace, TNT and hopper carts (b62: chest and hopper carts open server windows, openCart)
@@ -288,6 +289,7 @@ export class ServerVehicles {
     Object.assign(p.previous, { x: m.rider.x, y: m.rider.y, z: m.rider.z });
     Object.assign(p.velocity, { x: 0, y: 0, z: 0 });
     Object.assign(p, { grounded: false, fallDistance: 0, landedFall: 0 });
+    if (mounted) expectPosLook(this.host, p, 2); // b102 horse102: two S08, two C06
     if (mounted) (p.dimOut ??= []).push({ type: 'dismount', x: m.rider.x, y: m.rider.y, z: m.rider.z, yaw: p.yaw, pitch: p.pitch, vehicle: m.key ?? null }); // b101 horse101: S08 carries the player's own yaw and pitch (nh.a(x, y, z, mw.y, mw.z))
     p.mount = null;
     this.host.achievements?.stopRiding(p);
