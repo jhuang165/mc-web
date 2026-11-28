@@ -99,11 +99,11 @@ test('server block: /gamemode keeps LastOutput, the target hears gameMode.change
   }
   assert.equal(s.players.get('a').survival.mode, 'survival');
   fire('gamemode 2 alicex');
-  assert.ok(said(got, 'a').some((m) => m.includes('gameMode.changed')), 'the base player (not redirected) gets gameMode.changed');
+  assert.ok(said(got, 'a').some((m) => m.includes('"setGameMode"')) && !said(got, 'a').some((m) => m.includes('gameMode.changed')), 'b102: the base player gets S2B reason 3 (its client prints gameMode.changed), no chat line');
   assert.ok(said(got, 'a').some((m) => m.includes('chat.type.admin') && m.includes('commands.gamemode.success.other')), 'the op gets the admin line');
   assert.ok(!said(got, 'b').some((m) => m.includes('gameMode.changed')));
   fire('gamemode 1 bobx');
-  assert.ok(said(got, 'b').some((m) => m.includes('gameMode.changed')), 'a redirected target gets it too');
+  assert.ok(said(got, 'b').some((m) => m.includes('"setGameMode"')) && !said(got, 'b').some((m) => m.includes('gameMode.changed')), 'b102: a redirected target gets the S2B too');
   assert.equal(tile.lastOutput, before);
 });
 

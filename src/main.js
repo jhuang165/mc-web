@@ -264,7 +264,7 @@ const finishDrinking = (player) => finishDrinkingItem(player, finishBucketDrinki
 import { captureBucketTarget } from "./buckets-simulation.js";
 import { HUNGER, POISON } from "./status-effects.js";
 import { PlayerMotion, fovMultiplier, setAbilitySpeeds, shownAbilitySpeeds } from "./player-movement.js";
-import { setAbilityFlags, allowsFlight } from "./ability-flags.js"; // b101 abilities101
+import { setAbilityFlags, allowsFlight, isCreativeMode } from "./ability-flags.js"; // b101 abilities101
 import { abilitySpeedsOf, abilityRecordFields, clientModeOf } from "./multiplayer/abilities.js"; // b100 abilities100
 import { drainKnockback } from "./player-knockback.js";
 import { deathThrow, hitPoseSource } from "./death-throw.js";
@@ -4346,8 +4346,8 @@ function pickBlock() {
   const stonePick = target && (stoneUtilityPick(world, ...target.block) ?? shapedPick(world.get(...target.block), world.getMeta(...target.block)) ?? plantPick(world, ...target.block)); // b83 plants83: flower/shrub/double-plant getDamageValue (plant-damage.js)
   const id = stonePick?.id ?? (target && pickItem(world.get(...target.block), world.getMeta(...target.block)));
   if (id) {
-    const doPick = () => survival.inventory.pick(id, survival.creative, stonePick ? stonePick.damage : isColoredBlock(world.get(...target.block)) ? coloredPickDamage(world.get(...target.block), world.getMeta(...target.block)) : treePickDamage(id, world.getMeta(...target.block)) ?? (id === WOOL || id === RED_FLOWER || id === 2 || id === 6 || id === 56 || id === 58 ? world.getMeta(...target.block) : undefined), stonePick?.rawDamage); // b82 pots82: a rawDamage pot picks its stored stack
-    if (survival.creative && multiplayer?.ready && active?.remote) creativePick(survival.inventory, multiplayer, doPick); else doPick(); // b62: C10 for the picked hotbar slot
+    const doPick = () => survival.inventory.pick(id, isCreativeMode(survival.creative), stonePick ? stonePick.damage : isColoredBlock(world.get(...target.block)) ? coloredPickDamage(world.get(...target.block), world.getMeta(...target.block)) : treePickDamage(id, world.getMeta(...target.block)) ?? (id === WOOL || id === RED_FLOWER || id === 2 || id === 6 || id === 56 || id === 58 ? world.getMeta(...target.block) : undefined), stonePick?.rawDamage); // b82 pots82: a rawDamage pot picks its stored stack
+    if (isCreativeMode(survival.creative) && multiplayer?.ready && active?.remote) creativePick(survival.inventory, multiplayer, doPick); else doPick(); // b62: C10 for the picked hotbar slot
     mining = null;
     eating = null;
     renderHotbar();

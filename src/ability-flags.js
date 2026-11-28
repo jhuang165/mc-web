@@ -9,3 +9,4 @@ export function setAbilityFlags(m) {
 export const abilityFlags = () => flags;
 export const allowsFlight = (creativeMode) => (flags ? flags.allowFlying : !!creativeMode);
 export const disablesDamage = (creativeMode) => (flags ? flags.disableDamage : !!creativeMode);
+export const isCreativeMode = (creativeMode) => (flags ? flags.creative : !!creativeMode); // b102 abilities102: capabilities.isCreativeMode as the client reads it (bao.ao middle-click pick, bao.Y), from S39
